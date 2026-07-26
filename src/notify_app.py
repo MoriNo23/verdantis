@@ -10,19 +10,19 @@ Layout:
 │                                         │
 │ [IMAGEN GRANDE]                         │
 │                                         │
-│ ████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░ │  ← barra de tiempo
+│ ████████████░░░░░░░░░░░░░░░░░░░░░░░░░░ │  ← barra de tiempo
 └─────────────────────────────────────────┘
 """
 
 import sys
 import os
 import time
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QApplication, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QProgressBar
 )
-from PyQt5.QtGui import QPixmap, QFont, QColor, QPainter
-from PyQt5.QtCore import Qt, QTimer, QSize
+from PyQt6.QtGui import QPixmap, QFont, QColor, QPainter
+from PyQt6.QtCore import Qt, QTimer, QSize
 
 
 class NotificacionPersonalizada(QWidget):
@@ -30,21 +30,18 @@ class NotificacionPersonalizada(QWidget):
                  duration=8000, parent=None):
         super().__init__(parent)
 
-        # Ventana sin bordes, siempre encima, fondo translúcido
         self.setWindowFlags(
-            Qt.WindowStaysOnTopHint |
-            Qt.FramelessWindowHint |
-            Qt.Tool
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.Tool
         )
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.duration = duration  # ms
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.duration = duration
 
-        # === Layout principal ===
         main_layout = QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # === Card (fondo oscuro) ===
         self.card = QWidget()
         self.card.setObjectName("card")
         self.card.setStyleSheet("""
@@ -58,20 +55,20 @@ class NotificacionPersonalizada(QWidget):
         card_layout.setContentsMargins(16, 16, 16, 16)
         card_layout.setSpacing(10)
 
-        # === Fila superior: icono + texto ===
         top_row = QHBoxLayout()
         top_row.setSpacing(12)
 
-        # Icono pequeño
         self.icon_label = QLabel()
         self.icon_label.setFixedSize(40, 40)
         self.icon_label.setStyleSheet("background: #313244; border-radius: 6px;")
         if icon_path and os.path.exists(icon_path):
-            pixmap = QPixmap(icon_path).scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            pixmap = QPixmap(icon_path).scaled(
+                40, 40, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
             self.icon_label.setPixmap(pixmap)
         top_row.addWidget(self.icon_label)
 
-        # Texto (título + cuerpo)
         text_layout = QVBoxLayout()
         text_layout.setSpacing(4)
 
@@ -87,7 +84,6 @@ class NotificacionPersonalizada(QWidget):
         self.body_label.setStyleSheet("""
             color: #a6adc8;
             font-size: 12px;
-            line-height: 1.4;
         """)
         self.body_label.setWordWrap(True)
 
@@ -97,13 +93,13 @@ class NotificacionPersonalizada(QWidget):
 
         card_layout.addLayout(top_row)
 
-        # === Imagen grande (opcional) ===
         self.image_label = QLabel()
-        self.image_label.setStyleSheet("border-radius: 8px; overflow: hidden;")
-        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setStyleSheet("border-radius: 8px;")
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         if image_path and os.path.exists(image_path):
             pixmap = QPixmap(image_path).scaled(
-                300, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                300, 160, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
             )
             self.image_label.setPixmap(pixmap)
             self.image_label.setFixedSize(pixmap.width(), pixmap.height())
@@ -111,7 +107,6 @@ class NotificacionPersonalizada(QWidget):
         else:
             self.image_label.hide()
 
-        # === Barra de tiempo animada ===
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setValue(100)
@@ -134,16 +129,14 @@ class NotificacionPersonalizada(QWidget):
         main_layout.addWidget(self.card)
         self.setLayout(main_layout)
 
-        # === Timer de cuenta regresiva ===
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_progress)
-        self.timer.start(50)  # actualiza cada 50ms para animación fluida
+        self.timer.start(50)
 
         self.start_time = time.time()
 
     def update_progress(self):
-        """Actualiza la barra de tiempo de forma fluida."""
-        elapsed = (time.time() - self.start_time) * 1000  # ms
+        elapsed = (time.time() - self.start_time) * 1000
         remaining = max(0, self.duration - elapsed)
         pct = (remaining / self.duration) * 100
         self.progress.setValue(int(pct))
@@ -157,11 +150,11 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Notificación personalizada")
-    parser.add_argument("--title", default="Notificación", help="Título")
-    parser.add_argument("--body", default="", help="Cuerpo")
-    parser.add_argument("--icon", default=None, help="Ruta del icono")
-    parser.add_argument("--image", default=None, help="Ruta de la imagen")
-    parser.add_argument("--duration", type=int, default=8000, help="Duración en ms")
+    parser.add_argument("--title", default="Notificación")
+    parser.add_argument("--body", default="")
+    parser.add_argument("--icon", default=None)
+    parser.add_argument("--image", default=None)
+    parser.add_argument("--duration", type=int, default=8000)
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
@@ -173,7 +166,7 @@ def main():
         duration=args.duration
     )
     notif.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
