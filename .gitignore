@@ -3,3 +3,6 @@ __pycache__/
 *.log
 .venv/
 src/__pycache__/
+
+__pycache__/
+*.pyc

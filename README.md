@@ -47,9 +47,35 @@ python src/notify_app.py \
 |---|---|---|
 | `--title` | `Notificación` | Título de la notificación |
 | `--body` | `""` | Cuerpo de texto |
-| `--icon` | `None` | Ruta del icono (40×40) |
+| `--icon` | `None` | Ruta del icono (32×32) |
 | `--image` | `None` | Ruta de la imagen grande |
 | `--duration` | `8000` | Duración en ms |
+| `--margin` | `16` | Margen desde el borde de la pantalla |
+| `--corner` | `top-right` | Esquina: `top-right`, `top-left`, `bottom-right`, `bottom-left` |
+
+## Soporte Wayland
+
+En sesiones Wayland, NotifyApp puede usar el protocolo `wlr_layer_shell_unstable_v1` para posicionar notificaciones con anclaje preciso a esquinas de la pantalla.
+
+```python
+from src.wayland_integration import WaylandLayerShell, is_wayland_session, get_anchor_for_corner
+
+if is_wayland_session():
+    wl = WaylandLayerShell()
+    if wl.connect() and wl.is_available():
+        # Crear una superficie de capa en la esquina superior derecha
+        anchor = get_anchor_for_corner("top-right")
+        layer_surface = wl.create_layer_surface(
+            surface=wl_surface,
+            layer=Layer.OVERLAY,
+            anchor=anchor,
+            width=320,
+            height=200,
+            margin=16,
+            namespace="notify-app"
+        )
+        wl.disconnect()
+```
 
 ## Requisitos del sistema (para notificaciones nativas)
 
