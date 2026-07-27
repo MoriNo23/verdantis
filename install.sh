@@ -14,5 +14,13 @@ echo "==> Dependencias Python..."
 pip install PyQt6 2>&1 | tail -1
 
 echo ""
+echo "==> Servicio systemd (user) para daemon DBus..."
+mkdir -p "$HOME/.config/systemd/user/"
+cp "$SCRIPT_DIR/notify-daemon.service" "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload
+echo ""
 echo "Done: source .venv/bin/activate"
-echo "Uso: python src/notify_app.py --title 'Hola' --body 'Mundo'"
+echo ""
+echo "Uso (one-shot): python src/notify_app.py --title 'Hola' --body 'Mundo'"
+echo "Uso (daemon):   systemctl --user enable --now notify-daemon.service"
+echo "                (reemplaza mako/deadd como daemon de notificaciones DBus)"
