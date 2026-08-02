@@ -129,7 +129,14 @@ def _icon_from_theme(icon_name, size=16):
     if not icon_name:
         return None
     try:
-        theme = Gtk.IconTheme.get_default()
+        # En Wayland, Gtk.IconTheme.get_default() a menudo no resuelve el
+        # tema (no tiene screen asociada) y devuelve None. Usar
+        # get_for_screen() con la screen por defecto es lo correcto en GTK3.
+        screen = Gdk.Screen.get_default()
+        if screen is not None:
+            theme = Gtk.IconTheme.get_for_screen(screen)
+        else:
+            theme = Gtk.IconTheme.new()
         info = theme.lookup_icon(icon_name, size, 0)
         if info:
             return info.load_icon()
