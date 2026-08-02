@@ -464,7 +464,7 @@ class WaylandPopup:
             raise RuntimeError("wlr_layer_shell no soportado")
 
         self.window = Gtk.Window.new(Gtk.WindowType.POPUP)
-        self.window.set_title("notify-app")
+        self.window.set_title("Verdantis")
         self.window.set_name("notify-card")
         self.window.set_app_paintable(True)
         screen = self.window.get_screen()

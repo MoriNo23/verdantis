@@ -1,0 +1,14 @@
+[Unit]
+Description=Verdantis DBus notification daemon
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.freedesktop.Notifications
+ExecStart=/home/fullmetal/repos/notify-app/.venv/bin/python /home/fullmetal/repos/notify-app/src/verdantis.py --daemon --corner top-right
+Restart=on-failure
+Environment=GDK_BACKEND=wayland
+
+[Install]
+WantedBy=graphical-session.target

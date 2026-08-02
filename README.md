@@ -1,4 +1,4 @@
-# NotifyApp
+# Verdantis
 
 ```
 ┌─────────────────────────────────────────┐
@@ -20,7 +20,7 @@ source .venv/bin/activate
 ## Uso
 
 ```bash
-python src/notify_app.py --title "Hola" --body "Mundo" --icon icon.png --image foto.jpg --corner top-right
+python src/verdantis.py --title "Hola" --body "Mundo" --icon icon.png --image foto.jpg --corner top-right
 ```
 
 | Flag | Default | Descripción |
@@ -34,8 +34,9 @@ python src/notify_app.py --title "Hola" --body "Mundo" --icon icon.png --image f
 | `--accent` | `#89b4fa` | Color acento hex |
 | `--force-wayland` | | Forzar backend GTK+layer-shell |
 | `--force-qt` | | Forzar backend PyQt6 |
+| `--daemon` | | Iniciar como daemon DBus |
 
 ## Backends
 
 - **Wayland**: GTK3 + gtk-layer-shell (anclaje preciso a esquinas)
-- **X11/fallback**: PyQt6 (posicionamiento via `move()`)
+- **X11/fallback**: PyQt6 (posicionamiento via `move()`)```

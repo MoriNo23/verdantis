@@ -161,7 +161,7 @@ def main():
     args = parser.parse_args()
 
     if args.daemon:
-        from notify_daemon import main as daemon_main
+        from verdantis_daemon import main as daemon_main
         import sys as _sys
         _sys.argv = [_sys.argv[0], "--corner", args.corner]
         daemon_main()
@@ -188,7 +188,7 @@ def main():
             print(f"[notify] Wayland falló ({e}); usando Qt", file=sys.stderr)
 
     app = QApplication.instance() or QApplication(sys.argv)
-    app.setApplicationName("notify-app")
+    app.setApplicationName("Verdantis")
     n = NotificacionPersonalizada(
         titulo=args.title, cuerpo=args.body,
         icon_path=args.icon, image_path=args.image,

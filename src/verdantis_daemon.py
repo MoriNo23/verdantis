@@ -9,7 +9,7 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('GtkLayerShell', '0.1')
 from gi.repository import Gtk, GtkLayerShell, GLib, Gio
 
-from wayland_popup import WaylandPopup
+from wayland_popup import WaylandPopup, _find_desktop_file
 
 NOTIFICATIONS_XML = '''
 <node>
@@ -112,10 +112,13 @@ class NotificationManager:
         self._next_id += 1
 
         url = self._extract_url(hints)
+        desktop_entry = hints.get("desktop-entry", "") or app_name
         self._notifications[nid] = {
             "actions": actions,
             "hints": hints,
             "url": url,
+            "app_name": app_name,
+            "desktop_entry": desktop_entry,
         }
 
         avatar_path = hints.get("image-path", "")
@@ -166,10 +169,37 @@ class NotificationManager:
                 break
         self._queue = [(qid, qk) for qid, qk in self._queue if qid != nid]
 
+    def _focus_or_activate_app(self, desktop_entry, app_name):
+        target = desktop_entry or app_name
+        if not target:
+            return
+        desktop_path = _find_desktop_file(target)
+        desktop_id = ""
+        if desktop_path and os.path.exists(desktop_path):
+            desktop_id = os.path.splitext(os.path.basename(desktop_path))[0]
+            try:
+                app_info = Gio.DesktopAppInfo.new_from_filename(desktop_path)
+                if app_info:
+                    app_info.launch([], None)
+                    return
+            except Exception:
+                pass
+        # Fallback: gtk-launch con el desktop-id o el nombre de la app
+        launch_id = desktop_id or target
+        try:
+            subprocess.Popen(
+                ["gtk-launch", launch_id],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
+
     def _on_action_invoked(self, nid):
         info = self._notifications.get(nid, {})
         actions = info.get("actions", [])
         url = info.get("url", "")
+        app_name = info.get("app_name", "")
+        desktop_entry = info.get("desktop_entry", "")
 
         default_action = "default"
         for i in range(0, len(actions), 2):
@@ -192,8 +222,14 @@ class NotificationManager:
                 subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
                 pass
+        else:
+            self._focus_or_activate_app(desktop_entry, app_name)
 
-        self._on_closed(nid)
+        # Cierre inmediato del popup visual (su callback dispara _on_closed)
+        for aid, popup in list(self._active):
+            if aid == nid:
+                popup._close()
+                break
 
     def _on_closed(self, nid):
         self._active = [(aid, p) for aid, p in self._active if aid != nid]
@@ -260,7 +296,7 @@ class NotificationDaemon:
             invocation.return_value(GLib.Variant("(as)", (caps,)))
         elif method_name == "GetServerInformation":
             invocation.return_value(GLib.Variant("(ssss)", (
-                "notify-app", "opencode", "0.1.0", "1.2",
+                "Verdantis", "Verdantis", "0.1.0", "1.2",
             )))
 
     def _handle_get_property(self, conn, sender, obj_path, iface_name, prop_name):
