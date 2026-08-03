@@ -114,14 +114,25 @@ def test_card_background_color_is_drak_theme():
 # ---------------------------------------------------------------------------
 
 def test_card_dimensions_for_image_and_body():
-    """La altura de la card crece si hay imagen banner (260x140)."""
-    # Con cuerpo de 2 líneas + app_name: text_h=20+21+36=77, row_h=max(77,80)=80
-    altura_sin = wp.WaylandPopup.calc_card_height("App", "cuerpo\nline2", "")
-    # Con imagen (el check de existencia ocurre en el caller; la fórmula
-    # añade 8+140 si el path existe). Verificamos que la fórmula base
-    # da la altura mínima y que el padding extra es el esperado.
-    assert altura_sin == 14 + 80 + 14, f"altura sin img={altura_sin}"
-    assert wp.WaylandPopup.calc_card_height("App", "c", "") == 14 + 80 + 14
+    """La altura de la card es coherente con la medición real del body (no
+    desborda) y crece si hay imagen banner (260x140)."""
+    # "c" corto → row mínimo (80) → card mínima
+    assert wp.WaylandPopup.calc_card_height("App", "c", "") >= 14 + 80 + 14
+    # cuerpo largo (wrap) genera más alto que uno corto
+    largo = wp.WaylandPopup.calc_card_height("App", "x" * 400, "", expanded=True)
+    corto = wp.WaylandPopup.calc_card_height("App", "c", "", expanded=True)
+    assert largo > corto, "un body largo expandido debe agrandar la card"
+    # imagen añade su banner (8 + 140) a la altura base
+    import os
+    tmp = os.path.join(os.path.dirname(__file__), "_tmp_icon_x.png")
+    with open(tmp, "wb") as f:
+        f.write(b"fake png")
+    try:
+        con_img = wp.WaylandPopup.calc_card_height("App", "c", tmp)
+    finally:
+        os.remove(tmp)
+    sin_img = wp.WaylandPopup.calc_card_height("App", "c", "")
+    assert con_img == sin_img + 8 + 140, f"con img={con_img}, sin={sin_img}"
 
 
 def test_unified_card_height_formula():

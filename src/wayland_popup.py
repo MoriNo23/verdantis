@@ -159,9 +159,84 @@ def _extract_markup_url(text):
     return ""
 
 
+_CARD_WIDTH = 360
+_TEXT_COL_W = _CARD_WIDTH - 14 - 80 - 12 - 14  # 240: pad, icon, gap, pad
+
+# Tags de markup que Pango SOPORTA de verdad. Pango NO conoce <a> ni <img>:
+# mandarle un body con <a href> a set_markup rompe el parseo (warning
+# "Unknown tag 'a'") y el texto deja de envolverse. Por eso se sanitizan.
+_PANGO_TAGS = ("b>", "i>", "u>", "s>", "big>", "small>", "tt>", "sub>",
+               "sup>", "span", "strikethrough>")
+
+_LINK_COLOR = "#89b4fa"
+
+
+def _sanitize_pango_markup(text):
+    """Convierte markup de body (freedesktop 1.2) a markup que Pango entienda.
+
+    - <a href="URL">label</a> → <span underline="single" color="...">label</span>
+      (Pango no tiene <a>; el subrayado mantiene la semántica de link y la
+      URL ya la extrae _extract_markup_url para el click).
+    - Devuelve el texto tal cual si no hay tags reconocibles."""
+    import re
+    text = re.sub(
+        r'<a\s+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+        r'<span underline="single" color="%s">\2</span>' % _LINK_COLOR,
+        text, flags=re.S | re.I)
+    return text
+
+
+def _has_pango_markup(text):
+    """True si el texto contiene al menos una tag de markup que Pango soporta."""
+    return "<" in text and any(t in text for t in _PANGO_TAGS)
+
+
 def _hex_rgb(h):
     h = h.lstrip("#")
     return tuple(int(h[i:i+2], 16) / 255 for i in (0, 2, 4))
+
+
+def _body_metrics(cuerpo, width, font_size=14, max_lines=None):
+    """Mide el layout del body: (líneas visuales, altura_px lógica).
+
+    - Si `max_lines` es >0, aplica el mismo cap de altura + ellipsis que
+      _draw_text (colapsado) y devuelve la altura CAPPED — que es la que
+      realmente vemos dibujada.
+    - Si `max_lines` es None, devuelve la altura natural (todo el wrap).
+
+    Sin display (headless): Pango.Context() necesito el font_map de PangoCairo
+    (imprescindible para medir estilos; un Context() pelado no envuelve). El
+    markup/wrap coincide con _draw_text, así card height y botón anclan justo
+    debajo del texto (solve del solape body↔botón)."""
+    cuerpo = (cuerpo or "").strip()
+    if not cuerpo:
+        return 0, 0
+    cuerpo = _sanitize_pango_markup(cuerpo)
+    ctx = Pango.Context()
+    ctx.set_font_map(PangoCairo.font_map_get_default())
+    layout = Pango.Layout(ctx)
+    fd = Pango.FontDescription("sans-serif " + str(font_size))
+    layout.set_font_description(fd)
+    if _has_pango_markup(cuerpo):
+        try:
+            layout.set_markup(cuerpo, -1)
+        except Exception:
+            layout.set_text(cuerpo, -1)
+    else:
+        layout.set_text(cuerpo, -1)
+    layout.set_width(int(max(1.0, width) * Pango.SCALE))
+    layout.set_wrap(Pango.WrapMode.WORD_CHAR)
+    if max_lines:
+        layout.set_height(max_lines * int(font_size * 1.6 * Pango.SCALE))
+        layout.set_ellipsize(Pango.EllipsizeMode.END)
+    lines = layout.get_line_count()
+    _, logical = layout.get_pixel_extents()
+    return lines, max(0.0, logical.height)
+
+
+def _count_body_lines(cuerpo, width, font_size=14):
+    """Líneas visuales si el body se muestra COMPLETO (sin cap)."""
+    return _body_metrics(cuerpo, width, font_size)[0]
 
 
 def _make_circular(pixbuf, size):
@@ -181,14 +256,21 @@ def _make_circular(pixbuf, size):
 
 
 class NotificationWidget(Gtk.DrawingArea):
+    # Constantes de layout / colapso
+    _MAX_VISIBLE_LINES = 3      # líneas visibles del body antes de colapsar
+    _BTN_H = 20                 # alto de la franja del botón expandir/contraer
+
     def __init__(self, app_name, app_icon, titulo, cuerpo, icon_path, image_path, accent,
-                 image_data_raw=None, on_click=None):
+                 image_data_raw=None, on_click=None, on_resize=None):
         super().__init__()
         self.set_app_paintable(True)
         screen = self.get_screen()
         visual = screen.get_rgba_visual()
         if visual:
             self.set_visual(visual)
+        self._expanded = False
+        self._expand_rect = None
+        self._on_resize = on_resize
         self._fraction = 1.0
         self._on_click = on_click
         self._app_name = _get_app_display_name(app_name)
@@ -198,7 +280,8 @@ class NotificationWidget(Gtk.DrawingArea):
         self._card_bg = _hex_rgb("#1e1e2e")
 
         # Left (uncovered) - normal colors
-        self._left_title = _hex_rgb("#cdd6f4")
+        # Título más claro que el body (#e6e9f2 vs #cdd6f4) para jerarquía
+        self._left_title = _hex_rgb("#e6e9f2")
         self._left_body = _hex_rgb("#cdd6f4")
         self._left_app = _hex_rgb("#a6adc8")
 
@@ -272,9 +355,33 @@ class NotificationWidget(Gtk.DrawingArea):
         self.connect("button-press-event", self._on_button_press)
 
     def _on_button_press(self, widget, event):
+        # Click en la franja Expandir/Contraer → toggle el estado (consume el evento)
+        if self._expand_rect:
+            x0, y0, x1, y1 = self._expand_rect
+            if x0 <= event.x <= x1 and y0 <= event.y <= y1:
+                self.toggle_expanded()
+                return True
         if self._on_click:
             self._on_click()
         return True
+
+    def toggle_expanded(self):
+        self._expanded = not self._expanded
+        self.queue_draw()
+        if self._on_resize:
+            self._on_resize(self.desired_height())
+
+    def desired_height(self):
+        """Altura en el estado actual (colapsado/expandido) para redimensionar la window.
+        Incluye la altura del banner de imagen si el widget lo tiene cargado (equivale
+        a lo que calc_card_height suma cuando existe image_path)."""
+        h = WaylandPopup.calc_card_height(
+            self._app_name, self._cuerpo, "",
+            text_width=_TEXT_COL_W, expanded=self._expanded,
+        )
+        if self._image_pb is not None:
+            h += 8 + 140
+        return h
 
     def set_fraction(self, f):
         self._fraction = f
@@ -289,8 +396,9 @@ class NotificationWidget(Gtk.DrawingArea):
         if bold:
             fd.set_weight(Pango.Weight.BOLD)
         layout.set_font_description(fd)
-        # Soportar markup (body-markup): <b>, <i>, <u>, <a href>
-        if "<" in text and (("b>" in text) or ("i>" in text) or ("a " in text)):
+        # Soportar markup (body-markup): <b>, <i>, <u> y <a href> (sanitizado a span)
+        text = _sanitize_pango_markup(text)
+        if _has_pango_markup(text):
             try:
                 layout.set_markup(text, -1)
             except Exception:
@@ -329,7 +437,7 @@ class NotificationWidget(Gtk.DrawingArea):
             cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
             cr.close_path()
 
-        r = 8
+        r = 12   # radio card: 8→12 (más moderno/redondeado, Linear usa 8-12)
 
         # Background
         cr.set_source_rgba(self._card_bg[0], self._card_bg[1], self._card_bg[2], 0.85)
@@ -349,19 +457,29 @@ class NotificationWidget(Gtk.DrawingArea):
             cr.fill()
             cr.restore()
 
-        # Subtle translucent edge (shadow-like)
-        cr.set_source_rgba(0.5, 0.5, 0.5, 0.25)
-        cr.set_line_width(2.5)
+        # Subtle translucent edge (shadow-like) — borde sutil blanco estilo Linear
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.08)
+        cr.set_line_width(1.5)
         rrect(cr, 0.5, 0.5, W - 1, H - 1, r)
         cr.stroke()
 
-        # Calculate text block height for vertical centering
+        # --- Layout: real wrapped line count (coincide con _draw) ---
+        total_lines = _count_body_lines(self._cuerpo, text_col_w, 14)
+        expanded = self._expanded
+        cap = min(total_lines, self._MAX_VISIBLE_LINES)
+        if expanded:
+            _, body_h = _body_metrics(self._cuerpo, text_col_w, 14, max_lines=None)
+        else:
+            _, body_h = _body_metrics(self._cuerpo, text_col_w, 14, max_lines=cap)
+        has_more = total_lines > self._MAX_VISIBLE_LINES   # overflow => mostrar botón (debe persistir al expandir para poder contraer)
+
         text_h = 0
         if self._app_name:
             text_h += 20
-        text_h += 21
-        for line in self._cuerpo.split("\n"):
-            text_h += 18
+        text_h += 22
+        text_h += body_h
+        if has_more:
+            text_h += self._BTN_H + 6   # franja del botón expandir/contraer
         row_h = max(text_h, icon_size)
         cy = pad + (row_h - icon_size) / 2
 
@@ -407,19 +525,81 @@ class NotificationWidget(Gtk.DrawingArea):
 
             cr.set_source_rgb(*tcol)
             cr.select_font_face("sans-serif", 0, 1)
-            cr.set_font_size(11)
+            cr.set_font_size(12)
             cr.move_to(text_col_x, yy + 11)
             cr.show_text(self._titulo)
-            yy += 21
+            yy += 22
 
+            # Body con wrap real + ellipsis cuando colapsa
             cr.set_source_rgb(*bcol)
-            cr.select_font_face("sans-serif", 0, 0)
-            cr.set_font_size(14)
-            body = self._cuerpo
-            for line in body.split("\n"):
-                cr.move_to(text_col_x, yy + 14)
-                cr.show_text(line)
-                yy += 18
+            self._draw_text(cr, self._cuerpo, text_col_x, yy, text_col_w, 14,
+                            bcol, bcol, bold=False,
+                            max_lines=(0 if expanded else cap))
+
+        # Botón expandir/contraer (si hay overflow), una sola pasada
+        self._expand_rect = None
+        if has_more:
+            body_top = ty
+            if self._app_name:
+                body_top += 20
+            body_top += 22
+            # Ancla justo debajo del body medido (altura lógica real), nunca se solapa
+            btn_y = body_top + body_h
+            btn_h = self._BTN_H
+            label = "Ver menos" if expanded else "Ver más"
+            btn_x0 = text_col_x
+            btn_x1 = text_col_x + text_col_w
+            self._expand_rect = (btn_x0, btn_y, btn_x1, btn_y + btn_h)
+            # Pill background sutil del color acento (+ borde fino, estilo Linear)
+            accent_r = self._accent_rgb[0]
+            accent_g = self._accent_rgb[1]
+            accent_b = self._accent_rgb[2]
+            # Pill con padding horizontal interno: margen de 8px a cada lado
+            pad_x = 8
+            pill_x0 = btn_x0 + pad_x
+            pill_w = (btn_x1 - btn_x0) - 2 * pad_x
+            for clip_x, is_dark in ((wx, False), (W - wx, True)):
+                if clip_x <= 0:
+                    continue
+                cr.save()
+                if clip_x < W:
+                    cr.rectangle((0 if not is_dark else wx), 0,
+                                 (clip_x if not is_dark else W - wx), H)
+                    cr.clip()
+                cr.set_source_rgba(accent_r, accent_g, accent_b, 0.18)
+                rrect(cr, pill_x0, btn_y, pill_w, btn_h, btn_h / 2)
+                cr.fill()
+                # borde sutil del pill
+                cr.set_source_rgba(accent_r, accent_g, accent_b, 0.35)
+                cr.set_line_width(1.0)
+                rrect(cr, pill_x0, btn_y, pill_w, btn_h, btn_h / 2)
+                cr.stroke()
+                if is_dark:  # dark pass: texto en la parte cubierta
+                    cr.set_source_rgb(0.85, 0.95, 0.85)
+                else:
+                    cr.set_source_rgb(*self._left_title)
+                # Texto "Ver más / Ver menos" + chevrón dibujado con cairo (siempre visible)
+                cr.select_font_face("sans-serif", 0, 0)
+                cr.set_font_size(11)
+                tw = len(label) * 6 + 10      # texto + 5px de chevrón + gap
+                tx0 = pill_x0 + pill_w - tw
+                cr.move_to(tx0, btn_y + btn_h / 2 + 4)
+                cr.show_text(label)
+                # Chevron cairo (triángulo) a la derecha del texto, verticalmente centrado
+                cx0 = tx0 + len(label) * 6 + 2
+                cy_mid = btn_y + btn_h / 2 - 1 if not expanded else btn_y + btn_h / 2 + 1
+                if expanded:
+                    cr.move_to(cx0, cy_mid - 4)
+                    cr.line_to(cx0 + 5, cy_mid + 2.5)
+                    cr.line_to(cx0 + 10, cy_mid - 4)   # apunta arriba = "ver menos"
+                else:
+                    cr.move_to(cx0, cy_mid + 4)
+                    cr.line_to(cx0 + 5, cy_mid - 2.5)
+                    cr.line_to(cx0 + 10, cy_mid + 4)   # apunta abajo = "ver más"
+                cr.close_path()
+                cr.set_source_rgb(*self._accent_rgb)   # chevrón en color acento (visible)
+                cr.fill()
+                cr.restore()
 
         # Draw light text in left portion (uncovered)
         cr.save()
@@ -541,6 +721,7 @@ class WaylandPopup:
             self.accent,
             self.image_data_raw,
             self._on_click,
+            on_resize=self._resize_card,
         )
         h = WaylandPopup.calc_card_height(self.app_name, self.cuerpo, self.image_path)
         self._card.set_size_request(CARD_WIDTH, h)
@@ -548,6 +729,16 @@ class WaylandPopup:
         if not self._on_close:
             self.window.connect("destroy", lambda *a: Gtk.main_quit())
         self.window.connect("key-press-event", lambda *a: self._close())
+
+    def _resize_card(self, new_h):
+        """Redimensiona la window (layer-shell) al alto pedido por toggle expandir/contraer."""
+        if not self.window or not self._card:
+            return
+        self._card.set_size_request(_CARD_WIDTH, new_h)
+        self.window.set_size_request(_CARD_WIDTH, new_h)
+        self.window.queue_resize()
+        self.window.show_all()          # reactiva layout
+        GtkLayerShell.try_force_commit(self.window)
 
     def _update_progress(self):
         if self._closed:
@@ -561,13 +752,30 @@ class WaylandPopup:
         return True
 
     @staticmethod
-    def calc_card_height(app_name, cuerpo, image_path):
+    def calc_card_height(app_name, cuerpo, image_path, text_width=_TEXT_COL_W,
+                         expanded=False):
+        """Altura de la card según el wrap REAL del cuerpo.
+
+        `text_width` es el ancho de la columna de texto (card 360 − pad 14 − icon
+        80 − gap 12 − pad 14 = 240). Antes se contaban líneas físicas (split
+        "\\n") y el texto desbordaba el borde; ahora se cuentan las líneas
+        visuales envolviéndolo. Si `expanded`, se muestran todas las líneas;
+        si no, se limitan a _MAX_VISIBLE_LINES y se reserva la franja del botón."""
         text_h = 0
         if app_name:
             text_h += 20
-        text_h += 21
-        for _ in cuerpo.split("\n"):
-            text_h += 18
+        text_h += 22
+        total = _count_body_lines(cuerpo, text_width, 14)
+        if expanded:
+            # Altura NATURAL del body completo (toda la envoltura)
+            _, body_h = _body_metrics(cuerpo, text_width, 14, max_lines=None)
+        else:
+            # Altura CAPPED + ellipsis (la que dibuja _draw_text al colapsar)
+            cap = min(total, NotificationWidget._MAX_VISIBLE_LINES)
+            _, body_h = _body_metrics(cuerpo, text_width, 14, max_lines=cap)
+        text_h += body_h
+        if total > NotificationWidget._MAX_VISIBLE_LINES:
+            text_h += NotificationWidget._BTN_H + 6
         row_h = max(text_h, 80)
         h = 14 + row_h + 14
         if image_path and os.path.exists(image_path):
