@@ -9,7 +9,7 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('GtkLayerShell', '0.1')
 from gi.repository import Gtk, GtkLayerShell, GLib, Gio
 
-from wayland_popup import WaylandPopup, _find_desktop_file
+from wayland_popup import WaylandPopup, _find_desktop_file, _extract_markup_url
 
 NOTIFICATIONS_XML = '''
 <node>
@@ -112,13 +112,26 @@ class NotificationManager:
         self._next_id += 1
 
         url = self._extract_url(hints)
+        # URL de hyperlink en el body (body-hyperlinks): <a href="...">
+        markup_url = _extract_markup_url(body)
+        if not url and markup_url:
+            url = markup_url
         desktop_entry = hints.get("desktop-entry", "") or app_name
+        # Urgency: BYTE 0=low, 1=normal, 2=critical (spec freedesktop 1.2)
+        urgency = hints.get("urgency", 1)
+        try:
+            urgency = int(urgency)
+        except (TypeError, ValueError):
+            urgency = 1
+        if urgency not in (0, 1, 2):
+            urgency = 1
         self._notifications[nid] = {
             "actions": actions,
             "hints": hints,
             "url": url,
             "app_name": app_name,
             "desktop_entry": desktop_entry,
+            "urgency": urgency,
         }
 
         avatar_path = hints.get("image-path", "")
@@ -142,6 +155,7 @@ class NotificationManager:
             "duration": expire_timeout if expire_timeout > 0 else 6000,
             "corner": self._corner,
             "accent": hints.get("accent", "#80cbc4"),
+            "urgency": urgency,
             "app_name": app_name,
             "app_icon": app_icon_file,
             "on_close": lambda nid=nid: self._on_closed(nid),
@@ -292,7 +306,8 @@ class NotificationDaemon:
             self._manager._close_id(nid)
             invocation.return_value(None)
         elif method_name == "GetCapabilities":
-            caps = ["actions", "body", "icon-static", "persistence"]
+            caps = ["actions", "body", "body-markup", "body-hyperlinks",
+                    "icon-static", "persistence"]
             invocation.return_value(GLib.Variant("(as)", (caps,)))
         elif method_name == "GetServerInformation":
             invocation.return_value(GLib.Variant("(ssss)", (

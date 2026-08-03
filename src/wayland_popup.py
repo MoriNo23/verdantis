@@ -145,6 +145,20 @@ def _icon_from_theme(icon_name, size=16):
     return None
 
 
+def _extract_markup_url(text):
+    """Extrae el href del primer <a href="..."> en un body con markup.
+    Devuelve la URL o '' si no hay. (body-hyperlinks support)"""
+    if not text or "<a " not in text:
+        return ""
+    import re
+    m = re.search(r'<a\s+[^>]*href=["\']([^"\']+)["\']', text, re.IGNORECASE)
+    if m:
+        url = m.group(1)
+        if url.startswith(("http://", "https://", "mailto:", "tel:")):
+            return url
+    return ""
+
+
 def _hex_rgb(h):
     h = h.lstrip("#")
     return tuple(int(h[i:i+2], 16) / 255 for i in (0, 2, 4))
@@ -275,7 +289,14 @@ class NotificationWidget(Gtk.DrawingArea):
         if bold:
             fd.set_weight(Pango.Weight.BOLD)
         layout.set_font_description(fd)
-        layout.set_text(text, -1)
+        # Soportar markup (body-markup): <b>, <i>, <u>, <a href>
+        if "<" in text and (("b>" in text) or ("i>" in text) or ("a " in text)):
+            try:
+                layout.set_markup(text, -1)
+            except Exception:
+                layout.set_text(text, -1)
+        else:
+            layout.set_text(text, -1)
         layout.set_width(int(w * Pango.SCALE))
         layout.set_wrap(Pango.WrapMode.WORD_CHAR)
 
@@ -427,7 +448,8 @@ class NotificationWidget(Gtk.DrawingArea):
 class WaylandPopup:
     def __init__(self, titulo="", cuerpo="", icon_path=None, image_path=None,
                  duration=8000, margin=16, corner="top-right", accent="#89b4fa",
-                 app_name="", app_icon="", on_close=None, image_data_raw=None, on_click=None):
+                 app_name="", app_icon="", on_close=None, image_data_raw=None,
+                 on_click=None, urgency=1):
         self.app_name = app_name
         self.app_icon = app_icon
         self.titulo = titulo
@@ -446,6 +468,23 @@ class WaylandPopup:
         self._on_close = on_close
         self._on_click = on_click
         self._stack_margin = 0
+
+        # Urgency (spec freedesktop 1.2): 0=low, 1=normal, 2=critical
+        self.urgency = urgency if urgency in (0, 1, 2) else 1
+        # Ajustes por nivel de urgencia (respeta duration=0 => nunca expirar)
+        if self.urgency == 0:
+            # low: más tenue y corto
+            self._bg_alpha = 0.55
+            if duration > 0:
+                self.duration = int(duration * 0.7)
+        elif self.urgency == 2:
+            # critical: opaco y persistente (no expirar si duration<=0)
+            self._bg_alpha = 1.0
+            if duration > 0:
+                self.duration = int(duration * 1.5)
+        else:
+            # normal: comportamiento actual
+            self._bg_alpha = 0.85
 
     _EDGES = {
         "top": GtkLayerShell.Edge.TOP,
