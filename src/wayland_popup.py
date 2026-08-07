@@ -1,6 +1,8 @@
 import math
 import os
+import re
 import configparser
+import cairo
 os.environ['GDK_BACKEND'] = 'wayland'
 
 import time
@@ -95,7 +97,12 @@ def _find_desktop_file(app_name):
 
 
 def _get_app_icon_from_desktop(app_name, size=80):
-    path = _find_desktop_file(app_name)
+    """Icono de la app desde .desktop, SOLO con match EXACTO.
+
+    (Igual regla que _get_app_display_name: el match difuso de _find_desktop_file
+    resuelve "brave" al primer PWA instalado —brave-<appid>.desktop— y el toast
+    mostraba el icono de la web app xat. Exacto o nada → cae al tema.)"""
+    path = _exact_desktop_file(app_name)
     if not path:
         return None
     try:
@@ -113,8 +120,33 @@ def _get_app_icon_from_desktop(app_name, size=80):
     return None
 
 
+def _exact_desktop_file(app_name):
+    """Resuelve el .desktop con match EXACTO (stem/WMClass/Name), sin substring.
+
+    Devuelve path o None. Es la única vía segura: los PWA de navegador
+    (brave-<appid>.desktop) tienen prefijos que rompen el match difuso."""
+    if not app_name:
+        return None
+    if _desktop_cache is None:
+        _rebuild_desktop_cache()
+    entries = _desktop_cache.get(app_name.lower().strip())
+    if entries:
+        return entries[0]["path"]
+    return None
+
+
 def _get_app_display_name(app_name):
-    path = _find_desktop_file(app_name)
+    """Nombre visible de la app.
+
+    Usa SOLO match EXACTO (stem/WMClass/Name) contra los .desktop. El match
+    difuso por substring de _find_desktop_file es un arma de doble filo: "brave"
+    cae en el primer PWA instalado (brave-<appid>.desktop, ej "xat de masha") y
+    todas las notificaciones de Brave muestran ese nombre. Si no hay match
+    exacto, mostrar el app_name crudo que manda el sender (ej: "Brave").
+    """
+    if not app_name:
+        return ""
+    path = _exact_desktop_file(app_name)
     if not path:
         return app_name
     try:
@@ -123,6 +155,42 @@ def _get_app_display_name(app_name):
         return cp.get("Desktop Entry", "Name", fallback=app_name)
     except Exception:
         return app_name
+
+
+_URL_RE = re.compile(r'https?://[^\s<>"\'\)\]]+', re.IGNORECASE)
+# Hosts desnudos: dominios (xat.com, www.foo.com/path) e IP:puerto (127.0.0.1:8766).
+# Brave inyecta el link del sitio como primera línea del body
+# (<a href="URL">HOST</a>) — con sanitize queda el host pelado; hay que sacarlo.
+_BARE_HOST_RE = re.compile(
+    # Dominios: cada label arranca con letra (evita versiones "0.1.0.tar.gz")
+    r'(?<![\w./-])(?:[a-z][\w-]*\.)+[a-z]{2,}(?::\d+)?(?:/[^\s<>"\'\)\]]*)?'
+    r'|\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?(?:/[^\s<>"\'\)\]]*)?',
+    re.IGNORECASE,
+)
+
+
+def _strip_urls(text):
+    """Quita URLs del TEXTO VISIBLE del body (las notificaciones son un botón:
+    el destino se usa para el click, no se muestra).
+
+    - http(s)://... (texto plano)
+    - hosts desnudos (xat.com, 127.0.0.1:8766): Brave inyecta el URL del sitio
+      como primera línea del body; además, el set_height+ellipsize de Pango con
+      ese salto explícito colapsa TODO el body a esa única línea (el body real
+      no se veía). Sacarlo arregla ambas cosas.
+    - NO toca URLs dentro de atributos de markup (ej: <a href="URL">label</a>)
+    - Colapsa saltos de línea seguidos (\n\n\n → \n).
+    """
+    if not text:
+        return text
+    parts = re.split(r'(<[^>]*>)', text)
+    out = "".join(
+        (_BARE_HOST_RE.sub("", _URL_RE.sub("", part)) if not part.startswith("<") else part)
+        for part in parts
+    )
+    # Limpiar <a> que quedaron vacíos tras quitar el host/label
+    out = re.sub(r'<a\s+[^>]*>\s*</a>', '', out)
+    return re.sub(r'\n{2,}', '\n', out).strip("\n")
 
 
 def _icon_from_theme(icon_name, size=16):
@@ -168,20 +236,18 @@ _TEXT_COL_W = _CARD_WIDTH - 14 - 80 - 12 - 14  # 240: pad, icon, gap, pad
 _PANGO_TAGS = ("b>", "i>", "u>", "s>", "big>", "small>", "tt>", "sub>",
                "sup>", "span", "strikethrough>")
 
-_LINK_COLOR = "#89b4fa"
-
 
 def _sanitize_pango_markup(text):
     """Convierte markup de body (freedesktop 1.2) a markup que Pango entienda.
 
-    - <a href="URL">label</a> → <span underline="single" color="...">label</span>
-      (Pango no tiene <a>; el subrayado mantiene la semántica de link y la
-      URL ya la extrae _extract_markup_url para el click).
+    - <a href="URL">label</a> → label plano (SIN subrayado ni color de link).
+      El toast ES el botón: el único propósito es el click (action/URL que ya
+      extrae el daemon). No hay links internos, nada de <a href> visible.
     - Devuelve el texto tal cual si no hay tags reconocibles."""
     import re
     text = re.sub(
-        r'<a\s+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
-        r'<span underline="single" color="%s">\2</span>' % _LINK_COLOR,
+        r'<a\s+[^>]*>(.*?)</a>',
+        r'\1',
         text, flags=re.S | re.I)
     return text
 
@@ -261,7 +327,8 @@ class NotificationWidget(Gtk.DrawingArea):
     _BTN_H = 20                 # alto de la franja del botón expandir/contraer
 
     def __init__(self, app_name, app_icon, titulo, cuerpo, icon_path, image_path, accent,
-                 image_data_raw=None, on_click=None, on_resize=None):
+                 image_data_raw=None, on_click=None, on_resize=None,
+                 app_label=None, hide_title=False):
         super().__init__()
         self.set_app_paintable(True)
         screen = self.get_screen()
@@ -273,9 +340,15 @@ class NotificationWidget(Gtk.DrawingArea):
         self._on_resize = on_resize
         self._fraction = 1.0
         self._on_click = on_click
+        # Label de app compuesto: "Brave - <tab>" (navegadores). Con hide_title,
+        # el título va dentro del label y no se dibuja como línea aparte.
+        self._app_label = app_label
+        self._hide_title = hide_title
         self._app_name = _get_app_display_name(app_name)
         self._titulo = titulo
-        self._cuerpo = cuerpo
+        # El URL se usa para el click (ya lo extrae el daemon del body/hints);
+        # en el TEXTO VISIBLE no se muestra (las notificaciones son un botón).
+        self._cuerpo = _strip_urls(cuerpo)
         self._accent_rgb = _hex_rgb(accent)
         self._card_bg = _hex_rgb("#1e1e2e")
 
@@ -316,21 +389,14 @@ class NotificationWidget(Gtk.DrawingArea):
             except Exception:
                 pass
 
-        if not self._avatar_pb:
-            avatar_from_desktop = _get_app_icon_from_desktop(app_name, 80)
-            if avatar_from_desktop:
-                self._avatar_pb = _make_circular(avatar_from_desktop, 80)
-            else:
-                avatar_from_theme = _icon_from_theme(app_icon, 80)
-                if not avatar_from_theme:
-                    avatar_from_theme = _icon_from_theme(app_name, 80)
-                if avatar_from_theme:
-                    self._avatar_pb = _make_circular(avatar_from_theme, 80)
-
-        if image_data_raw:
+        # Avatar = ICONO DEL TAB (lo que manda el navegador como image-data).
+        # Antes image-data iba al banner grande (favicon gigante estirado) y el
+        # slot izquierdo caía al icono de escritorio (Brave). Ahora: image-data
+        # primero; sin imagen real → SIN slot (no se reserva espacio por nada).
+        if not self._avatar_pb and image_data_raw:
             try:
                 w, h, rowstride, has_alpha, bps, n_channels, data = image_data_raw
-                self._image_pb = GdkPixbuf.Pixbuf.new_from_bytes(
+                raw = GdkPixbuf.Pixbuf.new_from_bytes(
                     GLib.Bytes.new(data),
                     GdkPixbuf.Colorspace.RGB,
                     has_alpha,
@@ -338,11 +404,12 @@ class NotificationWidget(Gtk.DrawingArea):
                     w, h,
                     rowstride,
                 )
-                self._image_pb = self._image_pb.scale_simple(
-                    260, 140, GdkPixbuf.InterpType.BILINEAR)
+                self._avatar_pb = _make_circular(raw, 80)
             except Exception:
                 pass
 
+        # Banner grande: SOLO image-path (imagen real de la app, ej: descarga).
+        # image-data ya no va acá (es el icono, no una imagen para agrandar).
         if image_path and os.path.exists(image_path):
             try:
                 self._image_pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(
@@ -371,13 +438,24 @@ class NotificationWidget(Gtk.DrawingArea):
         if self._on_resize:
             self._on_resize(self.desired_height())
 
+    def _eff_text_width(self):
+        """Ancho real de la columna de texto en el estado actual.
+
+        Con avatar: 360 - 14 - 80 - 12 - 14 = 240 (igual que _TEXT_COL_W).
+        Sin avatar (no hay imagen): texto a ancho completo (~332)."""
+        base = _CARD_WIDTH - 14 - 14
+        if self._avatar_pb:
+            base -= 80 + 12
+        return base
+
     def desired_height(self):
         """Altura en el estado actual (colapsado/expandido) para redimensionar la window.
         Incluye la altura del banner de imagen si el widget lo tiene cargado (equivale
         a lo que calc_card_height suma cuando existe image_path)."""
         h = WaylandPopup.calc_card_height(
             self._app_name, self._cuerpo, "",
-            text_width=_TEXT_COL_W, expanded=self._expanded,
+            text_width=self._eff_text_width(), expanded=self._expanded,
+            hide_title=self._hide_title,
         )
         if self._image_pb is not None:
             h += 8 + 140
@@ -424,8 +502,10 @@ class NotificationWidget(Gtk.DrawingArea):
         wx = self._wipe_x(W)
         pad = 14
         gap = 12
-        icon_size = 80
-        text_col_x = pad + icon_size + gap
+        # Slot izquierdo SOLO si hay avatar real (icono del tab). Sin imagen:
+        # no se reserva espacio (texto a ancho completo).
+        icon_size = 80 if self._avatar_pb else 0
+        text_col_x = pad + icon_size + (gap if icon_size else 0)
         text_col_w = W - text_col_x - pad
 
         # Helper: rounded rect path (clockwise, outer corners)
@@ -446,9 +526,14 @@ class NotificationWidget(Gtk.DrawingArea):
 
         # Wipe: clip to card shape, fill right portion
         if wx < W:
-            dr = self._accent_rgb[0] * 0.2
-            dg = self._accent_rgb[1] * 0.4
-            db = self._accent_rgb[2] * 0.2
+            # Tinte SUTIL: mezcla del acento hacia el fondo de la card (no un
+            # bloque oscuro plano). blend=0.15 => variación leve del fondo.
+            bg = self._card_bg
+            acc = self._accent_rgb
+            blend = 0.15
+            dr = bg[0] + (acc[0] - bg[0]) * blend
+            dg = bg[1] + (acc[1] - bg[1]) * blend
+            db = bg[2] + (acc[2] - bg[2]) * blend
             cr.save()
             rrect(cr, 0, 0, W, H, r)
             cr.clip()
@@ -476,22 +561,26 @@ class NotificationWidget(Gtk.DrawingArea):
         text_h = 0
         if self._app_name:
             text_h += 20
-        text_h += 22
+        if not self._hide_title:
+            text_h += 22
         text_h += body_h
         if has_more:
-            text_h += self._BTN_H + 6   # franja del botón expandir/contraer
+            text_h += self._BTN_H + 8   # franja del botón expandir/contraer
         row_h = max(text_h, icon_size)
-        cy = pad + (row_h - icon_size) / 2
 
-        # Avatar (container izquierdo, centrado verticalmente)
+        # Avatar (slot izquierdo, centrado verticalmente) — solo si hay imagen real.
+        # El pixbuf YA viene circular (lo recorta _make_circular); el blit rect es
+        # transparente en las esquinas. Se agrega un anillo sutil en el borde.
         if self._avatar_pb:
+            cy = pad + (row_h - icon_size) / 2
             Gdk.cairo_set_source_pixbuf(cr, self._avatar_pb, pad, cy)
             cr.rectangle(pad, cy, icon_size, icon_size)
             cr.fill()
-        else:
-            cr.set_source_rgb(0.19, 0.20, 0.27)
-            cr.rectangle(pad, cy, icon_size, icon_size)
-            cr.fill()
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.15)
+            cr.set_line_width(1.0)
+            cr.arc(pad + icon_size / 2, cy + icon_size / 2, icon_size / 2 - 0.5,
+                   0, 2 * math.pi)
+            cr.stroke()
 
         # --- Text in two passes ---
         ty = pad + (row_h - text_h) / 2
@@ -516,19 +605,29 @@ class NotificationWidget(Gtk.DrawingArea):
                     cr.rectangle(text_col_x, yy, 16, 16)
                     cr.fill()
                 cr.set_source_rgb(*acol)
-                cr.select_font_face("sans-serif", 0, 0)
-                cr.set_font_size(10)
+                # Label de app (puede ser "Brave - <tab>") con elipsis real de Pango
+                label = self._app_label or self._app_name
                 tx = text_col_x + (20 if self._app_icon_pb else 0)
-                cr.move_to(tx, yy + 13)
-                cr.show_text(self._app_name)
+                ll = PangoCairo.create_layout(cr)
+                ll.set_font_description(Pango.FontDescription("sans-serif 10"))
+                ll.set_text(label, -1)
+                ll.set_width(int(max(1, text_col_w - tx + text_col_x) * Pango.SCALE))
+                ll.set_ellipsize(Pango.EllipsizeMode.END)
+                cr.move_to(tx, yy + 3)
+                PangoCairo.show_layout(cr, ll)
                 yy += 20
 
-            cr.set_source_rgb(*tcol)
-            cr.select_font_face("sans-serif", 0, 1)
-            cr.set_font_size(12)
-            cr.move_to(text_col_x, yy + 11)
-            cr.show_text(self._titulo)
-            yy += 22
+            if not self._hide_title:
+                cr.set_source_rgb(*tcol)
+                # Título con elipsis Pango (antes cr.show_text: se salía del card)
+                ll = PangoCairo.create_layout(cr)
+                ll.set_font_description(Pango.FontDescription("sans-serif Bold 12"))
+                ll.set_text(self._titulo or "", -1)
+                ll.set_width(int(text_col_w * Pango.SCALE))
+                ll.set_ellipsize(Pango.EllipsizeMode.END)
+                cr.move_to(text_col_x, yy + 2)
+                PangoCairo.show_layout(cr, ll)
+                yy += 22
 
             # Body con wrap real + ellipsis cuando colapsa
             cr.set_source_rgb(*bcol)
@@ -542,22 +641,27 @@ class NotificationWidget(Gtk.DrawingArea):
             body_top = ty
             if self._app_name:
                 body_top += 20
-            body_top += 22
+            if not self._hide_title:
+                body_top += 22
             # Ancla justo debajo del body medido (altura lógica real), nunca se solapa
             btn_y = body_top + body_h
             btn_h = self._BTN_H
             label = "Ver menos" if expanded else "Ver más"
-            btn_x0 = text_col_x
             btn_x1 = text_col_x + text_col_w
-            self._expand_rect = (btn_x0, btn_y, btn_x1, btn_y + btn_h)
-            # Pill background sutil del color acento (+ borde fino, estilo Linear)
-            accent_r = self._accent_rgb[0]
-            accent_g = self._accent_rgb[1]
-            accent_b = self._accent_rgb[2]
-            # Pill con padding horizontal interno: margen de 8px a cada lado
+            accent_r, accent_g, accent_b = self._accent_rgb
+
+            # Pill COMPACTO alineado a la derecha: ancho = contenido real medido
             pad_x = 8
-            pill_x0 = btn_x0 + pad_x
-            pill_w = (btn_x1 - btn_x0) - 2 * pad_x
+            cr.select_font_face("sans-serif", 0, 0)
+            cr.set_font_size(11)
+            ext = cr.text_extents(label)
+            fe = cr.font_extents()
+            chev_size, chev_gap, inner_pad = 10, 3, 10
+            pill_w = inner_pad + ext[4] + chev_gap + chev_size + inner_pad
+            pill_x0 = btn_x1 - pill_w - pad_x
+            # Área clickeable = el pill (no toda la fila)
+            self._expand_rect = (pill_x0, btn_y, pill_x0 + pill_w, btn_y + btn_h)
+
             for clip_x, is_dark in ((wx, False), (W - wx, True)):
                 if clip_x <= 0:
                     continue
@@ -578,24 +682,23 @@ class NotificationWidget(Gtk.DrawingArea):
                     cr.set_source_rgb(0.85, 0.95, 0.85)
                 else:
                     cr.set_source_rgb(*self._left_title)
-                # Texto "Ver más / Ver menos" + chevrón dibujado con cairo (siempre visible)
-                cr.select_font_face("sans-serif", 0, 0)
-                cr.set_font_size(11)
-                tw = len(label) * 6 + 10      # texto + 5px de chevrón + gap
-                tx0 = pill_x0 + pill_w - tw
-                cr.move_to(tx0, btn_y + btn_h / 2 + 4)
+                # Texto anclado al padding interno izquierdo del pill
+                tx0 = pill_x0 + inner_pad
+                base_y = btn_y + btn_h / 2 + (fe[0] - fe[1]) / 2
+                cr.move_to(tx0, base_y)
                 cr.show_text(label)
-                # Chevron cairo (triángulo) a la derecha del texto, verticalmente centrado
-                cx0 = tx0 + len(label) * 6 + 2
-                cy_mid = btn_y + btn_h / 2 - 1 if not expanded else btn_y + btn_h / 2 + 1
+                # Chevrón relleno (triángulo) a la derecha del texto, centrado en el pill.
+                # Convención: colapsado "Ver más" ▼ (más abajo), expandido "Ver menos" ▲
+                cx0 = tx0 + ext[4] + chev_gap
+                cy = btn_y + btn_h / 2
                 if expanded:
-                    cr.move_to(cx0, cy_mid - 4)
-                    cr.line_to(cx0 + 5, cy_mid + 2.5)
-                    cr.line_to(cx0 + 10, cy_mid - 4)   # apunta arriba = "ver menos"
+                    cr.move_to(cx0, cy + 3)       # ▲ apunta arriba (colapsar)
+                    cr.line_to(cx0 + chev_size / 2, cy - 3)
+                    cr.line_to(cx0 + chev_size, cy + 3)
                 else:
-                    cr.move_to(cx0, cy_mid + 4)
-                    cr.line_to(cx0 + 5, cy_mid - 2.5)
-                    cr.line_to(cx0 + 10, cy_mid + 4)   # apunta abajo = "ver más"
+                    cr.move_to(cx0, cy - 3)       # ▼ apunta abajo (expandir)
+                    cr.line_to(cx0 + chev_size / 2, cy + 3)
+                    cr.line_to(cx0 + chev_size, cy - 3)
                 cr.close_path()
                 cr.set_source_rgb(*self._accent_rgb)   # chevrón en color acento (visible)
                 cr.fill()
@@ -615,21 +718,40 @@ class NotificationWidget(Gtk.DrawingArea):
         draw_text_pass(cr, wx, True)
         cr.restore()
 
+        # Separador sutil entre línea de app y título (solo si ambos existen)
+        if self._app_name and not self._hide_title:
+            sep_y = ty + 20 - 1
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.06)
+            cr.set_line_width(1.0)
+            cr.move_to(text_col_x, sep_y)
+            cr.line_to(text_col_x + text_col_w, sep_y)
+            cr.stroke()
+
         # Image at bottom
         if self._image_pb:
             iy = pad + row_h + 8
             ih = 140
             iw = min(260, W - pad * 2)
+            img_radius = 8
+            cr.save()
+            rrect(cr, pad, iy, iw, ih, img_radius)
+            cr.clip()
             Gdk.cairo_set_source_pixbuf(cr, self._image_pb, pad, iy)
-            cr.rectangle(pad, iy, iw, ih)
-            cr.fill()
+            cr.paint()
+            # fade sutil hacia el fondo en el borde inferior
+            grad = cairo.LinearGradient(0, iy + ih - 30, 0, iy + ih)
+            grad.add_color_stop_rgba(0, 0, 0, 0, 0)
+            grad.add_color_stop_rgba(1, 0, 0, 0, 0.4)
+            cr.set_source(grad)
+            cr.paint()
+            cr.restore()
 
 
 class WaylandPopup:
     def __init__(self, titulo="", cuerpo="", icon_path=None, image_path=None,
                  duration=8000, margin=16, corner="top-right", accent="#89b4fa",
                  app_name="", app_icon="", on_close=None, image_data_raw=None,
-                 on_click=None, urgency=1):
+                 on_click=None, urgency=1, app_label=None, hide_title=False):
         self.app_name = app_name
         self.app_icon = app_icon
         self.titulo = titulo
@@ -651,6 +773,8 @@ class WaylandPopup:
 
         # Urgency (spec freedesktop 1.2): 0=low, 1=normal, 2=critical
         self.urgency = urgency if urgency in (0, 1, 2) else 1
+        self.app_label = app_label
+        self.hide_title = hide_title
         # Ajustes por nivel de urgencia (respeta duration=0 => nunca expirar)
         if self.urgency == 0:
             # low: más tenue y corto
@@ -722,8 +846,10 @@ class WaylandPopup:
             self.image_data_raw,
             self._on_click,
             on_resize=self._resize_card,
+            app_label=self.app_label, hide_title=self.hide_title,
         )
-        h = WaylandPopup.calc_card_height(self.app_name, self.cuerpo, self.image_path)
+        h = self._card.desired_height() if self._card else WaylandPopup.calc_card_height(
+            self.app_name, self.cuerpo, self.image_path)
         self._card.set_size_request(CARD_WIDTH, h)
         self.window.add(self._card)
         if not self._on_close:
@@ -753,7 +879,7 @@ class WaylandPopup:
 
     @staticmethod
     def calc_card_height(app_name, cuerpo, image_path, text_width=_TEXT_COL_W,
-                         expanded=False):
+                         expanded=False, hide_title=False):
         """Altura de la card según el wrap REAL del cuerpo.
 
         `text_width` es el ancho de la columna de texto (card 360 − pad 14 − icon
@@ -764,7 +890,8 @@ class WaylandPopup:
         text_h = 0
         if app_name:
             text_h += 20
-        text_h += 22
+        if not hide_title:
+            text_h += 22
         total = _count_body_lines(cuerpo, text_width, 14)
         if expanded:
             # Altura NATURAL del body completo (toda la envoltura)
@@ -775,7 +902,7 @@ class WaylandPopup:
             _, body_h = _body_metrics(cuerpo, text_width, 14, max_lines=cap)
         text_h += body_h
         if total > NotificationWidget._MAX_VISIBLE_LINES:
-            text_h += NotificationWidget._BTN_H + 6
+            text_h += NotificationWidget._BTN_H + 8
         row_h = max(text_h, 80)
         h = 14 + row_h + 14
         if image_path and os.path.exists(image_path):
@@ -792,7 +919,10 @@ class WaylandPopup:
             return
         base_top, base_right, base_bottom, base_left = self._MARGIN_MAP.get(self.corner, (16, 16, 0, 0))
         gap = 8
-        card_h = WaylandPopup.calc_card_height(self.app_name, self.cuerpo, self.image_path)
+        if self._card:
+            card_h = self._card.desired_height()
+        else:
+            card_h = WaylandPopup.calc_card_height(self.app_name, self.cuerpo, self.image_path)
         offset = self._stack_margin * (card_h + gap)
         if "top" in self.corner:
             t, b = base_top + offset, base_bottom

@@ -151,3 +151,51 @@ def test_metatest_expand_grows_height_sensitive_to_regression():
         "Metatest: expandir debe agrandar la card; si falló, el toggle "
         "perdió el crecimiento y no se puede leer el texto largo."
     )
+
+
+# ---------------------------------------------------------------------------
+# Chevrón del botón: dirección y visibilidad (test visual numérico)
+# ---------------------------------------------------------------------------
+
+def _chevron_imbalance(expanded):
+    """Render headless del widget y devuelve el sesgo vertical del chevrón.
+
+    >0  → masa de píxeles acento ARRIBA del centro = chevrón ▼ (colapsado)
+    <0  → masa ABAJO = chevrón ▲ (expandido)
+    0.0 → no hay chevrón visible (regresión: fill/stroke perdido).
+    """
+    import cairo
+    from gi.repository import Gdk
+    w = wp.NotificationWidget("App", "", "T", LONG, None, None, "#89b4fa")
+    w._expanded = expanded
+    h = w.desired_height()
+    a = Gdk.Rectangle(); a.x = a.y = 0; a.width, a.height = 360, h
+    w.get_allocation = lambda: a
+    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, 360, h)
+    w._draw(w, cairo.Context(surf))
+    data = surf.get_data(); stride = surf.get_stride()
+    ys = []
+    for y in range(h):
+        cnt = 0
+        for x in range(300, 360):  # borde derecho del pill
+            o = y * stride + x * 4
+            r, g, b = data[o + 2], data[o + 1], data[o]
+            if 0x70 < r < 0xA0 and 0xA0 < g < 0xD0 and b > 0xE0:  # acento puro (#89b4fa), sin bordes de texto
+                cnt += 1
+        ys.append(cnt)
+    if not any(ys):
+        return 0.0
+    ymin = next(i for i, c in enumerate(ys) if c)
+    ymax = max(i for i, c in enumerate(ys) if c)
+    mid = (ymin + ymax) / 2
+    up = sum(ys[y] for y in range(ymin, ymax + 1) if y <= mid)
+    down = sum(ys[y] for y in range(ymin, ymax + 1) if y > mid)
+    return (up - down) / max(1, up + down)
+
+
+def test_chevron_visible_and_direction():
+    """El chevrón SE dibuja (fill) y apunta bien: ▼ colapsado, ▲ expandido."""
+    col = _chevron_imbalance(False)
+    exp = _chevron_imbalance(True)
+    assert col > 0.05, f"colapsado debe ser ▼ (masa arriba), imbalance={col:.2f}"
+    assert exp < -0.05, f"expandido debe ser ▲ (masa abajo), imbalance={exp:.2f}"

@@ -96,10 +96,11 @@ def test_icon_from_theme_fallback_to_new_when_no_screen(monkeypatch):
     assert pb is None or isinstance(pb, GdkPixbuf.Pixbuf)
 
 
-def test_notificationwidget_sets_avatar_without_image(tmpdir):
+def test_notificationwidget_no_avatar_without_image(tmpdir):
     """
-    INTEGRACIÓN: NotificationWidget sin image_path ni icon_path debe
-    terminar con _avatar_pb no-None (icono de proveniencia de la app).
+    Contrato nuevo (Mori): el avatar (slot izquierdo 80px) SOLO aparece si hay
+    imagen real (icon-path o image-data del tab). Sin imagen → _avatar_pb None
+    → el layout no reserva el slot (texto a ancho completo).
     """
     _make_desktop(tmpdir, "NavegadorZ", "navegadorz", "firefox-nightly")
     _setup_cache(tmpdir)
@@ -112,7 +113,28 @@ def test_notificationwidget_sets_avatar_without_image(tmpdir):
         image_path="",
         accent="#80cbc4",
     )
-    assert widget._avatar_pb is not None, (
-        "NotificationWidget no colocó el avatar de proveniencia sin imagen"
+    assert widget._avatar_pb is None, (
+        "sin imagen no debe haber slot de avatar (antes caía al icono de escritorio)"
     )
-    assert isinstance(widget._avatar_pb, GdkPixbuf.Pixbuf)
+    # El texto pasa a ancho completo (no se reserva 80px por nada)
+    assert widget._eff_text_width() > 240
+
+
+def test_imagedata_becomes_avatar_tab_icon():
+    """image-data (lo que manda el navegador: icono del tab) → avatar 80px,
+    NO al banner grande (antes el favicon se estiraba a 260x140)."""
+    pb = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 8, 8)
+    pb.fill(0xFFFFFFFF)
+    raw = (
+        pb.get_width(), pb.get_height(), pb.get_rowstride(),
+        pb.get_has_alpha(), pb.get_bits_per_sample(), pb.get_n_channels(),
+        pb.get_pixels(),
+    )
+    widget = wp.NotificationWidget(
+        app_name="Brave", app_icon="", titulo="t", cuerpo="c",
+        icon_path="", image_path="", accent="#80cbc4",
+        image_data_raw=raw,
+    )
+    assert widget._avatar_pb is not None, "image-data debe poblar el avatar (icono del tab)"
+    assert widget._image_pb is None, "image-data NO debe ir al banner grande"
+    assert widget._eff_text_width() == 240  # con avatar: columna de texto normal

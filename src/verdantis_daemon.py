@@ -11,6 +11,39 @@ from gi.repository import Gtk, GtkLayerShell, GLib, Gio
 
 from wayland_popup import WaylandPopup, _find_desktop_file, _extract_markup_url
 
+
+def _is_browser(app_name, desktop_entry):
+    """¿El sender es un navegador? Detección por desktop-entry (brave-browser,
+    firefox, chromium...) o por app_name conocido. Para navegadores la línea de
+    app muestra "Navegador - <tab>" y el título se pliega ahí."""
+    blob = "{} {}".format(app_name or "", desktop_entry or "").lower()
+    return any(b in blob for b in (
+        "brave", "chrome", "chromium", "firefox", "edge", "vivaldi",
+        "opera", "browser",
+    ))
+
+
+def _local_path(p):
+    """Convierte file:///ruta → /ruta (Brave/Chrome mandan el icono del tab como
+    file:// URI; os.path.exists falla con el prefijo)."""
+    if p and p.startswith("file://"):
+        return p[len("file://"):]
+    return p
+
+
+def _pick_action_key(actions):
+    """Devuelve la action key que el sender registró (spec 1.2):
+    - "default" si el sender la proveyó (click en el cuerpo del toast),
+    - la primera key real si hay actions pero no "default",
+    - None si no hay actions (no emitir ActionInvoked inventando keys).
+    """
+    if not actions or len(actions) < 2:
+        return None
+    for i in range(0, len(actions) - 1, 2):
+        if actions[i] == "default":
+            return "default"
+    return actions[0]
+
 NOTIFICATIONS_XML = '''
 <node>
   <interface name="org.freedesktop.Notifications">
@@ -134,14 +167,14 @@ class NotificationManager:
             "urgency": urgency,
         }
 
-        avatar_path = hints.get("image-path", "")
+        avatar_path = _local_path(hints.get("image-path", ""))
         if not avatar_path or not os.path.exists(avatar_path):
-            avatar_path = app_icon if app_icon and os.path.exists(app_icon) else ""
+            avatar_path = _local_path(app_icon) if app_icon and os.path.exists(_local_path(app_icon)) else ""
 
-        app_icon_file = app_icon if app_icon and os.path.exists(app_icon) else ""
+        app_icon_file = _local_path(app_icon) if app_icon and os.path.exists(_local_path(app_icon)) else ""
 
         image_data = hints.get("image-data", None)
-        image_path = hints.get("image-path", "")
+        image_path = _local_path(hints.get("image-path", ""))
         banner_path = ""
         if image_path and os.path.exists(image_path) and image_path != avatar_path:
             banner_path = image_path
@@ -161,6 +194,12 @@ class NotificationManager:
             "on_close": lambda nid=nid: self._on_closed(nid),
             "on_click": lambda nid=nid: self._on_action_invoked(nid),
         }
+
+        # Navegadores: la línea de app = "Brave - <tab>" (el tab = summary, que es
+        # el nombre de la notificación/pestaña) y el título se pliega ahí.
+        if _is_browser(app_name, desktop_entry):
+            kwargs["app_label"] = "{} - {}".format(app_name, summary)
+            kwargs["hide_title"] = True
 
         if len(self._active) < self.MAX_VISIBLE:
             self._show_popup(nid, kwargs)
@@ -183,61 +222,33 @@ class NotificationManager:
                 break
         self._queue = [(qid, qk) for qid, qk in self._queue if qid != nid]
 
-    def _focus_or_activate_app(self, desktop_entry, app_name):
-        target = desktop_entry or app_name
-        if not target:
-            return
-        desktop_path = _find_desktop_file(target)
-        desktop_id = ""
-        if desktop_path and os.path.exists(desktop_path):
-            desktop_id = os.path.splitext(os.path.basename(desktop_path))[0]
-            try:
-                app_info = Gio.DesktopAppInfo.new_from_filename(desktop_path)
-                if app_info:
-                    app_info.launch([], None)
-                    return
-            except Exception:
-                pass
-        # Fallback: gtk-launch con el desktop-id o el nombre de la app
-        launch_id = desktop_id or target
-        try:
-            subprocess.Popen(
-                ["gtk-launch", launch_id],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-        except Exception:
-            pass
-
     def _on_action_invoked(self, nid):
         info = self._notifications.get(nid, {})
         actions = info.get("actions", [])
         url = info.get("url", "")
-        app_name = info.get("app_name", "")
-        desktop_entry = info.get("desktop_entry", "")
 
-        default_action = "default"
-        for i in range(0, len(actions), 2):
-            if actions[i] == "default":
-                default_action = actions[i]
-                break
+        # BUG-2: emitir la key REAL del sender, no "default" inventada.
+        action_key = _pick_action_key(actions)
 
-        if self._dbus_bus:
+        if action_key and self._dbus_bus:
             try:
                 self._dbus_bus.emit_signal(
                     None, "/org/freedesktop/Notifications",
                     "org.freedesktop.Notifications", "ActionInvoked",
-                    GLib.Variant("(us)", (nid, default_action)),
+                    GLib.Variant("(us)", (nid, action_key)),
                 )
             except Exception:
                 pass
 
+        # El click NO lanza ventanas de la app (evita abrir navegadores a lo loco).
+        # El foco lo resuelve: (a) el sender vía ActionInvoked (caso navegador, que
+        # re-enfoca su propia ventana/tab), o (b) xdg-open con la URL → tab del
+        # navegador por defecto. Sin URL ni action, no hay nada que lanzar.
         if url:
             try:
                 subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
                 pass
-        else:
-            self._focus_or_activate_app(desktop_entry, app_name)
 
         # Cierre inmediato del popup visual (su callback dispara _on_closed)
         for aid, popup in list(self._active):
