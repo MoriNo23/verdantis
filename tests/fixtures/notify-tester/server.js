@@ -18,6 +18,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8766);
 const GUI = join(__dirname, "index.html");
 
+// nid -> titulo de la ventana a re-enfocar al recibir ActionInvoked (Paso 5 fix).
+const pendingTitles = new Map();
+
 function send(res, code, obj) {
   res.writeHead(code, { "Content-Type": "application/json" });
   res.end(JSON.stringify(obj));
@@ -87,6 +90,14 @@ const server = http.createServer(async (req, res) => {
       child.stderr.on("data", (d) => (err += d));
       child.on("close", (code) => {
         if (code === 0) {
+          // gdbus Notify devuelve "(uint32 NID,)"; extraemos el nid para mapear
+          // nid -> titulo de la ventana a re-enfocar al recibir ActionInvoked.
+          const m = String(out).match(/uint32\s+(\d+)/);
+          const nid = m ? Number(m[1]) : null;
+          if (nid != null) {
+            // El titulo de la ventana PWA suele ser el summary o appName.
+            pendingTitles.set(nid, payload.summary || payload.appName || "");
+          }
           send(res, 200, { ok: true, dbusId: out.trim() });
         } else {
           send(res, 502, { ok: false, code, error: err.trim() || out.trim() });
@@ -114,9 +125,51 @@ server.listen(PORT, () => {
 // ---- Paso 5 (plan fix-pwa-click-focus): escuchar ActionInvoked y re-enfocar Brave ----
 // El emisor (gdbus) muere al salir, asi que nadie recibia la señal dirigida.
 // Arrancamos un dbus-monitor persistente que parsea ActionInvoked del daemon y
-// re-enfoca la ventana de Brave (xdotool/wmctrl, best-effort) para validar el
-// fix end-to-end (PWA re-enfoca en vez de abrir duplicada). Tambien loguea.
-import { spawn as _spawn } from "node:child_process";
+// re-enfoca la ventana de Brave/PWA para validar el fix end-to-end (PWA re-enfoca
+// en vez de abrir duplicada). Tambien loguea.
+//
+// En Wayland puro xdotool/wmctrl NO operan sobre ventanas. El re-enfoque usa
+// kdotool (KWin), que ademas hace switch de desktop automatico si la ventana
+// esta en otro desktop virtual. Fallback a xdotool si kdotool no existe.
+import { spawn as _spawn, execFileSync } from "node:child_process";
+
+// Detectar la herramienta de re-enfoque disponible (kdotool prioridad en Wayland).
+function execFileSyncSafe(cmd) {
+  try {
+    execFileSync("which", [cmd], { stdio: "ignore" });
+    return cmd;
+  } catch {
+    return null;
+  }
+}
+function focusTool() {
+  if (execFileSyncSafe("kdotool")) return "kdotool";
+  if (execFileSyncSafe("xdotool")) return "xdotool";
+  return null;
+}
+
+const FOCUS_TOOL = focusTool();
+console.log(`[re-enfoque] herramienta: ${FOCUS_TOOL || "NINGUNA (solo log)"}`);
+
+function focusWindowByTitle(title) {
+  if (!FOCUS_TOOL || !title) return;
+  if (FOCUS_TOOL === "kdotool") {
+    // kdotool search <titulo> -> UUID; luego windowactivate <UUID>.
+    try {
+      const uuid = execFileSync("kdotool", ["search", title], { encoding: "utf8" }).trim().split("\n")[0];
+      if (uuid) execFileSync("kdotool", ["windowactivate", uuid], { stdio: "ignore" });
+    } catch (e) {
+      console.error(`[re-enfoque] kdotool fallo para "${title}": ${e.message}`);
+    }
+  } else {
+    // xdotool (sesiones X11): search --name + windowactivate.
+    try {
+      execFileSync("xdotool", ["search", "--name", title, "windowactivate"], { stdio: "ignore" });
+    } catch (e) {
+      console.error(`[re-enfoque] xdotool fallo para "${title}": ${e.message}`);
+    }
+  }
+}
 
 const monitor = _spawn("dbus-monitor", [
   "type='signal',interface='org.freedesktop.Notifications',member='ActionInvoked'",
@@ -140,9 +193,12 @@ function handleLine(line) {
       const nid = m[1];
       const key = m[2];
       console.log(`ActionInvoked recibido: nid=${nid} key=${key}`);
-      // Re-enfocar la ventana de Brave (PWA o navegador) best-effort.
-      _spawn("xdotool", ["search", "--class", "brave", "windowactivate"],
-        { stdio: "ignore" });
+      // Re-enfocar la ventana asociada a esta notificacion (PWA o navegador).
+      const title = pendingTitles.get(Number(nid));
+      if (title) {
+        focusWindowByTitle(title);
+        pendingTitles.delete(Number(nid));
+      }
       buf = "";
     }
   }
