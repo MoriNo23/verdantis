@@ -1,0 +1,11 @@
+{
+  "name": "verdantis-notify-tester",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tester de notificaciones reales para Verdantis: GUI web + backend que dispara Notify por gdbus con hints completos (desktop-entry/url/actions).",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}
