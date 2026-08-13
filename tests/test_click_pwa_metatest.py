@@ -60,3 +60,44 @@ def test_sensitivity_pwa_bug_detected():
         assert "SENSITIVITY FAIL" in str(e)
     finally:
         NotificationManager._on_action_invoked = original
+
+
+def _buggy_broadcast_on_action_invoked(self, nid):
+    """Version bugueada: emite ActionInvoked con dest=None (broadcast), no dirigido."""
+    info = self._notifications.get(nid, {})
+    actions = info.get("actions", [])
+    action_key = vd._pick_action_key(actions)
+    if action_key and self._dbus_bus:
+        try:
+            self._dbus_bus.emit_signal(
+                None, "/org/freedesktop/Notifications",
+                "org.freedesktop.Notifications", "ActionInvoked",
+                mock.MagicMock(),
+            )
+        except Exception:
+            pass
+
+
+def test_sensitivity_broadcast_bug_detected():
+    """La version bugueada (dest=None) debe ser detectada por
+    test_on_action_invoked_emits_to_sender (que exige dest=sender)."""
+    mgr = NotificationManager()
+    mgr._notifications[1] = {
+        "actions": ["default", "Abrir"],
+        "url": "",
+        "desktop_entry": PWA_DESKTOP,
+        "sender": ":1.42",
+    }
+    bus = mock.MagicMock()
+    mgr.set_dbus(bus)
+    original = NotificationManager._on_action_invoked
+    NotificationManager._on_action_invoked = _buggy_broadcast_on_action_invoked
+    try:
+        with mock.patch.object(vd.subprocess, "Popen"):
+            mgr._on_action_invoked(1)
+        # Si llegamos aqui sin AssertionError, el metatest falla (no detecto el bug).
+        raise AssertionError("SENSITIVITY FAIL: la version broadcast NO fue detectada por test_on_action_invoked_emits_to_sender")
+    except AssertionError as e:
+        assert "SENSITIVITY FAIL" in str(e)
+    finally:
+        NotificationManager._on_action_invoked = original

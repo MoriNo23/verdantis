@@ -118,6 +118,38 @@ NOTIFICATIONS_XML = '''
 '''
 
 
+def _is_local_url(url):
+    """True si la URL apunta a la maquina local o red privada (RFC1918).
+
+    localhost / 127.0.0.0/8 / ::1 / 0.0.0.0 / 192.168.x / 10.x / 172.16-31.x.
+    Jamas es un destino legitimo de una notificacion: abrirlo con xdg-open
+    suele ser un bug o una url inyectada (p.ej. el propio servidor del tester).
+    """
+    if not url:
+        return True
+    hostport = url.split("://", 1)[-1].split("/", 1)[0]
+    # IPv6 entre corchetes: [::1] o [::1]:puerto -> host = ::1
+    if hostport.startswith("["):
+        host = hostport.split("]", 1)[0].strip("[]")
+    else:
+        host = hostport.split(":", 1)[0]
+    host = host.lower()
+    if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+        return True
+    if host.startswith("127."):
+        return True
+    parts = host.split(".")
+    if len(parts) == 4:
+        try:
+            a, b, c, _ = (int(p) for p in parts)
+            return (a == 10
+                    or (a == 192 and b == 168)
+                    or (a == 172 and 16 <= b <= 31))
+        except ValueError:
+            return False
+    return False
+
+
 class NotificationManager:
     MAX_VISIBLE = 5
     STACK_GAP = 8
@@ -164,10 +196,16 @@ class NotificationManager:
                 pass
         if url and not url.startswith(("http://", "https://", "mailto:", "tel:")):
             url = ""
+        # Jamas abrir urls apuntando a la maquina local/red privada: no es un
+        # destino legitimo de notificacion y suele ser una url inyectada (p.ej.
+        # el propio server del tester). Ver _is_local_url.
+        if url and _is_local_url(url):
+            url = ""
         return url
 
     def notify(self, app_name="", app_icon="", summary="", body="",
-               actions=None, hints=None, expire_timeout=-1, replaces_id=0):
+               actions=None, hints=None, expire_timeout=-1, replaces_id=0,
+               sender=""):
         if hints is None:
             hints = {}
         if actions is None:
@@ -200,6 +238,7 @@ class NotificationManager:
             "app_name": app_name,
             "desktop_entry": desktop_entry,
             "urgency": urgency,
+            "sender": sender,
         }
 
         avatar_path = _local_path(hints.get("image-path", ""))
@@ -263,12 +302,16 @@ class NotificationManager:
         url = info.get("url", "")
 
         # BUG-2: emitir la key REAL del sender, no "default" inventada.
+        # DIRIGIDO al sender (no broadcast None): la spec freedesktop manda que
+        # ActionInvoked vaya a la conexion que emitio Notify. Chromium/Brave solo
+        # re-enfoca la PWA/tab si recibe la señal en su propia conexion.
         action_key = _pick_action_key(actions)
+        sender = info.get("sender", "") or None
 
         if action_key and self._dbus_bus:
             try:
                 self._dbus_bus.emit_signal(
-                    None, "/org/freedesktop/Notifications",
+                    sender, "/org/freedesktop/Notifications",
                     "org.freedesktop.Notifications", "ActionInvoked",
                     GLib.Variant("(us)", (nid, action_key)),
                 )
@@ -285,6 +328,10 @@ class NotificationManager:
         # duplicada (p.ej. WhatsApp Web) en vez de enfocar la existente.
         desktop_entry = info.get("desktop_entry", "")
         is_pwa = _is_pwa(desktop_entry)
+        # Jamas abrir urls a la maquina local/red privada (ver _is_local_url).
+        # Es la ultima linea de defensa: ni siquiera con PWA borra esto.
+        if url and _is_local_url(url):
+            url = ""
         if url and not is_pwa:
             try:
                 subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -351,6 +398,7 @@ class NotificationDaemon:
                 summary=summary, body=body,
                 actions=actions, hints=hints,
                 expire_timeout=timeout, replaces_id=replaces_id,
+                sender=sender,
             )
             invocation.return_value(GLib.Variant("(u)", (nid,)))
         elif method_name == "CloseNotification":

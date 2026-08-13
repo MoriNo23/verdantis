@@ -99,6 +99,65 @@ const server = http.createServer(async (req, res) => {
   send(res, 404, { error: "no encontrado" });
 });
 
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`Puerto ${PORT} ya en uso. ¿Ya corre un server? Usa el que está, o pkill -f 'node server.js'.`);
+    process.exit(0);
+  }
+  throw err;
+});
+
 server.listen(PORT, () => {
   console.log(`Verdantis notify-tester en http://localhost:${PORT}/notify-tester.html`);
+});
+
+// ---- Paso 5 (plan fix-pwa-click-focus): escuchar ActionInvoked y re-enfocar Brave ----
+// El emisor (gdbus) muere al salir, asi que nadie recibia la señal dirigida.
+// Arrancamos un dbus-monitor persistente que parsea ActionInvoked del daemon y
+// re-enfoca la ventana de Brave (xdotool/wmctrl, best-effort) para validar el
+// fix end-to-end (PWA re-enfoca en vez de abrir duplicada). Tambien loguea.
+import { spawn as _spawn } from "node:child_process";
+
+const monitor = _spawn("dbus-monitor", [
+  "type='signal',interface='org.freedesktop.Notifications',member='ActionInvoked'",
+], { stdio: ["ignore", "pipe", "pipe"] });
+
+let buf = "";
+function handleLine(line) {
+  // dbus-monitor emite bloques como:
+  //   signal time=... -> destination=... path=...; interface=...; member=ActionInvoked
+  //   uint32 NID
+  //   string ":1.42"
+  if (/member=ActionInvoked/.test(line)) {
+    // reiniciar captura de bloque
+    buf = "AI:" + line + "\n";
+    return;
+  }
+  if (buf.startsWith("AI:")) {
+    buf += line + "\n";
+    const m = buf.match(/uint32\s+(\d+)[\s\S]*?string\s+"([^"]+)"/);
+    if (m) {
+      const nid = m[1];
+      const key = m[2];
+      console.log(`ActionInvoked recibido: nid=${nid} key=${key}`);
+      // Re-enfocar la ventana de Brave (PWA o navegador) best-effort.
+      _spawn("xdotool", ["search", "--class", "brave", "windowactivate"],
+        { stdio: "ignore" });
+      buf = "";
+    }
+  }
+}
+
+if (monitor.stdout) {
+  monitor.stdout.setEncoding("utf8");
+  monitor.stdout.on("data", (d) => {
+    d.split("\n").forEach((l) => l.trim() && handleLine(l.trim()));
+  });
+}
+if (monitor.stderr) {
+  monitor.stderr.setEncoding("utf8");
+  monitor.stderr.on("data", (d) => process.stderr.write(`[dbus-monitor] ${d}`));
+}
+monitor.on("exit", (code) => {
+  if (code) console.error(`dbus-monitor salio (${code}). El re-enfoque no funcionara.`);
 });
