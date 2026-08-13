@@ -44,6 +44,41 @@ def _pick_action_key(actions):
             return "default"
     return actions[0]
 
+
+def _is_pwa(desktop_entry):
+    """¿La notificación viene de una PWA instalada (webapp del navegador)?
+
+    Chromium/Brave crean un .desktop propio al instalar la webapp, con
+    `Exec=.../brave --app-id=<id>` y `StartupWMClass=crx_<id>`. El navegador
+    manda ese .desktop en el hint `desktop-entry`. Distinguirlo del navegador
+    genérico (brave-browser.desktop / firefox.desktop) permite no disparar
+    xdg-open (que abriría una ventana-PWA duplicada): la PWA ya re-enfoca su
+    propia ventana al recibir ActionInvoked.
+    """
+    if not desktop_entry:
+        return False
+    name = desktop_entry
+    if not name.endswith(".desktop"):
+        name = name + ".desktop"
+    candidates = [
+        os.path.expanduser(os.path.join("~/.local/share/applications", name)),
+        os.path.join("/usr/share/applications", name),
+        os.path.expanduser(os.path.join("~/.local/share/applications", desktop_entry)),
+    ]
+    path = next((c for c in candidates if os.path.exists(c)), None)
+    if not path:
+        base = desktop_entry.lower()
+        if ("brave-" in base or "chrome-" in base) and "browser" not in base:
+            return True
+        return False
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            content = fh.read()
+    except Exception:
+        return False
+    return ("--app-id=" in content) or ("crx_" in content)
+
+
 NOTIFICATIONS_XML = '''
 <node>
   <interface name="org.freedesktop.Notifications">
@@ -241,10 +276,16 @@ class NotificationManager:
                 pass
 
         # El click NO lanza ventanas de la app (evita abrir navegadores a lo loco).
-        # El foco lo resuelve: (a) el sender vía ActionInvoked (caso navegador, que
-        # re-enfoca su propia ventana/tab), o (b) xdg-open con la URL → tab del
+        # El foco lo resuelve: (a) el sender vía ActionInvoked (caso navegador/PWA,
+        # que re-enfoca su propia ventana/tab), o (b) xdg-open con la URL → tab del
         # navegador por defecto. Sin URL ni action, no hay nada que lanzar.
-        if url:
+        #
+        # PWA instalada: NO hacer xdg-open. El navegador ya re-enfoca la ventana de
+        # la webapp al recibir ActionInvoked; un xdg-open abriría una ventana-PWA
+        # duplicada (p.ej. WhatsApp Web) en vez de enfocar la existente.
+        desktop_entry = info.get("desktop_entry", "")
+        is_pwa = _is_pwa(desktop_entry)
+        if url and not is_pwa:
             try:
                 subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
