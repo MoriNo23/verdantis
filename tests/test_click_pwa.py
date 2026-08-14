@@ -1,9 +1,9 @@
 """Tests para el fix de click en navegador: PWA instalada -> solo ActionInvoked
-(nada de xdg-open que abriria una ventana-PWA duplicada); navegador generico o
-vacio -> ActionInvoked + xdg-open (abre/focusea la pestaña).
+(nada de xdg-open que abriria una ventana-PWA duplicada); navegador generico
+con actions -> solo ActionInvoked (el navegador re-enfoca su pestaña solo).
+xdg-open queda reservado para apps NATIVAS sin actions que traen URL.
 
-Rojo primero: estas pruebas fallan contra el codigo actual (que hace xdg-open
-siempre que hay URL).
+Contrato estilo dunst: accion O url, mutuamente excluyentes.
 """
 import os
 import sys
@@ -65,16 +65,21 @@ def test_on_action_invoked_pwa_no_xdgopen():
     popen.assert_not_called()  # NO xdg-open -> no ventana PWA duplicada
 
 
-def test_on_action_invoked_generic_xdgopen():
-    """Navegador generico + URL: emite ActionInvoked Y hace xdg-open."""
+def test_on_action_invoked_generic_no_xdgopen():
+    """Navegador generico + URL + actions: emite ActionInvoked y NO xdg-open.
+
+    El navegador SIEMPRE registra actions=["default",...], asi que se activa
+    solo via ActionInvoked (re-enfoca su pestaña). xdg-open abriria una
+    segunda pagina (doble-abierto, bug2). El xdg-open queda solo para apps
+    nativas SIN actions (ver test_dbus_contract.py).
+    """
     mgr = _manager_with(2, ["default", "Abrir"], "https://github.com/MoriNo23/verdantis", BROWSER_DESKTOP)
     bus = mock.MagicMock()
     mgr.set_dbus(bus)
     with mock.patch.object(vd.subprocess, "Popen") as popen:
         mgr._on_action_invoked(2)
     bus.emit_signal.assert_called_once()
-    popen.assert_called_once()
-    assert popen.call_args.args[0][0] == "xdg-open"
+    popen.assert_not_called()  # sin xdg-open -> no pagina duplicada
 
 
 # ---- Paso 1 (plan fix-pwa-click-focus): emitir ActionInvoked DIRIGIDO al sender ----

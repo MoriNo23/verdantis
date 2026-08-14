@@ -123,20 +123,27 @@ def test_no_spawn_with_custom_action_key(monkeypatch):
     assert popens == []
 
 
-# --- URL: única vía de redirigir (xdg-open → tab del navegador por defecto) ---
+# --- URL: xdg-open SOLO si el sender NO maneja sus propias acciones ---
+# Regla estilo dunst: ActionInvoked al sender SI hay actions; xdg-open solo
+# si NO hay actions PERO sí URL. NUNCA las dos (evita doble-abierto:
+# navegador se enfoca vía ActionInvoked Y xdg-open abre otra pestaña).
 
-def test_url_opens_via_xdg_open(monkeypatch):
+def test_url_with_actions_emits_only_actioninvoked(monkeypatch):
+    # Pinterest/Slack: actions=["default",...] + URL. El navegador ya sabe
+    # activarse con ActionInvoked -> NO debe correr xdg-open (antes lo hacía:
+    # doble página).
     m, nid = _manager_with_notification(
         actions=["default", "Abrir"],
         hints={"x-kde-urls": ["https://example.com"]},
     )
     popens = _popens(m, monkeypatch)
     m._on_action_invoked(nid)
-    assert popens and popens[0] == ["xdg-open", "https://example.com"]
     assert _invoked_keys(m) == ["default"]
+    assert popens == [], "con actions el sender se activa solo: sin xdg-open"
 
 
-def test_url_without_actions_still_opens(monkeypatch):
+def test_url_without_actions_opens_via_xdg_open(monkeypatch):
+    # App nativa sin actions pero con URL: xdg-open es la única vía.
     m, nid = _manager_with_notification(
         actions=[],
         hints={"url": "https://example.org"},
