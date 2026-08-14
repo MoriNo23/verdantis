@@ -345,7 +345,7 @@ class NotificationWidget(Gtk.DrawingArea):
         self._app_label = app_label
         self._hide_title = hide_title
         self._app_name = _get_app_display_name(app_name)
-        self._titulo = titulo
+        self._titulo = (titulo or "").replace("\n", " ").replace("\t", " ").strip()
         # El URL se usa para el click (ya lo extrae el daemon del body/hints);
         # en el TEXTO VISIBLE no se muestra (las notificaciones son un botón).
         self._cuerpo = _strip_urls(cuerpo)
