@@ -826,6 +826,9 @@ class WaylandPopup:
         if not GtkLayerShell.is_layer_window(self.window):
             raise RuntimeError("gtk-layer-shell init falló")
         GtkLayerShell.set_layer(self.window, GtkLayerShell.Layer.TOP)
+        # Namespace para que tools de ventana (kdotool, wlr-tools) identifiquen
+        # la superficie layer-shell aunque no sea ventana gestionada por KWin.
+        GtkLayerShell.set_namespace(self.window, "verdantis")
         GtkLayerShell.try_force_commit(self.window)
 
         for e in self._ANCHOR_MAP.get(self.corner, ("top", "right")):
