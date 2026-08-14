@@ -231,6 +231,20 @@ class NotificationManager:
             urgency = 1
         if urgency not in (0, 1, 2):
             urgency = 1
+        # Hints del spec freedesktop 1.2 que verdantis no parseaba (gaps):
+        #   resident      : bool — la app cierra la noti; el daemon NO la
+        #                  auto-expira (forza duration=0). Confirmado en
+        #                  KDE (notification.cpp:423) y mako.
+        #   transient     : bool — no guardar en historial (verdantis no
+        #                  tiene historial, se guarda para future-proofing).
+        #   category      : str — agrupacion ("im", "email", "presence"...).
+        #   suppress-sound: bool — NO reproducir sonido (no implementado yet).
+        #   sound-name    : str — nombre en el freedesktop sound theme.
+        is_resident = bool(hints.get("resident", False))
+        is_transient = bool(hints.get("transient", False))
+        category = hints.get("category", "") or ""
+        suppress_sound = bool(hints.get("suppress-sound", False))
+        sound_name = hints.get("sound-name", "") or ""
         self._notifications[nid] = {
             "actions": actions,
             "hints": hints,
@@ -239,6 +253,11 @@ class NotificationManager:
             "desktop_entry": desktop_entry,
             "urgency": urgency,
             "sender": sender,
+            "is_resident": is_resident,
+            "is_transient": is_transient,
+            "category": category,
+            "suppress_sound": suppress_sound,
+            "sound_name": sound_name,
         }
 
         avatar_path = _local_path(hints.get("image-path", ""))
@@ -264,7 +283,9 @@ class NotificationManager:
             #    > 0 -> ese valor en ms
             #    < 0 -> default del server (6000ms, ej -1 = "server default")
             # Confirmado en mako/dunst/KDE: 0 = sticky, -1 = default.
-            "duration": (0 if expire_timeout == 0
+            # resident (hint): la app gestiona el cierre; el daemon NO auto-expira.
+            # Igual que expire_timeout=0 (KDE notification.cpp:423).
+            "duration": (0 if expire_timeout == 0 or is_resident
                          else expire_timeout if expire_timeout > 0
                          else 6000),
             "corner": self._corner,
