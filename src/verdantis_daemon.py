@@ -259,7 +259,14 @@ class NotificationManager:
             "icon_path": avatar_path if avatar_path else None,
             "image_path": banner_path if banner_path else None,
             "image_data_raw": image_data,
-            "duration": expire_timeout if expire_timeout > 0 else 6000,
+            # expire_timeout (spec freedesktop 1.2):
+            #   == 0 -> persistente (requireInteraction del navegador: nunca expirar)
+            #    > 0 -> ese valor en ms
+            #    < 0 -> default del server (6000ms, ej -1 = "server default")
+            # Confirmado en mako/dunst/KDE: 0 = sticky, -1 = default.
+            "duration": (0 if expire_timeout == 0
+                         else expire_timeout if expire_timeout > 0
+                         else 6000),
             "corner": self._corner,
             "accent": hints.get("accent", "#80cbc4"),
             "urgency": urgency,
@@ -319,20 +326,22 @@ class NotificationManager:
                 pass
 
         # El click NO lanza ventanas de la app (evita abrir navegadores a lo loco).
-        # El foco lo resuelve: (a) el sender vía ActionInvoked (caso navegador/PWA,
-        # que re-enfoca su propia ventana/tab), o (b) xdg-open con la URL → tab del
-        # navegador por defecto. Sin URL ni action, no hay nada que lanzar.
-        #
-        # PWA instalada: NO hacer xdg-open. El navegador ya re-enfoca la ventana de
-        # la webapp al recibir ActionInvoked; un xdg-open abriría una ventana-PWA
-        # duplicada (p.ej. WhatsApp Web) en vez de enfocar la existente.
+        # Regla estilo dunst (mutuamente excluyente):
+        #   - SI el sender registró actions: emitir ActionInvoked y YA (el sender
+        #     se activa solo: navegador re-enfoca tab/PWA, app nativa corre su
+        #     callback). NUNCA xdg-open en ese caso -> evita doble-abierto.
+        #   - SOLO si NO hay actions PERO sí URL: xdg-open (apps nativas que no
+        #     manejan ActionInvoked).
+        # El navegador SIEMPRE manda actions=["default",...], así que Pinterest/
+        # Slack/WhatsApp Web caen en la rama ActionInvoked y no abren página extra.
         desktop_entry = info.get("desktop_entry", "")
         is_pwa = _is_pwa(desktop_entry)
+        has_actions = bool(actions)
         # Jamas abrir urls a la maquina local/red privada (ver _is_local_url).
         # Es la ultima linea de defensa: ni siquiera con PWA borra esto.
         if url and _is_local_url(url):
             url = ""
-        if url and not is_pwa:
+        if url and not has_actions:
             try:
                 subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
