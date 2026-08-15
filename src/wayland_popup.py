@@ -262,7 +262,7 @@ def _hex_rgb(h):
     return tuple(int(h[i:i+2], 16) / 255 for i in (0, 2, 4))
 
 
-def _body_metrics(cuerpo, width, font_size=14, max_lines=None):
+def _body_metrics(cuerpo, width, font_size=13, max_lines=None):
     """Mide el layout del body: (líneas visuales, altura_px lógica).
 
     - Si `max_lines` es >0, aplica el mismo cap de altura + ellipsis que
@@ -281,7 +281,7 @@ def _body_metrics(cuerpo, width, font_size=14, max_lines=None):
     ctx = Pango.Context()
     ctx.set_font_map(PangoCairo.font_map_get_default())
     layout = Pango.Layout(ctx)
-    fd = Pango.FontDescription("sans-serif " + str(font_size))
+    fd = Pango.FontDescription("Cantarell " + str(font_size))
     layout.set_font_description(fd)
     if _has_pango_markup(cuerpo):
         try:
@@ -300,7 +300,7 @@ def _body_metrics(cuerpo, width, font_size=14, max_lines=None):
     return lines, max(0.0, logical.height)
 
 
-def _count_body_lines(cuerpo, width, font_size=14):
+def _count_body_lines(cuerpo, width, font_size=13):
     """Líneas visuales si el body se muestra COMPLETO (sin cap)."""
     return _body_metrics(cuerpo, width, font_size)[0]
 
@@ -326,9 +326,17 @@ class NotificationWidget(Gtk.DrawingArea):
     _MAX_VISIBLE_LINES = 3      # líneas visibles del body antes de colapsar
     _BTN_H = 20                 # alto de la franja del botón expandir/contraer
 
+    # Fuente: Cantarell (humanist, GNOME default). Más legible que 'sans-serif'
+    # generico que Pango resuelve a Noto Sans (mas pesada, menos crisp a
+    # tamaño chico). Confirmado disponible: fc-list + Pango font_map.
+    _BODY_FONT = "Cantarell 13"
+    _TITLE_FONT = "Cantarell Bold 12"
+    _APP_FONT = "Cantarell 10"
+    _BTN_FONT_SIZE = 10         # botón Ver más/menos + pill de cerrar
+
     def __init__(self, app_name, app_icon, titulo, cuerpo, icon_path, image_path, accent,
-                 image_data_raw=None, on_click=None, on_resize=None,
-                 app_label=None, hide_title=False):
+                 image_data_raw=None, on_click=None, on_resize=None, on_close=None,
+                 app_label=None, hide_title=False, persistent=False):
         super().__init__()
         self.set_app_paintable(True)
         screen = self.get_screen()
@@ -340,6 +348,11 @@ class NotificationWidget(Gtk.DrawingArea):
         self._on_resize = on_resize
         self._fraction = 1.0
         self._on_click = on_click
+        self._on_close = on_close
+        self._persistent = persistent
+        self._hover = False            # mouse sobre el card
+        self._hover_close = False     # mouse sobre el pill de cerrar
+        self._close_rect = None       # (x0, y0, x1, y1) del pill de cerrar
         # Label de app compuesto: "Brave - <tab>" (navegadores). Con hide_title,
         # el título va dentro del label y no se dibuja como línea aparte.
         self._app_label = app_label
@@ -418,10 +431,61 @@ class NotificationWidget(Gtk.DrawingArea):
                 pass
 
         self.connect("draw", self._draw)
-        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+        self.add_events(
+            Gdk.EventMask.BUTTON_PRESS_MASK
+            | Gdk.EventMask.ENTER_NOTIFY_MASK
+            | Gdk.EventMask.LEAVE_NOTIFY_MASK
+            | Gdk.EventMask.POINTER_MOTION_MASK
+        )
         self.connect("button-press-event", self._on_button_press)
+        self.connect("enter-notify-event", self._on_enter)
+        self.connect("leave-notify-event", self._on_leave)
+        self.connect("motion-notify-event", self._on_motion)
+
+    def _on_enter(self, widget, event):
+        self._hover = True
+        self._set_cursor_hand()
+        self.queue_draw()
+
+    def _on_leave(self, widget, event):
+        self._hover = False
+        self._hover_close = False
+        self.queue_draw()
+
+    def _on_motion(self, widget, event):
+        if not self._persistent:
+            return
+        over_close = self._in_close_rect(event.x, event.y)
+        if over_close != self._hover_close:
+            self._hover_close = over_close
+            self._set_cursor(over_close)
+            self.queue_draw()
+
+    def _set_cursor_hand(self):
+        win = self.get_window()
+        if win:
+            win.set_cursor(Gdk.Cursor.new_from_name(
+                self.get_display(), "pointer"))
+
+    def _set_cursor(self, hand):
+        win = self.get_window()
+        if win:
+            win.set_cursor(Gdk.Cursor.new_from_name(
+                self.get_display(), "pointer" if hand else "default"))
+
+    def _in_close_rect(self, x, y):
+        if not self._close_rect:
+            return False
+        x0, y0, x1, y1 = self._close_rect
+        return x0 <= x <= x1 and y0 <= y <= y1
 
     def _on_button_press(self, widget, event):
+        # Click en el pill de cerrar (X) → cierra el toast (solo persistentes).
+        # NO dispara on_click/ActionInvoked: es cierre manual del usuario.
+        if self._persistent and self._in_close_rect(event.x, event.y):
+            if self._on_close:
+                self._on_close()
+            return True
         # Click en la franja Expandir/Contraer → toggle el estado (consume el evento)
         if self._expand_rect:
             x0, y0, x1, y1 = self._expand_rect
@@ -470,7 +534,7 @@ class NotificationWidget(Gtk.DrawingArea):
 
     def _draw_text(self, cr, text, x, y, w, font_size, light_col, dark_col, bold=False, max_lines=2):
         layout = PangoCairo.create_layout(cr)
-        fd = Pango.FontDescription("sans-serif " + str(font_size))
+        fd = Pango.FontDescription("Cantarell " + str(font_size))
         if bold:
             fd.set_weight(Pango.Weight.BOLD)
         layout.set_font_description(fd)
@@ -519,8 +583,9 @@ class NotificationWidget(Gtk.DrawingArea):
 
         r = 12   # radio card: 8→12 (más moderno/redondeado, Linear usa 8-12)
 
-        # Background
-        cr.set_source_rgba(self._card_bg[0], self._card_bg[1], self._card_bg[2], 0.85)
+        # Background — hover aclara levemente el alpha (feedback "estás sobre esto")
+        bg_alpha = 0.92 if self._hover else 0.85
+        cr.set_source_rgba(self._card_bg[0], self._card_bg[1], self._card_bg[2], bg_alpha)
         rrect(cr, 0, 0, W, H, r)
         cr.fill()
 
@@ -549,13 +614,13 @@ class NotificationWidget(Gtk.DrawingArea):
         cr.stroke()
 
         # --- Layout: real wrapped line count (coincide con _draw) ---
-        total_lines = _count_body_lines(self._cuerpo, text_col_w, 14)
+        total_lines = _count_body_lines(self._cuerpo, text_col_w, 13)
         expanded = self._expanded
         cap = min(total_lines, self._MAX_VISIBLE_LINES)
         if expanded:
-            _, body_h = _body_metrics(self._cuerpo, text_col_w, 14, max_lines=None)
+            _, body_h = _body_metrics(self._cuerpo, text_col_w, 13, max_lines=None)
         else:
-            _, body_h = _body_metrics(self._cuerpo, text_col_w, 14, max_lines=cap)
+            _, body_h = _body_metrics(self._cuerpo, text_col_w, 13, max_lines=cap)
         has_more = total_lines > self._MAX_VISIBLE_LINES   # overflow => mostrar botón (debe persistir al expandir para poder contraer)
 
         text_h = 0
@@ -609,7 +674,7 @@ class NotificationWidget(Gtk.DrawingArea):
                 label = self._app_label or self._app_name
                 tx = text_col_x + (20 if self._app_icon_pb else 0)
                 ll = PangoCairo.create_layout(cr)
-                ll.set_font_description(Pango.FontDescription("sans-serif 10"))
+                ll.set_font_description(Pango.FontDescription("Cantarell 10"))
                 ll.set_text(label, -1)
                 ll.set_width(int(max(1, text_col_w - tx + text_col_x) * Pango.SCALE))
                 ll.set_ellipsize(Pango.EllipsizeMode.END)
@@ -621,7 +686,7 @@ class NotificationWidget(Gtk.DrawingArea):
                 cr.set_source_rgb(*tcol)
                 # Título con elipsis Pango (antes cr.show_text: se salía del card)
                 ll = PangoCairo.create_layout(cr)
-                ll.set_font_description(Pango.FontDescription("sans-serif Bold 12"))
+                ll.set_font_description(Pango.FontDescription("Cantarell Bold 12"))
                 ll.set_text(self._titulo or "", -1)
                 ll.set_width(int(text_col_w * Pango.SCALE))
                 ll.set_ellipsize(Pango.EllipsizeMode.END)
@@ -631,7 +696,7 @@ class NotificationWidget(Gtk.DrawingArea):
 
             # Body con wrap real + ellipsis cuando colapsa
             cr.set_source_rgb(*bcol)
-            self._draw_text(cr, self._cuerpo, text_col_x, yy, text_col_w, 14,
+            self._draw_text(cr, self._cuerpo, text_col_x, yy, text_col_w, 13,
                             bcol, bcol, bold=False,
                             max_lines=(0 if expanded else cap))
 
@@ -652,7 +717,7 @@ class NotificationWidget(Gtk.DrawingArea):
 
             # Pill COMPACTO alineado a la derecha: ancho = contenido real medido
             pad_x = 8
-            cr.select_font_face("sans-serif", 0, 0)
+            cr.select_font_face("Cantarell", 0, 0)
             cr.set_font_size(11)
             ext = cr.text_extents(label)
             fe = cr.font_extents()
@@ -744,6 +809,46 @@ class NotificationWidget(Gtk.DrawingArea):
             grad.add_color_stop_rgba(1, 0, 0, 0, 0.4)
             cr.set_source(grad)
             cr.paint()
+            cr.restore()
+
+        # --- Pill de cerrar (X) — solo persistentes + hover ---
+        # Pill rojizo semi-transparente 28x28, esquina superior-derecha.
+        # NO ocupa todo el toast — es un botón chico esquinado.
+        # Hover del pill: fondo más sólido + scale 1.08 (simulado con padding).
+        self._close_rect = None
+        if self._persistent and self._hover:
+            cs = 28                                   # close button size
+            cx_r = W - pad - 6                        # right edge (margen 6)
+            cy_t = 6                                  # top edge
+            cx0 = cx_r - cs
+            cy0 = cy_t
+            cx1 = cx_r
+            cy1 = cy_t + cs
+            self._close_rect = (cx0, cy0, cx1, cy1)
+            cr.save()
+            rrect(cr, cx0, cy0, cs, cs, 8)
+            if self._hover_close:
+                cr.set_source_rgba(0.86, 0.15, 0.15, 0.32)   # hover: más sólido
+            else:
+                cr.set_source_rgba(0.86, 0.15, 0.15, 0.18)   # normal hover del card
+            cr.fill()
+            # borde sutil
+            cr.set_source_rgba(0.86, 0.15, 0.15, 0.35)
+            cr.set_line_width(1.0)
+            rrect(cr, cx0, cy0, cs, cs, 8)
+            cr.stroke()
+            # X con dos trazos stroke (no fill): más limpio que path cerrado
+            mx = cx0 + cs / 2
+            my = cy0 + cs / 2
+            inset = 7
+            cr.set_source_rgba(0.953, 0.482, 0.659, 0.95)   # #f38ba8
+            cr.set_line_width(2.5)
+            cr.set_line_cap(cairo.LINE_CAP_ROUND)
+            cr.move_to(mx - inset, my - inset)
+            cr.line_to(mx + inset, my + inset)
+            cr.move_to(mx + inset, my - inset)
+            cr.line_to(mx - inset, my + inset)
+            cr.stroke()
             cr.restore()
 
 
@@ -849,7 +954,9 @@ class WaylandPopup:
             self.image_data_raw,
             self._on_click,
             on_resize=self._resize_card,
+            on_close=self._close,
             app_label=self.app_label, hide_title=self.hide_title,
+            persistent=(self.duration == 0),
         )
         h = self._card.desired_height() if self._card else WaylandPopup.calc_card_height(
             self.app_name, self.cuerpo, self.image_path)
@@ -871,6 +978,10 @@ class WaylandPopup:
 
     def _update_progress(self):
         if self._closed:
+            return False
+        # Persistent (duration=0): no hay barra de progreso ni auto-cierre.
+        # El usuario cierra con la X (hover → pill rojizo).
+        if self.duration <= 0:
             return False
         elapsed = (time.time() - self._start) * 1000
         remaining = max(0, self.duration - elapsed)
@@ -895,14 +1006,14 @@ class WaylandPopup:
             text_h += 20
         if not hide_title:
             text_h += 22
-        total = _count_body_lines(cuerpo, text_width, 14)
+        total = _count_body_lines(cuerpo, text_width, 13)
         if expanded:
             # Altura NATURAL del body completo (toda la envoltura)
-            _, body_h = _body_metrics(cuerpo, text_width, 14, max_lines=None)
+            _, body_h = _body_metrics(cuerpo, text_width, 13, max_lines=None)
         else:
             # Altura CAPPED + ellipsis (la que dibuja _draw_text al colapsar)
             cap = min(total, NotificationWidget._MAX_VISIBLE_LINES)
-            _, body_h = _body_metrics(cuerpo, text_width, 14, max_lines=cap)
+            _, body_h = _body_metrics(cuerpo, text_width, 13, max_lines=cap)
         text_h += body_h
         if total > NotificationWidget._MAX_VISIBLE_LINES:
             text_h += NotificationWidget._BTN_H + 8
