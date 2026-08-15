@@ -13,6 +13,7 @@ import {
   buildActions,
   buildNotifyArgs,
 } from "./notify.js";
+import { buildFocusPlan } from "./focus.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8766);
@@ -96,7 +97,11 @@ const server = http.createServer(async (req, res) => {
           const nid = m ? Number(m[1]) : null;
           if (nid != null) {
             // El titulo de la ventana PWA suele ser el summary o appName.
-            pendingTitles.set(nid, payload.summary || payload.appName || "");
+            // Pero el re-enfoque robusto usa desktop_entry -> StartupWMClass.
+            pendingTitles.set(nid, {
+              title: payload.summary || payload.appName || "",
+              desktopEntry: payload.desktopEntry || "",
+            });
           }
           send(res, 200, { ok: true, dbusId: out.trim() });
         } else {
@@ -151,24 +156,58 @@ function focusTool() {
 const FOCUS_TOOL = focusTool();
 console.log(`[re-enfoque] herramienta: ${FOCUS_TOOL || "NINGUNA (solo log)"}`);
 
-function focusWindowByTitle(title) {
-  if (!FOCUS_TOOL || !title) return;
-  if (FOCUS_TOOL === "kdotool") {
-    // kdotool search <titulo> -> UUID; luego windowactivate <UUID>.
-    try {
-      const uuid = execFileSync("kdotool", ["search", title], { encoding: "utf8" }).trim().split("\n")[0];
-      if (uuid) execFileSync("kdotool", ["windowactivate", uuid], { stdio: "ignore" });
-    } catch (e) {
-      console.error(`[re-enfoque] kdotool fallo para "${title}": ${e.message}`);
-    }
-  } else {
-    // xdotool (sesiones X11): search --name + windowactivate.
-    try {
-      execFileSync("xdotool", ["search", "--name", title, "windowactivate"], { stdio: "ignore" });
-    } catch (e) {
-      console.error(`[re-enfoque] xdotool fallo para "${title}": ${e.message}`);
+function focusWindowByMeta(meta) {
+  if (!FOCUS_TOOL || !meta) return;
+  const plan = buildFocusPlan(meta);
+  for (const step of plan) {
+    if (step.type === "class") {
+      if (focusByClass(step.value)) return;
+    } else {
+      if (focusByTitle(step.value)) return;
     }
   }
+}
+
+function focusByClass(wmClass) {
+  if (!wmClass) return false;
+  try {
+    const uuid = execFileSync(
+      "kdotool", ["search", "--class", wmClass], { encoding: "utf8" },
+    ).trim().split("\n")[0];
+    if (uuid) {
+      execFileSync("kdotool", ["windowactivate", uuid], { stdio: "ignore" });
+      console.log(`[re-enfoque] clase '${wmClass}' -> ${uuid}`);
+      return true;
+    }
+  } catch (e) {
+    console.error(`[re-enfoque] clase '${wmClass}' fallo: ${e.message}`);
+  }
+  return false;
+}
+
+function focusByTitle(title) {
+  if (!title) return false;
+  if (FOCUS_TOOL === "kdotool") {
+    try {
+      const uuid = execFileSync("kdotool", ["search", title], { encoding: "utf8" }).trim().split("\n")[0];
+      if (uuid) {
+        execFileSync("kdotool", ["windowactivate", uuid], { stdio: "ignore" });
+        console.log(`[re-enfoque] titulo '${title}' -> ${uuid}`);
+        return true;
+      }
+    } catch (e) {
+      console.error(`[re-enfoque] kdotool titulo '${title}' fallo: ${e.message}`);
+    }
+  } else if (FOCUS_TOOL === "xdotool") {
+    try {
+      execFileSync("xdotool", ["search", "--name", title, "windowactivate"], { stdio: "ignore" });
+      console.log(`[re-enfoque] titulo '${title}' (xdotool)`);
+      return true;
+    } catch (e) {
+      console.error(`[re-enfoque] xdotool titulo '${title}' fallo: ${e.message}`);
+    }
+  }
+  return false;
 }
 
 const monitor = _spawn("dbus-monitor", [
@@ -194,9 +233,10 @@ function handleLine(line) {
       const key = m[2];
       console.log(`ActionInvoked recibido: nid=${nid} key=${key}`);
       // Re-enfocar la ventana asociada a esta notificacion (PWA o navegador).
-      const title = pendingTitles.get(Number(nid));
-      if (title) {
-        focusWindowByTitle(title);
+      // Usa desktop_entry -> StartupWMClass (clase) con fallback a titulo.
+      const meta = pendingTitles.get(Number(nid));
+      if (meta) {
+        focusWindowByMeta(meta);
         pendingTitles.delete(Number(nid));
       }
       buf = "";
