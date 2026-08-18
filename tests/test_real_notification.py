@@ -62,8 +62,22 @@ def test_real_notification_manager_builds_popup():
 
     Reproduce el camino completo del daemon: notify() con hints reales debe
     crear la notificación, extraer la URL del hyperlink/click, aplicar la
-    urgency y construir el WaylandPopup sin crash (headless)."""
+    urgency y construir el WaylandPopup sin crash (headless).
+
+    Nota: tras el refactor de batching (commit t_c93ad5ab) notify() encola en
+    _pending y el popup se construye al drenar el pump. Usamos un scheduler
+    no-op y disparamos el pump a mano; el popup se construye headless (sin
+    ventana GTK) pero con los kwargs reales del daemon."""
     mgr = NotificationManager(corner="top-right")
+    mgr._scheduler = lambda ms, cb: 0  # no auto-dispara; llamamos _pump() abajo
+
+    def headless_show(nid, kwargs):
+        # Popup REAL con los kwargs del daemon, pero sin abrir ventana GTK
+        # (prepare()/set_stack_margin() requieren WAYLAND_DISPLAY).
+        popup = wp.WaylandPopup(**kwargs)
+        mgr._active.append((nid, popup))
+
+    mgr._show_popup = headless_show
     nid = mgr.notify(
         app_name="Firefox",
         app_icon="",
@@ -73,6 +87,7 @@ def test_real_notification_manager_builds_popup():
         hints=dict(REAL_HINTS),
         expire_timeout=10000,
     )
+    mgr._pump()  # drena la cola -> _active poblado
     # La notificación se registró con los datos parseados
     info = mgr._notifications[nid]
     assert info["app_name"] == "Firefox"

@@ -26,17 +26,34 @@ os.environ.setdefault("GDK_BACKEND", "offscreen")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from verdantis_daemon import NotificationManager
+from wayland_popup import WaylandPopup
 
 
 def _duration_for(expire_timeout):
     m = NotificationManager(corner="top-right")
+    # Batching refactor (commit t_c93ad5ab): notify() ya NO construye el popup
+    # de forma sincrónica; lo encola en _pending y el pump (vía scheduler) lo
+    # drena llamando a _show_popup -> _active. Por eso acceder a _active[0]
+    # justo después de notify() daba IndexError (lista vacía). Reproducimos el
+    # camino real: usamos un scheduler no-op y disparamos el pump a mano.
+    m._scheduler = lambda ms, cb: 0  # no auto-dispara; llamamos _pump() abajo
     m.set_dbus(_FakeBus())
-    nid = m.notify(
+
+    def headless_show(nid, kwargs):
+        # Construye el WaylandPopup REAL con los kwargs del daemon, pero sin
+        # abrir la ventana GTK (prepare()/set_stack_margin() necesitan display).
+        # duration vive en el popup.
+        popup = WaylandPopup(**kwargs)
+        m._active.append((nid, popup))
+
+    m._show_popup = headless_show
+    m.notify(
         app_name="Brave", summary="Pinterest", body="idea",
         actions=["default", "Open"],
         hints={"desktop-entry": "brave-browser"},
         expire_timeout=expire_timeout,
     )
+    m._pump()  # drena la cola -> _active poblado
     # duration vive en el WaylandPopup (kwargs que se construye en _show_popup)
     return m._active[0][1].duration
 
