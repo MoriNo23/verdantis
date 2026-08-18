@@ -33,6 +33,12 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 ## Conventions
 
 - Código y commits en español. Commits conventional: `feat:`, `fix:`, `test:`, `chore:`.
+- Versionado: semver (`MAJOR.MINOR.PATCH`) con fuente única en la constante `VERSION`
+  de `src/verdantis_daemon.py` (la usa `GetServerInformation`). Bump MINOR en el primer
+  commit `feat:` de cada ciclo; PATCH en `fix:`; MAJOR solo en breaking. `test:`/`chore:`
+  NO bumpan. Un commit que bumea actualiza `VERSION` en el mismo commit y lo reporta al
+  usuario; verificar el bump con `busctl --user call ... GetServerInformation` tras
+  reiniciar el servicio. Sin tags de git: el número vive solo en el código.
 - TDD: test que falla primero (documenta el bug), luego fix mínimo, luego suite verde.
 - Resolución de .desktop: SOLO match exacto (`_exact_desktop_file`). El match difuso
   (`_find_desktop_file`) rompe con PWAs de Brave (`brave-<appid>.desktop`) — un
