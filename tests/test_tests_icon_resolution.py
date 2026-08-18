@@ -19,7 +19,7 @@ os.environ.setdefault("GDK_BACKEND", "wayland")
 if not os.environ.get("WAYLAND_DISPLAY") and not os.environ.get("DISPLAY"):
     os.environ["GDK_BACKEND"] = "offscreen"
 
-sys.path.insert(0, "/home/fullmetal/repos/verdantis/src")
+sys.path.insert(0, "/home/extra/repositorios/verdantis/src")
 
 import gi
 gi.require_version("Gtk", "3.0")

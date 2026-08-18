@@ -1,6 +1,6 @@
 # Plan: Fix de enfoque PWA en click (daemon + tester)
 
-Repositorio: `/home/fullmetal/repos/verdantis`
+Repositorio: `/home/extra/repositorios/verdantis`
 Entorno: local (fullmetal), Python 3.13 en `.venv/`
 Convenciones (AGENTS.md): código/commits en español, TDD (test rojo → fix → verde),
 tests headless con `GDK_BACKEND=offscreen` seteado ANTES de importar.

@@ -6,7 +6,7 @@ import os
 import sys
 
 os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, "/home/fullmetal/repos/verdantis/src")
+sys.path.insert(0, "/home/extra/repositorios/verdantis/src")
 
 from unittest import mock
 

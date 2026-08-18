@@ -15,7 +15,7 @@ os.environ.setdefault("GDK_BACKEND", "wayland")
 if not os.environ.get("WAYLAND_DISPLAY") and not os.environ.get("DISPLAY"):
     os.environ["GDK_BACKEND"] = "offscreen"
 
-sys.path.insert(0, "/home/fullmetal/repos/verdantis/src")
+sys.path.insert(0, "/home/extra/repositorios/verdantis/src")
 
 import gi
 gi.require_version("Gtk", "3.0")
@@ -37,7 +37,7 @@ def test_capabilities_declare_markup():
     # la respuesta. Usamos el XML de introspección del daemon.
     import verdantis_daemon as vd
     # El string literal de caps está en el módulo
-    src = open("/home/fullmetal/repos/verdantis/src/verdantis_daemon.py").read()
+    src = open("/home/extra/repositorios/verdantis/src/verdantis_daemon.py").read()
     assert '"body-markup"' in src, "Falta cap body-markup en GetCapabilities"
     assert '"body-hyperlinks"' in src, "Falta cap body-hyperlinks en GetCapabilities"
 

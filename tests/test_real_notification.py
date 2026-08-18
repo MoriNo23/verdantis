@@ -19,7 +19,7 @@ import sys
 os.environ.setdefault("GDK_BACKEND", "offscreen")
 # Sin WAYLAND_DISPLAY: WaylandPopup.prepare() hace return temprano (no crashea)
 
-sys.path.insert(0, "/home/fullmetal/repos/verdantis/src")
+sys.path.insert(0, "/home/extra/repositorios/verdantis/src")
 
 import wayland_popup as wp
 from verdantis_daemon import NotificationManager

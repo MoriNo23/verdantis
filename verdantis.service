@@ -6,7 +6,7 @@ PartOf=graphical-session.target
 [Service]
 Type=dbus
 BusName=org.freedesktop.Notifications
-ExecStart=/home/fullmetal/repos/verdantis/.venv/bin/python /home/fullmetal/repos/verdantis/src/verdantis.py --daemon --corner top-right
+ExecStart=/home/extra/repositorios/verdantis/.venv/bin/python /home/extra/repositorios/verdantis/src/verdantis.py --daemon --corner top-right
 Restart=on-failure
 Environment=GDK_BACKEND=wayland
 
