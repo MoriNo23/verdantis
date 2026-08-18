@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Verdantis — Toast Hover & Close Showcase</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap');
+  :root {
+    --card-bg: #1e1e2e;
+    --card-bg-hover: #262637;
+    --title: #e6e9f2;
+    --body: #cdd6f4;
+    --app: #a6adc8;
+    --accent: #80cbc4;
+    --close-bg: rgba(220, 38, 38, 0.18);
+    --close-bg-hover: rgba(220, 38, 38, 0.32);
+    --close-x: #f38ba8;
+    --close-x-hover: #fab4c6;
+    /* spacing scale (4px base) */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #11111b;
+    font-family: 'Manrope', 'Cantarell', 'Noto Sans', sans-serif;
+    display: flex;
+    gap: 16px;
+    padding: 40px;
+    min-height: 100vh;
+  }
+  .label-col {
+    color: #9399b2;
+    font-size: 12px;
+    width: 180px;
+    flex-shrink: 0;
+    padding-top: 8px;
+  }
+  .label-col strong { color: #cdd6f4; font-size: 14px; display: block; margin-bottom: 4px; }
+  .toast-wrap { margin-bottom: 12px; }
+
+  /* ===== Toast card (360px, igual que verdantis) ===== */
+  .card {
+    width: 360px;
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 14px;
+    cursor: pointer;                      /* FEEDBACK: mano siempre */
+    transition: background 0.15s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .card:hover { background: var(--card-bg-hover); }
+
+  /* ===== Barra de progreso (wipe) ===== */
+  .progress-bar {
+    position: absolute;
+    top: 0; left: 0; height: 100%;
+    width: 1%;
+    background: rgba(128, 203, 196, 0.12);   /* accent sutil */
+    pointer-events: none;
+    transition: width 0.05s linear;
+  }
+  .card.persistent .progress-bar { display: none; }  /* persistent: no bar */
+
+  /* ===== Layout interno ===== */
+  .app-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    margin-bottom: var(--sp-2);
+  }
+  .app-icon {
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    background: #f9e2af;
+    flex-shrink: 0;
+  }
+  .app-name {
+    font-size: 10px;
+    color: var(--app);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .title {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--title);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: var(--sp-2);
+  }
+  .card.hide-title .title { display: none; }
+  .body-text {
+    font-size: 13px;
+    color: var(--body);
+    line-height: 1.6;                     /* = Pango font_size*1.6 (fidelidad) */
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    text-overflow: ellipsis;
+  }
+  .body-text.expanded {
+    -webkit-line-clamp: unset;
+  }
+
+  /* ===== Botón "Ver más/menos" ===== */
+  .expand-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 8px;
+    padding: 3px 10px 3px 8px;
+    background: rgba(128, 203, 196, 0.15);
+    border-radius: 12px;
+    font-size: 10px;
+    color: var(--accent);
+    cursor: pointer;
+    float: right;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .expand-btn:hover { background: rgba(128, 203, 196, 0.28); }
+  .chev { font-size: 9px; }
+
+  /* ===== CLOSE BUTTON (solo persistentes) ===== */
+  .close-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--close-bg);
+    display: none;                         /* oculto por defecto */
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    z-index: 10;
+  }
+  .close-btn svg {
+    width: 14px; height: 14px;
+    stroke: var(--close-x);
+    stroke-width: 2.5;
+    fill: none;
+    stroke-linecap: round;
+  }
+  /* Solo en persistentes + hover del card entero */
+  .card.persistent:hover .close-btn {
+    display: flex;
+    animation: fadeIn 0.12s ease;
+  }
+  .close-btn:hover {
+    background: var(--close-bg-hover);
+    transform: scale(1.08);
+  }
+  .close-btn:hover svg { stroke: var(--close-x-hover); }
+  .close-btn:active { transform: scale(0.95); }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ===== Accesibilidad: foco visible + reduced-motion ===== */
+  .card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card, .progress-bar, .close-btn, .expand-btn,
+    .close-btn:hover, .expand-btn:hover {
+      transition: none !important;
+      animation: none !important;
+    }
+    .close-btn { animation: none !important; }
+  }
+
+  /* ===== Toast 4: Normal + avatar (80px, igual que verdantis) ===== */
+  .toast-wrap.avatar .card {
+    display: flex;
+    gap: var(--sp-3);
+    align-items: flex-start;
+  }
+  .avatar-box {
+    width: 80px; height: 80px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    background: #89b4fa;
+  }
+  .toast-wrap.avatar .card .content-col { flex: 1; min-width: 0; }
+  /* en avatar real, el app-icon pequeño se oculta (lo reemplaza el avatar-box) */
+  .toast-wrap.avatar .card .app-icon { display: none; }
+  /* circle-cut: less horizontal space → shrink summary/body for legibility */
+  .toast-wrap.avatar .title { font-size: 11px; }
+  .toast-wrap.avatar .body-text { font-size: 11px; }
+  /* barely-visible hairline below app_name */
+  .toast-wrap.avatar .app-row { border-bottom: 1px solid rgba(255,255,255,0.10); padding-bottom: 6px; }
+  .toast-wrap:not(.avatar) .app-row { border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 18px; margin-bottom: 4px; }
+
+  /* ===== Screen-resolution-aware font scaling (fidelity with verdantis) ===== */
+  @media (max-width: 1280px) {
+    .body-text { font-size: 11px !important; }
+    .title { font-size: 10px !important; }
+    .app-name { font-size: 9px !important; }
+    .expand-btn { font-size: 9px !important; }
+    .card { width: 320px; }
+  }
+  @media (max-width: 1600px) and (min-width: 1281px) {
+    .body-text { font-size: 12px !important; }
+    .title { font-size: 11px !important; }
+  }
+  .controls {
+    position: fixed;
+    bottom: 20px;
+    left: 240px;
+    background: #181825;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 12px;
+    color: #6c7086;
+    border: 1px solid #313244;
+  }
+  .controls code { color: #cdd6f4; }
+</style>
+</head>
+<body>
+
+<div class="label-col">
+  <strong>Toasts</strong>
+  Hover sobre cada card.<br>
+  Los persistentes (duration=0) muestran la X al hover.
+</div>
+
+<div class="toast-col">
+
+  <!-- Toast 1: Normal con body largo (se colapsa, tiene barra de progreso) -->
+  <div class="toast-wrap">
+  <div class="card" id="t1" onclick="cardClick('t1')">
+    <div class="progress-bar" id="pb1"></div>
+    <div class="app-row">
+      <div class="app-icon"></div>
+      <div class="app-name">Firefox</div>
+    </div>
+    <div class="title">Título de notificación media normal</div>
+    <div class="body-text" id="body1">Your download of <b>verdantis-0.1.0.tar.gz</b> has finished. Click here to open the release page. Este texto es lo bastante largo como para envolver dentro del ancho de la tarjeta y desbordar las tres líneas visibles.</div>
+    <div class="expand-btn" onclick="toggleExpand(event, 'body1', this)" id="exp1">
+      Ver más <span class="chev">▾</span>
+    </div>
+  </div>
+  </div>
+
+  <!-- Toast 2: Persistente (duration=0) — browser con hide_title -->
+  <div class="toast-wrap">
+  <div class="card persistent" id="t2" onclick="cardClick('t2')">
+    <div class="app-row">
+      <div class="app-icon"></div>
+      <div class="app-name">Brave - Pinterest</div>
+    </div>
+    <div class="title" style="display:none"></div>
+    <div class="body-text">Tienes 5 pines nuevos en tu tablero "Diseño de UI". Explora las últimas tendencias en notificaciones minimalistas y dark mode.</div>
+    <div class="close-btn" onclick="closeCard(event, 't2')">
+      <svg viewBox="0 0 24 24"><path d="M6 6 L18 18 M18 6 L6 18"/></svg>
+    </div>
+  </div>
+  </div>
+
+  <!-- Toast 3: Persistente + body largo + expand -->
+  <div class="toast-wrap">
+  <div class="card persistent" id="t3" onclick="cardClick('t3')">
+    <div class="app-row">
+      <div class="app-icon"></div>
+      <div class="app-name">Slack</div>
+    </div>
+    <div class="title">#design-team</div>
+    <div class="body-text" id="body3">mensaje extremadamente largo del canal de Slack que simula lo que pasa cuando alguien escribe un thread de 500 palabras y Slack manda todo en el body sin saltos de línea y la card tiene que colapsarlo a 3 líneas con elipsis y mostrar el botón Ver más</div>
+    <div class="expand-btn" onclick="toggleExpand(event, 'body3', this)">
+      Ver más <span class="chev">▾</span>
+    </div>
+    <div class="close-btn" onclick="closeCard(event, 't3')">
+      <svg viewBox="0 0 24 24"><path d="M6 6 L18 18 M18 6 L6 18"/></svg>
+    </div>
+  </div>
+  </div>
+
+  <!-- Toast 4: Normal + avatar -->
+  <div class="toast-wrap avatar">
+  <div class="card" id="t4" onclick="cardClick('t4')" tabindex="0">
+    <div class="avatar-box"></div>
+    <div class="content-col">
+    <div class="progress-bar" id="pb4"></div>
+    <div class="app-row">
+      <div class="app-icon" style="background:#89b4fa"></div>
+      <div class="app-name">Telegram</div>
+    </div>
+    <div class="title">Juan Pérez</div>
+    <div class="body-text">¿Viste el último commit de verdantis? Agregaron hover y botón de cerrar en toasts persistentes. QA: pasar el mouse sobre el toast y ver el cursor mano + el acorde del card.</div>
+    <div class="close-btn" onclick="closeCard(event, 't4')" style="display:none"></div>
+    </div>
+  </div>
+  </div>
+
+</div>
+
+<div class="controls">
+  Hover = cursor <code>pointer</code> + card se aclara.
+  Persistentes = <code>duration:0</code> → X rojiza al hover.
+  Click normal = <code>cardClick()</code> (ActionInvoked al sender).
+  Click X = <code>closeCard()</code> (cierra el toast).
+</div>
+
+<script>
+// Simula la barra de progreso (wipe) de toasts no-persistentes
+let starts = {};
+[1, 4].forEach(id => starts[id] = Date.now());
+
+function tickProgress() {
+  [1, 4].forEach(id => {
+    const pb = document.getElementById('pb' + id);
+    if (!pb) return;
+    const elapsed = Date.now() - starts[id];
+    let frac = 1 - (elapsed % 8000) / 8000;  // loop de 8s para el showcase
+    pb.style.width = (frac * 100) + '%';
+  });
+  requestAnimationFrame(tickProgress);
+}
+tickProgress();
+
+// Toggle expandir/contraer
+function toggleExpand(e, bodyId, btn) {
+  e.stopPropagation();
+  const body = document.getElementById(bodyId);
+  if (!body) return;
+  body.classList.toggle('expanded');
+  const expanded = body.classList.contains('expanded');
+  btn.innerHTML = (expanded ? 'Ver menos' : 'Ver más') + ' <span class="chev">' + (expanded ? '▴' : '▾') + '</span>';
+}
+
+// Click en el card = ActionInvoked (igual que verdantis)
+function cardClick(id) {
+  console.log('[verdantis] ActionInvoked → sender. toast=' + id);
+}
+
+// Click en la X = cerrar toast
+function closeCard(e, id) {
+  e.stopPropagation();
+  const card = document.getElementById(id);
+  if (card) {
+    card.style.transition = 'opacity 0.2s, transform 0.2s';
+    card.style.opacity = '0';
+    card.style.transform = 'translateX(20px)';
+    setTimeout(() => card.parentElement.remove(), 200);
+  }
+  console.log('[verdantis] CloseNotification → toast=' + id);
+}
+</script>
+</body>
+</html>

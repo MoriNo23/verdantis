@@ -84,11 +84,77 @@ def test_hover_changes_cursor_to_pointer():
     assert events & Gdk.EventMask.LEAVE_NOTIFY_MASK
 
 
-def test_font_is_cantarell():
-    """La fuente del body debe ser Cantarell (no 'sans-serif' generico)."""
+def test_font_is_manrope():
+    """La fuente del body debe ser Manrope (bundled, no 'sans-serif' generico)."""
     w = NotificationWidget(
         "Brave", "", "Test", "body", None, None, "#80cbc4",
         on_click=lambda: None,
     )
     assert hasattr(w, "_BODY_FONT")
-    assert "Cantarell" in w._BODY_FONT or "Roboto" in w._BODY_FONT
+    assert "Manrope" in w._BODY_FONT
+
+
+# ---------------------------------------------------------------------------
+# TESTS: Close button rendering quality (crisp, no blur/ghosting/misalignment)
+# ---------------------------------------------------------------------------
+
+def test_close_button_uses_antialias_none_on_x():
+    """The X strokes must use ANTIALIAS_NONE to avoid sub-pixel fringe blur
+    from round caps at 2.5px width on a 28x28 pill. Without this, the X
+    appears fuzzy/ghosted."""
+    import inspect
+    import cairo
+    src = inspect.getsource(wp.NotificationWidget._draw)
+    assert "ANTIALIAS_NONE" in src, (
+        "Close button X must use cairo.ANTIALIAS_NONE to avoid blurry "
+        "sub-pixel fringes from round caps"
+    )
+
+
+def test_close_button_uses_pixel_centering():
+    """The close button block must be pixel-centered (cr.translate(0.5, 0.5))
+    so pill + X strokes land on pixel boundaries instead of straddling
+    sub-pixel positions which causes blur."""
+    import inspect
+    src = inspect.getsource(wp.NotificationWidget._draw)
+    assert "translate(0.5, 0.5)" in src, (
+        "Close button drawing must include cr.translate(0.5, 0.5) for "
+        "pixel-centering to eliminate sub-pixel blur"
+    )
+
+
+def test_close_button_position_is_top_right():
+    """Close button must be at top-right corner: cx_r = W - pad - 6, cy_t = 6."""
+    import inspect
+    src = inspect.getsource(wp.NotificationWidget._draw)
+    # Verify the position constants from the spec
+    assert "cx_r = W - pad - 6" in src or "cx_r=W - pad - 6" in src
+    assert "cy_t = 6" in src or "cy_t=6" in src
+
+
+def test_close_button_size_is_28():
+    """Close pill must be 28x28 (crisp at 1x scale)."""
+    import inspect
+    src = inspect.getsource(wp.NotificationWidget._draw)
+    assert "cs = 28" in src
+
+
+def test_close_button_x_color_is_pink():
+    """X stroke color must be #f38ba8 (the pink from the spec)."""
+    import inspect
+    src = inspect.getsource(wp.NotificationWidget._draw)
+    assert "0.953, 0.482, 0.659" in src or "#f38ba8" in src.lower()
+
+
+def test_close_button_pill_color_is_red():
+    """Pill background must be red (0.86, 0.15, 0.15)."""
+    import inspect
+    src = inspect.getsource(wp.NotificationWidget._draw)
+    assert "0.86, 0.15, 0.15" in src
+
+
+def test_close_button_only_for_persistent():
+    """The close button block must be gated on self._persistent and self._hover."""
+    import inspect
+    src = inspect.getsource(wp.NotificationWidget._draw)
+    assert "self._persistent and self._hover" in src

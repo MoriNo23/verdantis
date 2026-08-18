@@ -1,9 +1,10 @@
 import math
 import os
 import re
+import ctypes
 import configparser
 import cairo
-os.environ['GDK_BACKEND'] = 'wayland'
+os.environ.setdefault('GDK_BACKEND', 'wayland')
 
 import time
 import gi
@@ -11,6 +12,29 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('GtkLayerShell', '0.1')
 gi.require_version('PangoCairo', '1.0')
 from gi.repository import Gtk, GtkLayerShell, GLib, Gdk, GdkPixbuf, Pango, PangoCairo
+
+
+# ── Bundled font: Manrope (OFL) ──────────────────────────────────────
+# Register TTFs with fontconfig at import time so Pango resolves "Manrope"
+# WITHOUT installing the font system-wide. The .ttf files live in src/fonts/.
+_FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+
+def _register_bundled_font():
+    """Add Manrope-Regular.ttf and Manrope-Bold.ttf to the fontconfig app set.
+    Idempotent: fontconfig de-dupes by file path. Safe if fontconfig is missing."""
+    try:
+        fc = ctypes.CDLL("libfontconfig.so.1")
+        fc.FcConfigAppFontAddFile.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        fc.FcConfigAppFontAddFile.restype = ctypes.c_int
+        cfg = fc.FcConfigGetCurrent()
+        for name in ("Manrope-Regular.ttf", "Manrope-Bold.ttf"):
+            path = os.path.join(_FONT_DIR, name)
+            if os.path.exists(path):
+                fc.FcConfigAppFontAddFile(cfg, path.encode())
+    except Exception:
+        pass  # fallback: Pango uses whatever "Manrope" resolves to (likely nothing)
+
+_register_bundled_font()
 
 
 _DESKTOP_DIRS = [
@@ -281,7 +305,7 @@ def _body_metrics(cuerpo, width, font_size=13, max_lines=None):
     ctx = Pango.Context()
     ctx.set_font_map(PangoCairo.font_map_get_default())
     layout = Pango.Layout(ctx)
-    fd = Pango.FontDescription("Cantarell " + str(font_size))
+    fd = Pango.FontDescription("Manrope " + str(font_size))
     layout.set_font_description(fd)
     if _has_pango_markup(cuerpo):
         try:
@@ -326,12 +350,12 @@ class NotificationWidget(Gtk.DrawingArea):
     _MAX_VISIBLE_LINES = 3      # líneas visibles del body antes de colapsar
     _BTN_H = 20                 # alto de la franja del botón expandir/contraer
 
-    # Fuente: Cantarell (humanist, GNOME default). Más legible que 'sans-serif'
-    # generico que Pango resuelve a Noto Sans (mas pesada, menos crisp a
-    # tamaño chico). Confirmado disponible: fc-list + Pango font_map.
-    _BODY_FONT = "Cantarell 13"
-    _TITLE_FONT = "Cantarell Bold 12"
-    _APP_FONT = "Cantarell 10"
+    # Fuente: Manrope (geométrica, moderna). Empaquetada en src/fonts/ y
+    # registrada via fontconfig al importar (sin instalar system-wide).
+    # Más legible que Cantarell a tamaños chicos en fondo oscuro.
+    _BODY_FONT = "Manrope 13"
+    _TITLE_FONT = "Manrope Bold 12"
+    _APP_FONT = "Manrope 10"
     _BTN_FONT_SIZE = 10         # botón Ver más/menos + pill de cerrar
 
     def __init__(self, app_name, app_icon, titulo, cuerpo, icon_path, image_path, accent,
@@ -343,6 +367,25 @@ class NotificationWidget(Gtk.DrawingArea):
         visual = screen.get_rgba_visual()
         if visual:
             self.set_visual(visual)
+
+        # ── Screen-resolution-aware font scaling ──────────────────────
+        # On small screens (low-res / HiDPI unscaled) the same px font sizes
+        # look proportionally larger. Shrink fonts so the toast reads right
+        # regardless of display resolution.
+        #   width < 1280  → scale 0.85  (small laptop / low-res)
+        #   width < 1600  → scale 0.92  (medium)
+        #   width >= 1600 → scale 1.0   (full HD / 4K)
+        try:
+            sw = screen.get_width()
+        except Exception:
+            sw = 0
+        if sw and sw < 1280:
+            self._font_scale = 0.85
+        elif sw and sw < 1600:
+            self._font_scale = 0.92
+        else:
+            self._font_scale = 1.0
+
         self._expanded = False
         self._expand_rect = None
         self._on_resize = on_resize
@@ -519,7 +562,8 @@ class NotificationWidget(Gtk.DrawingArea):
         h = WaylandPopup.calc_card_height(
             self._app_name, self._cuerpo, "",
             text_width=self._eff_text_width(), expanded=self._expanded,
-            hide_title=self._hide_title,
+            hide_title=self._hide_title, font_scale=self._font_scale,
+            has_avatar=bool(self._avatar_pb),
         )
         if self._image_pb is not None:
             h += 8 + 140
@@ -534,7 +578,7 @@ class NotificationWidget(Gtk.DrawingArea):
 
     def _draw_text(self, cr, text, x, y, w, font_size, light_col, dark_col, bold=False, max_lines=2):
         layout = PangoCairo.create_layout(cr)
-        fd = Pango.FontDescription("Cantarell " + str(font_size))
+        fd = Pango.FontDescription("Manrope " + str(font_size))
         if bold:
             fd.set_weight(Pango.Weight.BOLD)
         layout.set_font_description(fd)
@@ -571,6 +615,15 @@ class NotificationWidget(Gtk.DrawingArea):
         icon_size = 80 if self._avatar_pb else 0
         text_col_x = pad + icon_size + (gap if icon_size else 0)
         text_col_w = W - text_col_x - pad
+
+        # Circle-cut (avatar) steals ~80px of horizontal space: shrink body &
+        # summary fonts so the same text stays legible at the narrower width.
+        # Also apply screen-resolution scaling (self._font_scale).
+        has_avatar = bool(self._avatar_pb)
+        fs = self._font_scale
+        _title_fs = max(9, round((11 if has_avatar else 12) * fs))
+        _body_fs = max(9, round((11 if has_avatar else 13) * fs))
+        _app_fs = max(8, round(10 * fs))
 
         # Helper: rounded rect path (clockwise, outer corners)
         def rrect(cr, x, y, w, h, r):
@@ -614,13 +667,13 @@ class NotificationWidget(Gtk.DrawingArea):
         cr.stroke()
 
         # --- Layout: real wrapped line count (coincide con _draw) ---
-        total_lines = _count_body_lines(self._cuerpo, text_col_w, 13)
+        total_lines = _count_body_lines(self._cuerpo, text_col_w, _body_fs)
         expanded = self._expanded
         cap = min(total_lines, self._MAX_VISIBLE_LINES)
         if expanded:
-            _, body_h = _body_metrics(self._cuerpo, text_col_w, 13, max_lines=None)
+            _, body_h = _body_metrics(self._cuerpo, text_col_w, _body_fs, max_lines=None)
         else:
-            _, body_h = _body_metrics(self._cuerpo, text_col_w, 13, max_lines=cap)
+            _, body_h = _body_metrics(self._cuerpo, text_col_w, _body_fs, max_lines=cap)
         has_more = total_lines > self._MAX_VISIBLE_LINES   # overflow => mostrar botón (debe persistir al expandir para poder contraer)
 
         text_h = 0
@@ -649,6 +702,7 @@ class NotificationWidget(Gtk.DrawingArea):
 
         # --- Text in two passes ---
         ty = pad + (row_h - text_h) / 2
+        hr_info = None  # coordenadas del HR, calculadas en draw_text_pass, trazadas 1 vez afuera
 
         def draw_text_pass(cr, clip_x, is_dark):
             if clip_x < 0:
@@ -674,7 +728,7 @@ class NotificationWidget(Gtk.DrawingArea):
                 label = self._app_label or self._app_name
                 tx = text_col_x + (20 if self._app_icon_pb else 0)
                 ll = PangoCairo.create_layout(cr)
-                ll.set_font_description(Pango.FontDescription("Cantarell 10"))
+                ll.set_font_description(Pango.FontDescription("Manrope " + str(_app_fs)))
                 ll.set_text(label, -1)
                 ll.set_width(int(max(1, text_col_w - tx + text_col_x) * Pango.SCALE))
                 ll.set_ellipsize(Pango.EllipsizeMode.END)
@@ -682,11 +736,32 @@ class NotificationWidget(Gtk.DrawingArea):
                 PangoCairo.show_layout(cr, ll)
                 yy += 20
 
+            # Barely-visible hairline under the app_name row (separation cue)
+            if self._app_name:
+                # Sin avatar: el separador ocupa TODO el ancho de la card
+                # (es el único divisor visual entre app y contenido).
+                # El app-name es un label chiquito (10px): necesita aire para
+                # no romper la jerarquía. HR ~14px debajo del fin de la fila,
+                # y 8px más antes del título/body (buenas prácticas de espaciado).
+                # Con avatar: el bloque de 80px ya da aire, HR angosto al lado.
+                # Se calcula aquí (para que yy refleje el layout) pero se traza
+                # UNA vez afuera del closure, sin clip (ver abajo de los 2 passes).
+                if has_avatar:
+                    _hr_y = yy - 6
+                    _hr_x0, _hr_x1 = text_col_x, text_col_x + text_col_w
+                    _hr_alpha = 0.12
+                else:
+                    _hr_y = yy + 14
+                    _hr_x0, _hr_x1 = pad, W - pad
+                    _hr_alpha = 0.28
+                    yy += 18  # respiración: 14 gap al HR + 4 antes del título/body
+                hr_info = (_hr_y, _hr_x0, _hr_x1, _hr_alpha)
+
             if not self._hide_title:
                 cr.set_source_rgb(*tcol)
                 # Título con elipsis Pango (antes cr.show_text: se salía del card)
                 ll = PangoCairo.create_layout(cr)
-                ll.set_font_description(Pango.FontDescription("Cantarell Bold 12"))
+                ll.set_font_description(Pango.FontDescription("Manrope Bold " + str(_title_fs)))
                 ll.set_text(self._titulo or "", -1)
                 ll.set_width(int(text_col_w * Pango.SCALE))
                 ll.set_ellipsize(Pango.EllipsizeMode.END)
@@ -696,19 +771,20 @@ class NotificationWidget(Gtk.DrawingArea):
 
             # Body con wrap real + ellipsis cuando colapsa
             cr.set_source_rgb(*bcol)
-            self._draw_text(cr, self._cuerpo, text_col_x, yy, text_col_w, 13,
+            self._draw_text(cr, self._cuerpo, text_col_x, yy, text_col_w, _body_fs,
                             bcol, bcol, bold=False,
                             max_lines=(0 if expanded else cap))
 
         # Botón expandir/contraer (si hay overflow), una sola pasada
         self._expand_rect = None
         if has_more:
-            body_top = ty
-            if self._app_name:
-                body_top += 20
+            body_top = ty + 20  # fila del app-name
             if not self._hide_title:
-                body_top += 22
-            # Ancla justo debajo del body medido (altura lógica real), nunca se solapa
+                body_top += 22  # fila del título
+            # El HR sin-avatar empuja el body 18px abajo (respiración). El gap
+            # debe reflejarse aquí o el botón cae encima del texto.
+            if not self._avatar_pb:
+                body_top += 18
             btn_y = body_top + body_h
             btn_h = self._BTN_H
             label = "Ver menos" if expanded else "Ver más"
@@ -717,8 +793,8 @@ class NotificationWidget(Gtk.DrawingArea):
 
             # Pill COMPACTO alineado a la derecha: ancho = contenido real medido
             pad_x = 8
-            cr.select_font_face("Cantarell", 0, 0)
-            cr.set_font_size(11)
+            cr.select_font_face("Manrope", 0, 0)
+            cr.set_font_size(max(9, round(11 * fs)))
             ext = cr.text_extents(label)
             fe = cr.font_extents()
             chev_size, chev_gap, inner_pad = 10, 3, 10
@@ -783,6 +859,16 @@ class NotificationWidget(Gtk.DrawingArea):
         draw_text_pass(cr, wx, True)
         cr.restore()
 
+        # Hairline del app_name: se traza UNA vez, fuera de los 2 passes
+        # (sin clip) para que no se recorte por el wipe ni se duplique.
+        if hr_info:
+            _hr_y, _hr_x0, _hr_x1, _hr_alpha = hr_info
+            cr.set_source_rgba(1.0, 1.0, 1.0, _hr_alpha)
+            cr.set_line_width(1.0)
+            cr.move_to(_hr_x0, _hr_y + 0.5)
+            cr.line_to(_hr_x1, _hr_y + 0.5)
+            cr.stroke()
+
         # Separador sutil entre línea de app y título (solo si ambos existen)
         if self._app_name and not self._hide_title:
             sep_y = ty + 20 - 1
@@ -826,6 +912,11 @@ class NotificationWidget(Gtk.DrawingArea):
             cy1 = cy_t + cs
             self._close_rect = (cx0, cy0, cx1, cy1)
             cr.save()
+            # Pixel-center: translate 0.5px so pill + X strokes land on pixel
+            # boundaries (elimina el blur sub-pixel de line_width=2.5 centrado
+            # en coords enteros; sin esto los bordes de la X se pixelan con
+            # fringed AA que se lee como ghosting).
+            cr.translate(0.5, 0.5)
             rrect(cr, cx0, cy0, cs, cs, 8)
             if self._hover_close:
                 cr.set_source_rgba(0.86, 0.15, 0.15, 0.32)   # hover: más sólido
@@ -837,10 +928,14 @@ class NotificationWidget(Gtk.DrawingArea):
             cr.set_line_width(1.0)
             rrect(cr, cx0, cy0, cs, cs, 8)
             cr.stroke()
-            # X con dos trazos stroke (no fill): más limpio que path cerrado
+            # X con dos trazos stroke (no fill): más limpio que path cerrado.
+            # ANTIALIAS_NONE en la X: los round caps a 2.5px en un 28x28 crean
+            # fringed semi-transparent pixels (blur). Sin AA la X es nítida y
+            # el pixel-center (translate 0.5) mantiene las esquinas alineadas.
             mx = cx0 + cs / 2
             my = cy0 + cs / 2
             inset = 7
+            cr.set_antialias(cairo.ANTIALIAS_NONE)
             cr.set_source_rgba(0.953, 0.482, 0.659, 0.95)   # #f38ba8
             cr.set_line_width(2.5)
             cr.set_line_cap(cairo.LINE_CAP_ROUND)
@@ -993,27 +1088,33 @@ class WaylandPopup:
 
     @staticmethod
     def calc_card_height(app_name, cuerpo, image_path, text_width=_TEXT_COL_W,
-                         expanded=False, hide_title=False):
+                         expanded=False, hide_title=False, font_scale=1.0,
+                         has_avatar=False):
         """Altura de la card según el wrap REAL del cuerpo.
 
         `text_width` es el ancho de la columna de texto (card 360 − pad 14 − icon
         80 − gap 12 − pad 14 = 240). Antes se contaban líneas físicas (split
         "\\n") y el texto desbordaba el borde; ahora se cuentan las líneas
         visuales envolviéndolo. Si `expanded`, se muestran todas las líneas;
-        si no, se limitan a _MAX_VISIBLE_LINES y se reserva la franja del botón."""
+        si no, se limitan a _MAX_VISIBLE_LINES y se reserva la franja del botón.
+        `font_scale` aplica la misma escala de resolución que usa _draw.
+        `has_avatar` suma el gap del HR full-width (18px) que se dibuja en
+        _draw cuando NO hay avatar — si no se suma, el stack colisiona."""
+        _body_fs = max(9, round(13 * font_scale))
         text_h = 0
         if app_name:
             text_h += 20
         if not hide_title:
             text_h += 22
-        total = _count_body_lines(cuerpo, text_width, 13)
+        # Gap del HR full-width (sin avatar) debe coincidir con _draw
+        if app_name and not has_avatar:
+            text_h += 18
+        total = _count_body_lines(cuerpo, text_width, _body_fs)
         if expanded:
-            # Altura NATURAL del body completo (toda la envoltura)
-            _, body_h = _body_metrics(cuerpo, text_width, 13, max_lines=None)
+            _, body_h = _body_metrics(cuerpo, text_width, _body_fs, max_lines=None)
         else:
-            # Altura CAPPED + ellipsis (la que dibuja _draw_text al colapsar)
             cap = min(total, NotificationWidget._MAX_VISIBLE_LINES)
-            _, body_h = _body_metrics(cuerpo, text_width, 13, max_lines=cap)
+            _, body_h = _body_metrics(cuerpo, text_width, _body_fs, max_lines=cap)
         text_h += body_h
         if total > NotificationWidget._MAX_VISIBLE_LINES:
             text_h += NotificationWidget._BTN_H + 8
@@ -1032,11 +1133,12 @@ class WaylandPopup:
         if not self.window:
             return
         base_top, base_right, base_bottom, base_left = self._MARGIN_MAP.get(self.corner, (16, 16, 0, 0))
-        gap = 8
+        gap = 12
         if self._card:
             card_h = self._card.desired_height()
         else:
-            card_h = WaylandPopup.calc_card_height(self.app_name, self.cuerpo, self.image_path)
+            card_h = WaylandPopup.calc_card_height(self.app_name, self.cuerpo, self.image_path,
+                                                  has_avatar=False)
         offset = self._stack_margin * (card_h + gap)
         if "top" in self.corner:
             t, b = base_top + offset, base_bottom
