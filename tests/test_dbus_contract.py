@@ -14,6 +14,7 @@ os.environ.setdefault("GDK_BACKEND", "wayland")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from verdantis_daemon import NotificationManager, _pick_action_key
+from wayland_popup import WaylandPopup
 
 
 class FakeBus:
@@ -24,6 +25,27 @@ class FakeBus:
 
     def emit_signal(self, *args):
         self.emitted.append(args)
+
+
+def _batching_manager():
+    """Manager en modo headless batching-aware.
+
+    El refactor de batching (commit t_c93ad5ab) hizo que notify() NO construya
+    el popup de forma sincrónica: encola en _pending y el pump (vía scheduler)
+    lo drena llamando a _show_popup -> _active. notify() no abre ventana GTK
+    porque inyectamos un scheduler no-op y disparamos _pump() a mano, con un
+    _show_popup headless que construye el WaylandPopup REAL (sin WAYLAND_DISPLAY).
+    """
+    m = NotificationManager(corner="top-right")
+    m._scheduler = lambda ms, cb: 0  # no auto-dispara; llamamos _pump() abajo
+    m.set_dbus(FakeBus())
+
+    def headless_show(nid, kwargs):
+        popup = WaylandPopup(**kwargs)
+        m._active.append((nid, popup))
+
+    m._show_popup = headless_show
+    return m
 
 
 def _manager_with_notification(actions=None, hints=None, app_name="firefox"):
@@ -166,8 +188,8 @@ def test_is_browser_detection():
 
 def test_browser_notification_gets_app_label():
     # Payload real de Brave: desktop-entry brave-browser-nightly → app_label + hide_title
-    m = NotificationManager(corner="top-right")
-    m.set_dbus(FakeBus())
+    # Batching-aware: notify() encola en _pending; disparamos el pump para poblar _active.
+    m = _batching_manager()
     nid = m.notify(
         app_name="Brave", app_icon="",
         summary="Verdantis Test", body="clické",
@@ -175,20 +197,22 @@ def test_browser_notification_gets_app_label():
         hints={"desktop-entry": "brave-browser-nightly", "urgency": 1},
         expire_timeout=5000,
     )
+    m._pump()  # drena la cola -> _active poblado
     popup = m._active[0][1]
     assert popup.app_label == "Brave - Verdantis Test"
     assert popup.hide_title is True
 
 
 def test_non_browser_no_app_label():
-    m = NotificationManager(corner="top-right")
-    m.set_dbus(FakeBus())
+    # Batching-aware: igual que arriba, verificamos el popup NO navegador.
+    m = _batching_manager()
     nid = m.notify(
         app_name="Telegram", app_icon="",
         summary="Mensaje", body="hola",
         actions=[], hints={"desktop-entry": "telegramdesktop"},
         expire_timeout=5000,
     )
+    m._pump()  # drena la cola -> _active poblado
     popup = m._active[0][1]
     assert popup.app_label is None
     assert popup.hide_title is False
