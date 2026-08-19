@@ -493,6 +493,7 @@ class NotificationWidget(Gtk.DrawingArea):
     def _on_leave(self, widget, event):
         self._hover = False
         self._hover_close = False
+        self._set_cursor(False)
         self.queue_draw()
 
     def _on_motion(self, widget, event):
@@ -607,6 +608,13 @@ class NotificationWidget(Gtk.DrawingArea):
         W, H = alloc.width, alloc.height
         if W < 10 or H < 10:
             return
+        # Clear inicial con OPERATOR_CLEAR: deja la superficie transparente
+        # (RGBA) y evita artifacts de buffering (cajas negras) cuando el card
+        # redondeado no cubre la ventana POPUP entera (esquinas).
+        cr.save()
+        cr.set_operator(cairo.OPERATOR_CLEAR)
+        cr.paint()
+        cr.restore()
         wx = self._wipe_x(W)
         pad = 14
         gap = 12
@@ -874,8 +882,8 @@ class NotificationWidget(Gtk.DrawingArea):
             sep_y = ty + 20 - 1
             cr.set_source_rgba(1.0, 1.0, 1.0, 0.06)
             cr.set_line_width(1.0)
-            cr.move_to(text_col_x, sep_y)
-            cr.line_to(text_col_x + text_col_w, sep_y)
+            cr.move_to(text_col_x, sep_y + 0.5)
+            cr.line_to(text_col_x + text_col_w, sep_y + 0.5)
             cr.stroke()
 
         # Image at bottom

@@ -4,6 +4,35 @@ Daemon de notificaciones de escritorio para Wayland (KDE Plasma 6). Es el owner 
 `org.freedesktop.Notifications` en el bus de sesión y dibuja toasts con GTK3 +
 gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 
+## Skills — stack GTK3/Wayland (CARGA OBLIGATORIA)
+
+Estas skills viven en `.opencode/skills/<name>/SKILL.md` y son NECESARIAS para
+cualquier tarea que toque el stack de render/interacción. Cargalas con la
+herramienta `skill` ANTES de editar código de `src/wayland_popup.py`
+(o cualquier trabajo de ventanas layer-shell, dibujo cairo, tipografía, assets
+o runtime). Cada una incluye blueprints, pitfalls conocidos y helpers de prueba
+que coinciden con los patrones reales del repo:
+
+- `py-313-pygobject-runtime` — runtime Python 3.13/.venv, gi typelibs, threading
+  y ciclo de vida GLib sin leaks. Usar para import/venv/threads/memoria.
+- `gtk3-wayland-transparency` — pipeline RGBA de GTK3 y alpha compositing en KWin
+  (evita cajas negras y artifacts de tema). Usar al tocar el fondo/alpha del card.
+- `gtk-layer-shell-plasma6` — integración gtk-layer-shell 0.1 / zwlr_layer_shell_v1
+  en Plasma 6: anclas, exclusive zone, input masking, crash al realizar.
+- `pycairo-vector-rendering` — render vectorial cairo: rounded cards, close pills,
+  wipe V-Sync con Gdk.FrameClock, clipping de imágenes/avatares, alineación subpixel
+  (+0.5). USAR SIEMPRE al tocar `_draw`/cairo en `wayland_popup.py`.
+- `pangocairo-bundled-typography` — Pango/PangoCairo con Manrope bundled (FontConfig
+  ctypes), wrap multi-línea y ellipsis de precisión. Usar para textos/medición.
+- `gdk3-pixbuf-cursor-input` — Gdk 3.0: carga de assets con fallback a memoria,
+  cursors nativos Wayland y routing de eventos pointer/click en DrawingArea.
+- `wayland-hud-fullstack` — blueprint end-to-end que integra TODO el stack
+  (Python 3.13 + GTK3 + LayerShell + Cairo + Pango + Gdk) en una HUD flotante.
+  Es la única que además trae una app de referencia completa.
+
+Regla: si una skill coincide con la tarea, cargarla vía `skill <name>` y seguir
+sus constraints; no improvisar patrones del stack a mano.
+
 ## Dev environment
 
 - Python 3.13 en `.venv/` (venv clásico; la migración a uv está BLOQUEADA, ver
