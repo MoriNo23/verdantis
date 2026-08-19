@@ -54,10 +54,8 @@ def _render_close_to_png(path, hover_close=False):
     rrect(cr, cx0, cy0, cs, cs, 8)
     cr.set_source_rgba(0.86, 0.15, 0.15, 0.32 if hover_close else 0.18)
     cr.fill()
-    cr.set_source_rgba(0.86, 0.15, 0.15, 0.35)
-    cr.set_line_width(1.0)
-    rrect(cr, cx0, cy0, cs, cs, 8)
-    cr.stroke()
+    # Border red explícito eliminado (ver src/wayland_popup.py): generaba
+    # artifact de línea roja en hover.
     mx = cx0 + cs / 2
     my = cy0 + cs / 2
     inset = 7

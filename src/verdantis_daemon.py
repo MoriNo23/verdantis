@@ -11,7 +11,7 @@ from gi.repository import Gtk, GtkLayerShell, GLib, Gio
 
 from wayland_popup import WaylandPopup, _find_desktop_file, _extract_markup_url
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 
 
 def _is_browser(app_name, desktop_entry):

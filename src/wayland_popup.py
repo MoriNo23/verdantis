@@ -912,6 +912,12 @@ class NotificationWidget(Gtk.DrawingArea):
             cy1 = cy_t + cs
             self._close_rect = (cx0, cy0, cx1, cy1)
             cr.save()
+            # Cairo: save/restore NO guarda el path actual (no es parte del
+            # graphics state), así que un sub-path residual de bloques previos
+            # (texto Pango, wipe clip, HR...) sobreviviría al restore y el
+            # próximo stroke/fill del pill lo dibujaría como "línea fantasma".
+            # new_path() descarta cualquier sub-path huérfano de este frame.
+            cr.new_path()
             # Pixel-center: translate 0.5px so pill + X strokes land on pixel
             # boundaries (elimina el blur sub-pixel de line_width=2.5 centrado
             # en coords enteros; sin esto los bordes de la X se pixelan con
@@ -923,11 +929,12 @@ class NotificationWidget(Gtk.DrawingArea):
             else:
                 cr.set_source_rgba(0.86, 0.15, 0.15, 0.18)   # normal hover del card
             cr.fill()
-            # borde sutil
-            cr.set_source_rgba(0.86, 0.15, 0.15, 0.35)
-            cr.set_line_width(1.0)
-            rrect(cr, cx0, cy0, cs, cs, 8)
-            cr.stroke()
+            # NOTE: se eliminó el borde rojo explícito (set_source_rgba(0.86, 0.15,
+            # 0.15, 0.35) + stroke) que generaba el artifact de "línea roja" en
+            # hover: su alpha (0.35) era mucho mayor que el del fill (0.18-0.32),
+            # leyéndose como un contorno rojo flotante. El feedback de hover se
+            # mantiene vía el cambio de opacidad del fill (0.18 -> 0.32 en
+            # pill-hover), ya presente en el bloque.
             # X con dos trazos stroke (no fill): más limpio que path cerrado.
             # ANTIALIAS_NONE en la X: los round caps a 2.5px en un 28x28 crean
             # fringed semi-transparent pixels (blur). Sin AA la X es nítida y

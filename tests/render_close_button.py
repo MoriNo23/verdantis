@@ -66,10 +66,8 @@ def render_close_isolated(path, width=360, height=120, hover=True,
         else:
             cr.set_source_rgba(0.86, 0.15, 0.15, 0.18)
         cr.fill()
-        cr.set_source_rgba(0.86, 0.15, 0.15, 0.35)
-        cr.set_line_width(1.0)
-        rrect(cr, cx0, cy0, cs, cs, 8)
-        cr.stroke()
+        # Border red explícito eliminado (ver src/wayland_popup.py): generaba
+        # artifact de línea roja en hover.
         mx = cx0 + cs / 2
         my = cy0 + cs / 2
         inset = 7
