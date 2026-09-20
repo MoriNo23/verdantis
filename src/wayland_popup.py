@@ -256,6 +256,39 @@ def _extract_markup_url(text):
 _CARD_WIDTH = 360
 _TEXT_COL_W = _CARD_WIDTH - 14 - 80 - 12 - 14  # 240: pad, icon, gap, pad
 
+# ── Métricas de layout — FUENTE ÚNICA ──────────────────────────────────────
+# _draw (posiciones) y calc_card_height/_eff_text_width (medición de alto y
+# ancho) consumen estas constantes + _rows_above_body. Si el stack se computa
+# "por separado", el render desborda o deja slack — bug real cazado por
+# tests/test_layout_consistency.py (la barra flotaba 8px y, sin app_name,
+# desbordaba la card 30px).
+_PAD = 14            # padding interior del card
+_AVATAR_W = 80       # slot izquierdo del avatar
+_AVATAR_GAP = 12     # gap avatar → texto
+_ROW_MIN_H = 80      # alto mínimo de la fila (el avatar define el piso)
+_APP_ROW_H = 20      # fila del app-name
+_TITLE_ROW_H = 22    # fila del título
+_HR_GAP = 18         # respiración del HR full-width (solo con app_name, sin avatar)
+_BTN_GAP = 8         # gap body → barra expandir
+_CARD_RADIUS = 12    # radio del card
+
+
+def _rows_above_body(app_name, hide_title, has_avatar):
+    """Filas apiladas por encima del body — fuente única del stack.
+
+    _draw la usa para posicionar (yy/body_top) y calc_card_height para
+    reservar altura; ambos deben pasar por acá o divergen. El gap del HR
+    solo existe con app_name (el HR no se dibuja sin él): el bloque del
+    botón lo sumaba igual con solo mirar el avatar, y desbordaba la card."""
+    rows = 0
+    if app_name:
+        rows += _APP_ROW_H
+    if not hide_title:
+        rows += _TITLE_ROW_H
+    if app_name and not has_avatar:
+        rows += _HR_GAP
+    return rows
+
 # Tags de markup que Pango SOPORTA de verdad. Pango NO conoce <a> ni <img>:
 # mandarle un body con <a href> a set_markup rompe el parseo (warning
 # "Unknown tag 'a'") y el texto deja de envolverse. Por eso se sanitizan.
@@ -556,9 +589,9 @@ class NotificationWidget(Gtk.DrawingArea):
         Sin avatar (no hay imagen): texto a ancho completo (~332).
         Persistentes: menos el ancho de la franja de descarte (44px), que
         _draw reserva para que el texto no quede bajo el tint de hover."""
-        base = _CARD_WIDTH - 14 - 14
+        base = _CARD_WIDTH - _PAD - _PAD
         if self._avatar_pb:
-            base -= 80 + 12
+            base -= _AVATAR_W + _AVATAR_GAP
         if self._persistent:
             base -= self._CLOSE_STRIP_W
         return base
@@ -623,11 +656,11 @@ class NotificationWidget(Gtk.DrawingArea):
         cr.paint()
         cr.restore()
         wx = self._wipe_x(W)
-        pad = 14
-        gap = 12
+        pad = _PAD
+        gap = _AVATAR_GAP
         # Slot izquierdo SOLO si hay avatar real (icono del tab). Sin imagen:
         # no se reserva espacio (texto a ancho completo).
-        icon_size = 80 if self._avatar_pb else 0
+        icon_size = _AVATAR_W if self._avatar_pb else 0
         text_col_x = pad + icon_size + (gap if icon_size else 0)
         # Persistentes: la franja vertical de descarte (44px) se RESERVA en la
         # columna de texto — el texto nunca queda debajo del tint de hover.
@@ -694,15 +727,13 @@ class NotificationWidget(Gtk.DrawingArea):
             _, body_h = _body_metrics(self._cuerpo, text_col_w, _body_fs, max_lines=cap)
         has_more = total_lines > self._MAX_VISIBLE_LINES   # overflow => mostrar botón (debe persistir al expandir para poder contraer)
 
-        text_h = 0
-        if self._app_name:
-            text_h += 20
-        if not self._hide_title:
-            text_h += 22
+        text_h = _rows_above_body(self._app_name, self._hide_title, has_avatar)
         text_h += body_h
         if has_more:
-            text_h += self._BTN_H + 8   # franja del botón expandir/contraer
-        row_h = max(text_h, icon_size)
+            text_h += self._BTN_H + _BTN_GAP   # franja del botón expandir/contraer
+        # Piso de la fila: coincide con calc_card_height (max con 80) — antes
+        # _draw usaba max(text_h, icon_size) y sin avatar el piso se perdía.
+        row_h = max(text_h, icon_size, _ROW_MIN_H)
 
         # Avatar (slot izquierdo, centrado verticalmente) — solo si hay imagen real.
         # El pixbuf YA viene circular (lo recorta _make_circular); el blit rect es
@@ -752,7 +783,7 @@ class NotificationWidget(Gtk.DrawingArea):
                 ll.set_ellipsize(Pango.EllipsizeMode.END)
                 cr.move_to(tx, yy + 3)
                 PangoCairo.show_layout(cr, ll)
-                yy += 20
+                yy += _APP_ROW_H
 
             # Barely-visible hairline under the app_name row (separation cue)
             if self._app_name:
@@ -772,7 +803,7 @@ class NotificationWidget(Gtk.DrawingArea):
                     _hr_y = yy + 14
                     _hr_x0, _hr_x1 = pad, W - pad
                     _hr_alpha = 0.28
-                    yy += 18  # respiración: 14 gap al HR + 4 antes del título/body
+                    yy += _HR_GAP  # respiración: 14 gap al HR + 4 antes del título/body
                 hr_info = (_hr_y, _hr_x0, _hr_x1, _hr_alpha)
 
             if not self._hide_title:
@@ -785,7 +816,7 @@ class NotificationWidget(Gtk.DrawingArea):
                 ll.set_ellipsize(Pango.EllipsizeMode.END)
                 cr.move_to(text_col_x, yy + 2)
                 PangoCairo.show_layout(cr, ll)
-                yy += 22
+                yy += _TITLE_ROW_H
 
             # Body con wrap real + ellipsis cuando colapsa
             cr.set_source_rgb(*bcol)
@@ -796,14 +827,13 @@ class NotificationWidget(Gtk.DrawingArea):
         # Botón expandir/contraer (si hay overflow), una sola pasada
         self._expand_rect = None
         if has_more:
-            body_top = ty + 20  # fila del app-name
-            if not self._hide_title:
-                body_top += 22  # fila del título
-            # El HR sin-avatar empuja el body 18px abajo (respiración). El gap
-            # debe reflejarse aquí o el botón cae encima del texto.
-            if not self._avatar_pb:
-                body_top += 18
-            btn_y = body_top + body_h
+            # body_top = MISMA fuente que el flujo de texto (yy). Antes este
+            # bloque recomputaba las filas a mano: sumaba el gap del HR sin
+            # fijarse en app_name (desbordaba 30px) y no aplicaba _BTN_GAP
+            # (la barra flotaba 8px sobre el padding inferior).
+            body_top = ty + _rows_above_body(self._app_name,
+                                             self._hide_title, has_avatar)
+            btn_y = body_top + body_h + _BTN_GAP
             btn_h = self._BTN_H
             label = "Ver menos" if expanded else "Ver más"
             accent_r, accent_g, accent_b = self._accent_rgb
@@ -1134,15 +1164,8 @@ class WaylandPopup:
         _body_fs = max(9, round(13 * font_scale))
         if persistent:
             text_width -= NotificationWidget._CLOSE_STRIP_W
-        text_h = 0
-        if app_name:
-            text_h += 20
-        if not hide_title:
-            text_h += 22
-        # Gap del HR full-width (sin avatar) debe coincidir con _draw
-        if app_name and not has_avatar:
-            text_h += 18
         total = _count_body_lines(cuerpo, text_width, _body_fs)
+        text_h = _rows_above_body(app_name, hide_title, has_avatar)
         if expanded:
             _, body_h = _body_metrics(cuerpo, text_width, _body_fs, max_lines=None)
         else:
@@ -1150,9 +1173,9 @@ class WaylandPopup:
             _, body_h = _body_metrics(cuerpo, text_width, _body_fs, max_lines=cap)
         text_h += body_h
         if total > NotificationWidget._MAX_VISIBLE_LINES:
-            text_h += NotificationWidget._BTN_H + 8
-        row_h = max(text_h, 80)
-        h = 14 + row_h + 14
+            text_h += NotificationWidget._BTN_H + _BTN_GAP
+        row_h = max(text_h, _ROW_MIN_H)
+        h = _PAD + row_h + _PAD
         if image_path and os.path.exists(image_path):
             h += 8 + 140
         return h
