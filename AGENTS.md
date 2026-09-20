@@ -39,19 +39,26 @@ sus constraints; no improvisar patrones del stack a mano.
   `tests/test_uv_migration.py`). Instalación: `./install.sh` (apt: libgtk-layer-shell-dev,
   python3-gi, python3-gi-cairo; pip: PyQt6) y copia `verdantis.service` a
   `~/.config/systemd/user/`.
-- 3 módulos en `src/`:
+- 6 módulos en `src/`:
   - `verdantis.py` — entry point; `--daemon` delega al daemon; one-shot elige backend
-    Wayland (GTK layer-shell) o fallback PyQt6.
+    Wayland (GTK layer-shell) o fallback PyQt6 (import perezoso, sin Qt al arrancar).
   - `verdantis_daemon.py` — dueño del bus DBus (`Notify`, `CloseNotification`,
     `GetCapabilities`, `GetServerInformation`, signals), cola de toasts, click→action.
   - `wayland_popup.py` — render del toast: `NotificationWidget` (Gtk.DrawingArea con
     cairo), layout (avatar 80px opcional / texto a ancho completo), wrap Pango,
-    botón "Ver más/Ver menos", wipe de tiempo.
+    franja vertical de descarte + barra expandir full-width, wipe de tiempo.
+  - `app_info.py` — fuente única de `APP_NAME`/`APP_ID`/`VENDOR` (nada de literales
+    "Verdantis" inline; el vendor de GetServerInformation es MoriNo23, no el nombre).
+  - `dashboard.py` — Flask dashboard de historial + replay (thread dentro del daemon).
+  - `qt_fallback.py` — notificación one-shot PyQt6; solo se importa en ese branch.
+- Métricas de layout: fuente única en `wayland_popup` (`_PAD`/`_rows_above_body`/...),
+  consumidas por `_draw`, `calc_card_height` y `_eff_text_width`. No recomputar el
+  stack a mano o divergen (ver `tests/test_layout_consistency.py`).
 
 ## Build & test
 
 - Tests: `.venv/bin/python -m pytest tests/ -q --ignore=tests/test_uv_migration.py`
-  (~2s, 81 passed). La suite entera con el test uv tarda 30-50s y NECESITA red a PyPI.
+  (~10s, 180 passed). La suite entera con el test uv tarda 30-50s y NECESITA red a PyPI.
 - Los tests son headless: importan módulos con `os.environ.setdefault("GDK_BACKEND","offscreen")`
   ANTES de importar. `wayland_popup` forza `GDK_BACKEND=wayland` al importarse, así que
   el test debe pisarlo antes o no arranca display.
