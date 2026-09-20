@@ -16,6 +16,8 @@ import time
 
 from flask import Flask, jsonify, request, Response
 
+from app_info import APP_NAME
+
 app = Flask(__name__)
 
 # Set by NotificationDaemon when it starts the dashboard.
@@ -110,7 +112,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Verdantis Dashboard</title>
+<title>__APP_NAME__ Dashboard</title>
 <style>
   :root {
     --bg: #f5f5f5;
@@ -177,7 +179,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-  <h1>Verdantis Dashboard</h1>
+  <h1>__APP_NAME__ Dashboard</h1>
   <div class="subtitle">Historial de notificaciones en tiempo real — click Replay para re-disparar</div>
 
   <div class="stats-bar" id="stats"></div>
@@ -261,3 +263,7 @@ setInterval(refresh, 3000);
 </body>
 </html>
 """
+
+# Interpolación del nombre single-source (el template usa CSS con llaves y
+# porcentajes, así que no es f-string ni %-format: replace directo).
+_DASHBOARD_HTML = _DASHBOARD_HTML.replace("__APP_NAME__", APP_NAME)

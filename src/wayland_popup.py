@@ -13,6 +13,8 @@ gi.require_version('GtkLayerShell', '0.1')
 gi.require_version('PangoCairo', '1.0')
 from gi.repository import Gtk, GtkLayerShell, GLib, Gdk, GdkPixbuf, Pango, PangoCairo
 
+from app_info import APP_ID, APP_NAME
+
 
 # ── Bundled font: Manrope (OFL) ──────────────────────────────────────
 # Register TTFs with fontconfig at import time so Pango resolves "Manrope"
@@ -1029,7 +1031,7 @@ class WaylandPopup:
             raise RuntimeError("wlr_layer_shell no soportado")
 
         self.window = Gtk.Window.new(Gtk.WindowType.POPUP)
-        self.window.set_title("Verdantis")
+        self.window.set_title(APP_NAME)
         self.window.set_name("notify-card")
         self.window.set_app_paintable(True)
         screen = self.window.get_screen()
@@ -1043,7 +1045,7 @@ class WaylandPopup:
         GtkLayerShell.set_layer(self.window, GtkLayerShell.Layer.TOP)
         # Namespace para que tools de ventana (kdotool, wlr-tools) identifiquen
         # la superficie layer-shell aunque no sea ventana gestionada por KWin.
-        GtkLayerShell.set_namespace(self.window, "verdantis")
+        GtkLayerShell.set_namespace(self.window, APP_ID)
         GtkLayerShell.try_force_commit(self.window)
 
         for e in self._ANCHOR_MAP.get(self.corner, ("top", "right")):

@@ -8,6 +8,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt, QTimer
 
+from app_info import APP_NAME
+
 
 class NotificacionPersonalizada(QWidget):
     def __init__(self, titulo="", cuerpo="", icon_path=None, image_path=None,
@@ -188,7 +190,7 @@ def main():
             print(f"[notify] Wayland falló ({e}); usando Qt", file=sys.stderr)
 
     app = QApplication.instance() or QApplication(sys.argv)
-    app.setApplicationName("Verdantis")
+    app.setApplicationName(APP_NAME)
     n = NotificacionPersonalizada(
         titulo=args.title, cuerpo=args.body,
         icon_path=args.icon, image_path=args.image,

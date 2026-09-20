@@ -42,7 +42,10 @@ def test_get_server_information_uses_version():
     # Variant signature for GetServerInformation is (ssss)
     (name, vendor, version, spec_version) = inv.result.unpack()
     assert name == "Verdantis"
-    assert vendor == "Verdantis"
+    assert vendor == "MoriNo23", (
+        "vendor debe identificar al autor, no repetir el nombre del server "
+        "(spec freedesktop: name=server, vendor=quien lo hace)"
+    )
     assert version == VERSION, "GetServerInformation version must equal the VERSION constant"
     assert spec_version == "1.2"
     assert SEMVER.match(version)
@@ -54,3 +57,17 @@ def test_version_is_single_source():
     assert 'VERSION, "1.2"' in src, "GetServerInformation must interpolate VERSION"
     # No stray inline version literal left in the GetServerInformation tuple.
     assert '"0.1.0"' not in src, "stale inline version literal must be gone"
+
+
+def test_app_name_is_single_source():
+    """El nombre "Verdantis" NO puede estar inline en GetServerInformation ni
+    repetido en otros módulos: vive en app_info.APP_NAME y se importa."""
+    src = open("src/verdantis_daemon.py", encoding="utf-8").read()
+    assert 'APP_NAME, VENDOR' in src, (
+        "GetServerInformation debe interpolar APP_NAME/VENDOR de app_info, "
+        "no literales inline"
+    )
+    popup_src = open("src/wayland_popup.py", encoding="utf-8").read()
+    assert 'set_title(APP_NAME)' in popup_src, (
+        "window.set_title debe usar APP_NAME de app_info (single source)"
+    )

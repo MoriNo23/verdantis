@@ -9,9 +9,10 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('GtkLayerShell', '0.1')
 from gi.repository import Gtk, GtkLayerShell, GLib, Gio
 
+from app_info import APP_ID, APP_NAME, VENDOR
 from wayland_popup import WaylandPopup, _find_desktop_file, _extract_markup_url
 
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 
 
 def _is_browser(app_name, desktop_entry):
@@ -583,7 +584,7 @@ class NotificationDaemon:
             invocation.return_value(GLib.Variant("(as)", (caps,)))
         elif method_name == "GetServerInformation":
             invocation.return_value(GLib.Variant("(ssss)", (
-                "Verdantis", "Verdantis", VERSION, "1.2",
+                APP_NAME, VENDOR, VERSION, "1.2",
             )))
 
     def _handle_get_property(self, conn, sender, obj_path, iface_name, prop_name):
@@ -626,7 +627,7 @@ def main():
     if args.dashboard:
         from dashboard import start_dashboard
         start_dashboard(daemon)
-        print("[verdantis] Dashboard: http://127.0.0.1:8777")
+        print(f"[{APP_ID}] Dashboard: http://127.0.0.1:8777")
 
     try:
         daemon.run()
