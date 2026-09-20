@@ -27,17 +27,10 @@ import gi
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf
 
+from render_helpers import rrect, png_pixels
+
 _CARD_BG = wp._hex_rgb("#1e1e2e")
 _CLOSE_ACCENT = (0.953, 0.482, 0.659, 0.95)  # #f38ba8 pink
-
-
-def rrect(cr, x, y, w, h, r):
-    r = min(r, w / 2, h / 2)
-    cr.arc(x + w - r, y + r, r, 3 * math.pi / 2, 2 * math.pi)
-    cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
-    cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
-    cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
-    cr.close_path()
 
 
 def _render_close_to_png(path, hover_close=False):
@@ -78,19 +71,7 @@ def _render_close_to_png(path, hover_close=False):
 
 def _load_pixels(path):
     """Load PNG and return 2D list of (R,G,B,A) tuples."""
-    pb = GdkPixbuf.Pixbuf.new_from_file(path)
-    raw = pb.get_pixels()
-    n = pb.get_n_channels()
-    rs = pb.get_rowstride()
-    w, h = pb.get_width(), pb.get_height()
-    pixels = []
-    for y in range(h):
-        row = []
-        for x in range(w):
-            off = y * rs + x * n
-            row.append((raw[off], raw[off+1], raw[off+2], raw[off+3] if n == 4 else 255))
-        pixels.append(row)
-    return pixels
+    return png_pixels(path)
 
 
 def _is_x_stroke(r, g, b, a):

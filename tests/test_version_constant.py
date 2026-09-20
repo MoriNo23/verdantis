@@ -6,9 +6,15 @@ invocation so we confirm GetServerInformation returns (name, vendor,
 VERSION, spec_version) and that VERSION is single-source-of-truth.
 """
 import os
+import sys
+
 os.environ.setdefault("GDK_BACKEND", "offscreen")
+# sys.path propio: este archivo debe poder correr aislado (antes solo pasaba
+# como parte de la suite completa porque OTRO test insertaba src/ antes).
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import re
+import wayland_popup  # noqa: F401  (fija Gdk 3.0 antes de que gi cargue 4.0)
 import verdantis_daemon as v
 from verdantis_daemon import NotificationDaemon, VERSION
 

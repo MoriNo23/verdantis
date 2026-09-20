@@ -17,12 +17,9 @@ import sys
 os.environ.setdefault("GDK_BACKEND", "offscreen")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-import cairo
-
 # wayland_popup PRIMERO: fija Gdk 3.0 antes de que el import suelto de Gdk
 # cargue 4.0 y crashee (pitfall documentado en AGENTS.md).
 import wayland_popup as wp
-from gi.repository import Gdk
 from wayland_popup import NotificationWidget
 
 LONG = "x" * 400
@@ -39,7 +36,8 @@ class _Ev:
 
 
 def _draw_widget(persistent=False, hover=False, cuerpo=LONG, expanded=False):
-    """Render headless con allocation forzada; devuelve (widget, altura)."""
+    """Render headless (helper compartido); devuelve (widget, altura)."""
+    from render_helpers import alloc_and_draw
     w = NotificationWidget(
         "App", "", "T", cuerpo, None, None, "#80cbc4",
         on_click=lambda: None, on_close=lambda: None, persistent=persistent,
@@ -47,12 +45,7 @@ def _draw_widget(persistent=False, hover=False, cuerpo=LONG, expanded=False):
     w._hover = hover
     w._expanded = expanded
     h = w.desired_height()
-    a = Gdk.Rectangle()
-    a.x = a.y = 0
-    a.width, a.height = W, h
-    w.get_allocation = lambda a=a: a
-    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, W, h)
-    w._draw(w, cairo.Context(surf))
+    alloc_and_draw(w, W, h)
     return w, h
 
 
@@ -88,6 +81,7 @@ def test_close_strip_covers_mid_card_click():
 def test_click_on_strip_closes_without_opening():
     """Click en la franja: on_close SÍ, on_click NO (no abre el video)."""
     closed, clicked = [], []
+    from render_helpers import alloc_and_draw
     w = NotificationWidget(
         "App", "", "T", LONG, None, None, "#80cbc4",
         on_click=lambda: clicked.append(1),
@@ -96,12 +90,7 @@ def test_click_on_strip_closes_without_opening():
     )
     w._hover = True
     h = w.desired_height()
-    a = Gdk.Rectangle()
-    a.x = a.y = 0
-    a.width, a.height = W, h
-    w.get_allocation = lambda a=a: a
-    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, W, h)
-    w._draw(w, cairo.Context(surf))
+    alloc_and_draw(w, W, h)
     w._on_button_press(w, _Ev(W - 10, h / 2))
     assert closed and not clicked, (
         "click en la franja debe cerrar sin disparar on_click (misclick del video)"

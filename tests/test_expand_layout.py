@@ -20,7 +20,7 @@ import sys
 
 os.environ.setdefault("GDK_BACKEND", "offscreen")
 
-sys.path.insert(0, "/home/extra/repositorios/verdantis/src")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 import wayland_popup as wp
 
@@ -93,18 +93,12 @@ def test_collapsed_body_limit_at_visible_lines():
 # ---------------------------------------------------------------------------
 
 def _draw_then_get_rect(cuerpo, expanded):
-    """Ejecuta _draw headless (con allocation forzada) y devuelve el rect del botón."""
-    import cairo
-    from gi.repository import Gdk
+    """Ejecuta _draw headless (helper compartido) y devuelve el rect del botón."""
+    from render_helpers import alloc_and_draw
     w = wp.NotificationWidget("App", "", "T", cuerpo, None, None, "#80cbc4")
     w._expanded = expanded
     h = w.desired_height()
-    a = Gdk.Rectangle()
-    a.x, a.y, a.width, a.height = 0, 0, 360, h
-    w.get_allocation = lambda a=a: a
-    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, 360, h)
-    ctx = cairo.Context(surf)
-    w._draw(w, ctx)
+    alloc_and_draw(w, 360, h)
     return w._expand_rect
 
 
@@ -165,24 +159,21 @@ def _chevron_imbalance(expanded):
     0.0 → no hay chevrón visible (regresión: fill/stroke perdido).
     """
     import cairo
-    from gi.repository import Gdk
+    from render_helpers import alloc_and_draw, surface_pixels
     w = wp.NotificationWidget("App", "", "T", LONG, None, None, "#89b4fa")
     w._expanded = expanded
     h = w.desired_height()
-    a = Gdk.Rectangle(); a.x = a.y = 0; a.width, a.height = 360, h
-    w.get_allocation = lambda: a
-    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, 360, h)
-    w._draw(w, cairo.Context(surf))
-    data = surf.get_data(); stride = surf.get_stride()
+    surf = alloc_and_draw(w, 360, h)
+    pixels = surface_pixels(surf)
     ys = []
     for y in range(h):
         cnt = 0
         # El chevrón va CENTRADO en la barra full-width (antes era el pill
         # a la derecha); el scan cubre la mitad derecha del card.
+        # acento puro (#89b4fa), sin bordes de texto
         for x in range(100, 300):
-            o = y * stride + x * 4
-            r, g, b = data[o + 2], data[o + 1], data[o]
-            if 0x70 < r < 0xA0 and 0xA0 < g < 0xD0 and b > 0xE0:  # acento puro (#89b4fa), sin bordes de texto
+            r, g, b, a = pixels[y][x]
+            if 0x70 < r < 0xA0 and 0xA0 < g < 0xD0 and b > 0xE0:
                 cnt += 1
         ys.append(cnt)
     if not any(ys):

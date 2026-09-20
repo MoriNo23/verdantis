@@ -93,73 +93,12 @@ def test_font_is_manrope():
     assert "Manrope" in w._BODY_FONT
 
 
+
 # ---------------------------------------------------------------------------
-# TESTS: Close button rendering quality (crisp, no blur/ghosting/misalignment)
+# NOTA (auditoría de suite): la sección de "rendering quality" por inspección
+# de fuente (assert "..." in src) se ELIMINÓ: pineaba el texto del source en
+# vez del comportamiento. La cobertura real vive en:
+#   - tests/test_action_zones.py  -> geometría de franja/barra (hit-rects)
+#   - tests/test_close_render.py  -> crisp de la X (píxeles opacos, simetría)
+#   - tests/test_e2e_real.py      -> X rosa dibujada por el _draw real
 # ---------------------------------------------------------------------------
-
-def test_close_button_uses_antialias_none_on_x():
-    """The X strokes must use ANTIALIAS_NONE to avoid sub-pixel fringe blur
-    from round caps at 2.5px width on a 28x28 pill. Without this, the X
-    appears fuzzy/ghosted."""
-    import inspect
-    import cairo
-    src = inspect.getsource(wp.NotificationWidget._draw)
-    assert "ANTIALIAS_NONE" in src, (
-        "Close button X must use cairo.ANTIALIAS_NONE to avoid blurry "
-        "sub-pixel fringes from round caps"
-    )
-
-
-def test_close_button_uses_pixel_centering():
-    """The close button block must be pixel-centered (cr.translate(0.5, 0.5))
-    so pill + X strokes land on pixel boundaries instead of straddling
-    sub-pixel positions which causes blur."""
-    import inspect
-    src = inspect.getsource(wp.NotificationWidget._draw)
-    assert "translate(0.5, 0.5)" in src, (
-        "Close button drawing must include cr.translate(0.5, 0.5) for "
-        "pixel-centering to eliminate sub-pixel blur"
-    )
-
-
-def test_close_strip_position_is_right_edge():
-    """Franja de descarte: borde derecho, ancho _CLOSE_STRIP_W, alto completo.
-    Marcadores de la geometría de la franja en el source de _draw."""
-    import inspect
-    src = inspect.getsource(wp.NotificationWidget._draw)
-    # La franja nace del borde derecho y baja hasta el piso del card
-    assert "sx0 = W - sw" in src, (
-        "la franja debe anclarse al borde derecho del card"
-    )
-    assert "self._close_rect = (sx0, 0, W, H)" in src, (
-        "el hit-rect de cierre debe ser la franja completa (alto del card)"
-    )
-
-
-def test_close_strip_width_is_44():
-    """La franja de descarte mide 44px de ancho (target 5-8x el pill 28x28)."""
-    import inspect
-    src = inspect.getsource(wp.NotificationWidget._draw)
-    assert "sw = self._CLOSE_STRIP_W" in src
-    assert wp.NotificationWidget._CLOSE_STRIP_W == 44
-
-
-def test_close_button_x_color_is_pink():
-    """X stroke color must be #f38ba8 (the pink from the spec)."""
-    import inspect
-    src = inspect.getsource(wp.NotificationWidget._draw)
-    assert "0.953, 0.482, 0.659" in src or "#f38ba8" in src.lower()
-
-
-def test_close_button_pill_color_is_red():
-    """Pill background must be red (0.86, 0.15, 0.15)."""
-    import inspect
-    src = inspect.getsource(wp.NotificationWidget._draw)
-    assert "0.86, 0.15, 0.15" in src
-
-
-def test_close_button_only_for_persistent():
-    """The close button block must be gated on self._persistent and self._hover."""
-    import inspect
-    src = inspect.getsource(wp.NotificationWidget._draw)
-    assert "self._persistent and self._hover" in src

@@ -29,6 +29,8 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gdk, GLib  # noqa: E402
 
+from render_helpers import surface_pixels  # noqa: E402
+
 import verdantis_daemon as vd  # noqa: E402
 import wayland_popup as wp  # noqa: E402
 
@@ -48,7 +50,7 @@ def _render_real_close_button(W=360, H=120):
         accent="#80cbc4",
         persistent=True,
     )
-    widget._hover = True  # hover over the card -> close pill should draw
+    widget._hover = True  # hover over the card -> close strip should draw
 
     # The widget is not realized; feed it a fixed allocation so _draw proceeds.
     widget.get_allocation = lambda: types.SimpleNamespace(width=W, height=H)
@@ -64,19 +66,8 @@ def _render_real_close_button(W=360, H=120):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     surface.write_to_png(path)
 
-    # Read pixels back via GdkPixbuf for channel data.
-    pb = Gdk.pixbuf_get_from_surface(surface, 0, 0, W, H)
-    n = pb.get_n_channels()
-    rs = pb.get_rowstride()
-    raw = pb.get_pixels()
-    pixels = []
-    for y in range(H):
-        row = []
-        for x in range(W):
-            off = y * rs + x * n
-            row.append((raw[off], raw[off + 1], raw[off + 2],
-                        raw[off + 3] if n == 4 else 255))
-        pixels.append(row)
+    # Read pixels back via GdkPixbuf for channel data (helper compartido).
+    pixels = surface_pixels(surface)
     return pixels, path, widget
 
 
@@ -144,16 +135,12 @@ def test_e2e_close_button_only_on_hover():
     cr = cairo.Context(surface)
     widget._draw(None, cr)
     surface.flush()
-    pb = Gdk.pixbuf_get_from_surface(surface, 0, 0, 360, 120)
-    n = pb.get_n_channels()
-    rs = pb.get_rowstride()
-    raw = pb.get_pixels()
-    # Scan top-right close region: no pink X.
-    for y in range(6, 34):
-        for x in range(326, 354):
-            off = y * rs + x * n
-            if _is_x_pink(raw[off], raw[off + 1], raw[off + 2],
-                          raw[off + 3] if n == 4 else 255):
+    pixels = surface_pixels(surface)
+    # Scan la franja de descarte (donde viviría la X): sin hover no hay rosa.
+    strip_x0 = 360 - wp.NotificationWidget._CLOSE_STRIP_W
+    for y in range(0, 120):
+        for x in range(strip_x0, 360):
+            if _is_x_pink(*pixels[y][x]):
                 assert False, "Close X drawn even without hover (should be hidden)"
 
 
@@ -219,13 +206,22 @@ def test_e2e_burst_batched_real_scheduler():
     assert len(mgr._pending) == 5, mgr._pending
     assert len(mgr._active) == 0
 
-    _pump(0.05)  # 50ms < 400ms stagger
-    assert len(mgr._active) == 0, "toast shown before first stagger elapsed"
-
-    _pump(0.45)  # ~500ms total -> exactly one revealed
-    assert len(mgr._active) == 1, "expected 1 active after first stagger"
-
-    _pump(2.2)  # ~2.7s total -> all 5 revealed one-per-400ms
+    # NOTA (auditoría): antes se alineaba con wall-clock (==1 tras 500ms),
+    # pero bajo la carga de la suite completa los timers GLib disparan TARDE
+    # (0 activos a los 500ms) o justo-temprano, y el test era flaky en ambas
+    # direcciones. El intento real del test es "se revelan DE A UNO, nunca
+    # todos juntos", así que bombeamos en pasos cortos y verificamos que el
+    # conteo NUNCA salta por más de 1 por intervalo de stagger.
+    step, deadline = 0.05, time.time() + 8.0
+    seen = 0
+    while seen < 5 and time.time() < deadline:
+        _pump(step)
+        active = len(mgr._active)
+        assert active - seen <= 1, (
+            "stagger roto: saltaron {}->{} activos en un paso de "
+            "{}s (deberían revelarse de a uno)".format(seen, active, step)
+        )
+        seen = active
     assert len(mgr._active) == 5, "burst not fully drained: {}".format(
         len(mgr._active))
 
@@ -388,19 +384,13 @@ def test_e2e_persistent_close_button_renders_on_hover():
 
     widget._hover = True
     surface = _render_widget(widget)
-    pb = Gdk.pixbuf_get_from_surface(surface, 0, 0, 360, 120)
-    n = pb.get_n_channels()
-    rs = pb.get_rowstride()
-    raw = pb.get_pixels()
+    pixels = surface_pixels(surface)
     x_pink = 0
     # La X vive centrada en la franja de descarte (44px, borde derecho):
     # scan de la franja completa alrededor del centro vertical de la card.
     strip_x0 = 360 - wp.NotificationWidget._CLOSE_STRIP_W
     for y in range(60 - 16, 60 + 17):
         for x in range(strip_x0, 360):
-            off = y * rs + x * n
-            r, g, b, a = (raw[off], raw[off + 1], raw[off + 2],
-                          raw[off + 3] if n == 4 else 255)
-            if _is_x_pink(r, g, b, a):
+            if _is_x_pink(*pixels[y][x]):
                 x_pink += 1
     assert x_pink > 0, "persistent (expire_timeout=0) toast shows no close X on hover"

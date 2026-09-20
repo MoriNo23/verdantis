@@ -9,26 +9,19 @@ allocation needed (which fails headless without a display).
 import os
 os.environ.setdefault("GDK_BACKEND", "offscreen")
 
-import math
 import cairo
 
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import wayland_popup as wp
 from wayland_popup import _hex_rgb
 
+from render_helpers import rrect
+
 _CARD_BG = _hex_rgb("#1e1e2e")
 _CLOSE_ACCENT = (0.953, 0.482, 0.659, 0.95)  # #f38ba8 pink
-
-
-def rrect(cr, x, y, w, h, r):
-    r = min(r, w / 2, h / 2)
-    cr.arc(x + w - r, y + r, r, 3 * math.pi / 2, 2 * math.pi)
-    cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
-    cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
-    cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
-    cr.close_path()
 
 
 def render_close_isolated(path, width=360, height=120, hover=True,
