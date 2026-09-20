@@ -1,8 +1,10 @@
 """
 RED: Close button X must be crisp (no blur/ghosting).
 
-Validates that the X strokes in the close button don't have semi-transparent
+Validates that the X strokes in the close strip don't have semi-transparent
 fringe pixels that would make the X appear blurry/ghosted on screen.
+(The X lives centered in the 44px dismiss strip; this render isolates a
+28x28 crop around it.)
 
 Approach: render the close button Cairo drawing path (mirrored from _draw)
 to a 28x28 png and check that the X pixels are fully opaque (A=255) — no

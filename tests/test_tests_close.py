@@ -46,21 +46,22 @@ def test_metatest_source_sensitive_to_fix_removal():
 
 def test_metatest_close_position_constants():
     """
-    SENSIBILIDAD: si alguien cambia la posición del close button (e.g.
-    cy_t de 6 a 4, o cs de 28 a 30), la layout del close pill cambia.
-    Verificamos que los constants están en el source y son los esperados.
+    SENSIBILIDAD: si alguien revierte la franja de descarte al pill 28x28
+    esquinado (regresión del anti-misclick), la layout del cierre cambia.
+    Verificamos que los constants de la franja están en el source.
     """
     src = inspect.getsource(wp.NotificationWidget._draw)
-    assert "cx_r = W - pad - 6" in src or "cx_r=W - pad - 6" in src, (
-        "Metatest: close button right margin constant changed — "
-        "position would shift off the corner"
+    assert "sx0 = W - sw" in src, (
+        "Metatest: la franja debe anclarse al borde derecho (sx0 = W - sw)"
     )
-    assert "cy_t = 6" in src or "cy_t=6" in src, (
-        "Metatest: close button top offset changed — "
-        "position would shift from corner"
+    assert "self._close_rect = (sx0, 0, W, H)" in src, (
+        "Metatest: el hit-rect de cierre debe cubrir el alto completo del card"
     )
-    assert "cs = 28" in src, (
-        "Metatest: close button size changed — would affect crispness"
+    assert "sw = self._CLOSE_STRIP_W" in src, (
+        "Metatest: el ancho de la franja debe salir de _CLOSE_STRIP_W"
+    )
+    assert wp.NotificationWidget._CLOSE_STRIP_W == 44, (
+        "Metatest: el ancho de la franja debe seguir siendo 44px"
     )
 
 

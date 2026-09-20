@@ -1,15 +1,14 @@
 """
-RED: hover feedback + close button en persistentes.
+RED: hover feedback + franja de descarte en persistentes.
 
 Especificacion:
   - Todos los toasts deben tener cursor pointer (feedback "clickeable").
   - Hover sobre la card -> bg se aclara levemente.
-  - Toasts persistentes (duration=0): al hover, aparece X de cerrar
-    arriba-derecha (pill rojizo semi-transparente, no ocupa todo el toast).
-  - Click en la X -> cierra el toast (no dispara on_click/ActionInvoked).
-
-Confirmado contra el showcase HTML (tests/showcase-hover-close.html) que
-Mori aprobo.
+  - Toasts persistentes (duration=0): al hover, aparece la FRANJA VERTICAL de
+    descarte en el borde derecho (44px de ancho x alto del card, tint rojizo
+    semi-transparente con X centrada). Anti-misclick: el pill 28x28 de la
+    esquina fallaba el click y el fall-through abria el video/URL.
+  - Click en la franja -> cierra el toast (no dispara on_click/ActionInvoked).
 """
 import os
 import sys
@@ -123,20 +122,26 @@ def test_close_button_uses_pixel_centering():
     )
 
 
-def test_close_button_position_is_top_right():
-    """Close button must be at top-right corner: cx_r = W - pad - 6, cy_t = 6."""
+def test_close_strip_position_is_right_edge():
+    """Franja de descarte: borde derecho, ancho _CLOSE_STRIP_W, alto completo.
+    Marcadores de la geometría de la franja en el source de _draw."""
     import inspect
     src = inspect.getsource(wp.NotificationWidget._draw)
-    # Verify the position constants from the spec
-    assert "cx_r = W - pad - 6" in src or "cx_r=W - pad - 6" in src
-    assert "cy_t = 6" in src or "cy_t=6" in src
+    # La franja nace del borde derecho y baja hasta el piso del card
+    assert "sx0 = W - sw" in src, (
+        "la franja debe anclarse al borde derecho del card"
+    )
+    assert "self._close_rect = (sx0, 0, W, H)" in src, (
+        "el hit-rect de cierre debe ser la franja completa (alto del card)"
+    )
 
 
-def test_close_button_size_is_28():
-    """Close pill must be 28x28 (crisp at 1x scale)."""
+def test_close_strip_width_is_44():
+    """La franja de descarte mide 44px de ancho (target 5-8x el pill 28x28)."""
     import inspect
     src = inspect.getsource(wp.NotificationWidget._draw)
-    assert "cs = 28" in src
+    assert "sw = self._CLOSE_STRIP_W" in src
+    assert wp.NotificationWidget._CLOSE_STRIP_W == 44
 
 
 def test_close_button_x_color_is_pink():

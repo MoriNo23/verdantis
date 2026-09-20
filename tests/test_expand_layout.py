@@ -177,7 +177,9 @@ def _chevron_imbalance(expanded):
     ys = []
     for y in range(h):
         cnt = 0
-        for x in range(300, 360):  # borde derecho del pill
+        # El chevrón va CENTRADO en la barra full-width (antes era el pill
+        # a la derecha); el scan cubre la mitad derecha del card.
+        for x in range(100, 300):
             o = y * stride + x * 4
             r, g, b = data[o + 2], data[o + 1], data[o]
             if 0x70 < r < 0xA0 and 0xA0 < g < 0xD0 and b > 0xE0:  # acento puro (#89b4fa), sin bordes de texto

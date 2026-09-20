@@ -89,8 +89,9 @@ def test_e2e_close_button_renders_crisp():
     H = len(pixels)
     W = len(pixels[0])
 
-    # X center in the surface: cx0 = W - pad - 6 - 28 = 312, cy0 = 6 -> center ~ (326,20)
-    cx, cy = 326, 20
+    # X center in the strip: franja de descarte de 44px, X centrada en
+    # (W - 22, H/2) = (338, 60) para una card 360x120.
+    cx, cy = W - 22, H // 2
     x_pixels = []
     for dy in range(-6, 7):
         for dx in range(-6, 7):
@@ -392,8 +393,11 @@ def test_e2e_persistent_close_button_renders_on_hover():
     rs = pb.get_rowstride()
     raw = pb.get_pixels()
     x_pink = 0
-    for y in range(6, 34):
-        for x in range(312, 341):
+    # La X vive centrada en la franja de descarte (44px, borde derecho):
+    # scan de la franja completa alrededor del centro vertical de la card.
+    strip_x0 = 360 - wp.NotificationWidget._CLOSE_STRIP_W
+    for y in range(60 - 16, 60 + 17):
+        for x in range(strip_x0, 360):
             off = y * rs + x * n
             r, g, b, a = (raw[off], raw[off + 1], raw[off + 2],
                           raw[off + 3] if n == 4 else 255)

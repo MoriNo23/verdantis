@@ -350,7 +350,8 @@ def _make_circular(pixbuf, size):
 class NotificationWidget(Gtk.DrawingArea):
     # Constantes de layout / colapso
     _MAX_VISIBLE_LINES = 3      # líneas visibles del body antes de colapsar
-    _BTN_H = 20                 # alto de la franja del botón expandir/contraer
+    _BTN_H = 28                 # alto de la franja expandir/contraer (target de toque holgado)
+    _CLOSE_STRIP_W = 44         # ancho de la franja vertical de descarte (persistentes)
 
     # Fuente: Manrope (geométrica, moderna). Empaquetada en src/fonts/ y
     # registrada via fontconfig al importar (sin instalar system-wide).
@@ -552,10 +553,14 @@ class NotificationWidget(Gtk.DrawingArea):
         """Ancho real de la columna de texto en el estado actual.
 
         Con avatar: 360 - 14 - 80 - 12 - 14 = 240 (igual que _TEXT_COL_W).
-        Sin avatar (no hay imagen): texto a ancho completo (~332)."""
+        Sin avatar (no hay imagen): texto a ancho completo (~332).
+        Persistentes: menos el ancho de la franja de descarte (44px), que
+        _draw reserva para que el texto no quede bajo el tint de hover."""
         base = _CARD_WIDTH - 14 - 14
         if self._avatar_pb:
             base -= 80 + 12
+        if self._persistent:
+            base -= self._CLOSE_STRIP_W
         return base
 
     def desired_height(self):
@@ -566,7 +571,7 @@ class NotificationWidget(Gtk.DrawingArea):
             self._app_name, self._cuerpo, "",
             text_width=self._eff_text_width(), expanded=self._expanded,
             hide_title=self._hide_title, font_scale=self._font_scale,
-            has_avatar=bool(self._avatar_pb),
+            has_avatar=bool(self._avatar_pb), persistent=self._persistent,
         )
         if self._image_pb is not None:
             h += 8 + 140
@@ -624,7 +629,10 @@ class NotificationWidget(Gtk.DrawingArea):
         # no se reserva espacio (texto a ancho completo).
         icon_size = 80 if self._avatar_pb else 0
         text_col_x = pad + icon_size + (gap if icon_size else 0)
-        text_col_w = W - text_col_x - pad
+        # Persistentes: la franja vertical de descarte (44px) se RESERVA en la
+        # columna de texto — el texto nunca queda debajo del tint de hover.
+        strip_w = self._CLOSE_STRIP_W if self._persistent else 0
+        text_col_w = W - text_col_x - pad - strip_w
 
         # Circle-cut (avatar) steals ~80px of horizontal space: shrink body &
         # summary fonts so the same text stays legible at the narrower width.
@@ -798,20 +806,24 @@ class NotificationWidget(Gtk.DrawingArea):
             btn_y = body_top + body_h
             btn_h = self._BTN_H
             label = "Ver menos" if expanded else "Ver más"
-            btn_x1 = text_col_x + text_col_w
             accent_r, accent_g, accent_b = self._accent_rgb
 
-            # Pill COMPACTO alineado a la derecha: ancho = contenido real medido
-            pad_x = 8
+            # Barra FULL-WIDTH: TODO el ancho interior de la card es clickeable
+            # (anti-misclick: antes solo el pill compacto de la derecha). En
+            # persistentes termina antes de la franja de descarte (sin overlap).
+            bar_x0 = pad
+            bar_x1 = W - pad - strip_w
+            bar_w = bar_x1 - bar_x0
+            self._expand_rect = (bar_x0, btn_y, bar_x1, btn_y + btn_h)
+
+            # Contenido (label + chevrón) CENTRADO en la barra
             cr.select_font_face("Manrope", 0, 0)
             cr.set_font_size(max(9, round(11 * fs)))
             ext = cr.text_extents(label)
             fe = cr.font_extents()
-            chev_size, chev_gap, inner_pad = 10, 3, 10
-            pill_w = inner_pad + ext[4] + chev_gap + chev_size + inner_pad
-            pill_x0 = btn_x1 - pill_w - pad_x
-            # Área clickeable = el pill (no toda la fila)
-            self._expand_rect = (pill_x0, btn_y, pill_x0 + pill_w, btn_y + btn_h)
+            chev_size, chev_gap = 10, 3
+            content_w = ext[4] + chev_gap + chev_size
+            tx0 = bar_x0 + (bar_w - content_w) / 2
 
             for clip_x, is_dark in ((wx, False), (W - wx, True)):
                 if clip_x <= 0:
@@ -822,23 +834,21 @@ class NotificationWidget(Gtk.DrawingArea):
                                  (clip_x if not is_dark else W - wx), H)
                     cr.clip()
                 cr.set_source_rgba(accent_r, accent_g, accent_b, 0.18)
-                rrect(cr, pill_x0, btn_y, pill_w, btn_h, btn_h / 2)
+                rrect(cr, bar_x0, btn_y, bar_w, btn_h, 8)
                 cr.fill()
-                # borde sutil del pill
+                # borde sutil de la barra
                 cr.set_source_rgba(accent_r, accent_g, accent_b, 0.35)
                 cr.set_line_width(1.0)
-                rrect(cr, pill_x0, btn_y, pill_w, btn_h, btn_h / 2)
+                rrect(cr, bar_x0, btn_y, bar_w, btn_h, 8)
                 cr.stroke()
                 if is_dark:  # dark pass: texto en la parte cubierta
                     cr.set_source_rgb(0.85, 0.95, 0.85)
                 else:
                     cr.set_source_rgb(*self._left_title)
-                # Texto anclado al padding interno izquierdo del pill
-                tx0 = pill_x0 + inner_pad
                 base_y = btn_y + btn_h / 2 + (fe[0] - fe[1]) / 2
                 cr.move_to(tx0, base_y)
                 cr.show_text(label)
-                # Chevrón relleno (triángulo) a la derecha del texto, centrado en el pill.
+                # Chevrón relleno (triángulo) a la derecha del texto, centrado en la barra.
                 # Convención: colapsado "Ver más" ▼ (más abajo), expandido "Ver menos" ▲
                 cx0 = tx0 + ext[4] + chev_gap
                 cy = btn_y + btn_h / 2
@@ -907,50 +917,52 @@ class NotificationWidget(Gtk.DrawingArea):
             cr.paint()
             cr.restore()
 
-        # --- Pill de cerrar (X) — solo persistentes + hover ---
-        # Pill rojizo semi-transparente 28x28, esquina superior-derecha.
-        # NO ocupa todo el toast — es un botón chico esquinado.
-        # Hover del pill: fondo más sólido + scale 1.08 (simulado con padding).
+        # --- Franja de descarte vertical — solo persistentes + hover ---
+        # 44px de ancho × altura del card (antes: pill 28x28 en la esquina,
+        # imposible no misclickear: el fall-through abría el video/URL).
+        # El ancho YA está reservado en text_col_w — el texto nunca queda
+        # debajo del tint. El click routing (_on_button_press) prioriza la
+        # franja sobre expandir y sobre on_click, sin fall-through.
+        # Hover directo: tint más sólido (0.18 -> 0.32), igual feedback que
+        # tenía el pill.
         self._close_rect = None
         if self._persistent and self._hover:
-            cs = 28                                   # close button size
-            cx_r = W - pad - 6                        # right edge (margen 6)
-            cy_t = 6                                  # top edge
-            cx0 = cx_r - cs
-            cy0 = cy_t
-            cx1 = cx_r
-            cy1 = cy_t + cs
-            self._close_rect = (cx0, cy0, cx1, cy1)
+            sw = self._CLOSE_STRIP_W
+            sx0 = W - sw
+            self._close_rect = (sx0, 0, W, H)
             cr.save()
             # Cairo: save/restore NO guarda el path actual (no es parte del
             # graphics state), así que un sub-path residual de bloques previos
             # (texto Pango, wipe clip, HR...) sobreviviría al restore y el
-            # próximo stroke/fill del pill lo dibujaría como "línea fantasma".
+            # próximo stroke/fill lo dibujaría como "línea fantasma".
             # new_path() descarta cualquier sub-path huérfano de este frame.
             cr.new_path()
-            # Pixel-center: translate 0.5px so pill + X strokes land on pixel
-            # boundaries (elimina el blur sub-pixel de line_width=2.5 centrado
-            # en coords enteros; sin esto los bordes de la X se pixelan con
-            # fringed AA que se lee como ghosting).
-            cr.translate(0.5, 0.5)
-            rrect(cr, cx0, cy0, cs, cs, 8)
+            # Clip al card redondeado: el tint respeta las esquinas curvas.
+            rrect(cr, 0, 0, W, H, r)
+            cr.clip()
             if self._hover_close:
-                cr.set_source_rgba(0.86, 0.15, 0.15, 0.32)   # hover: más sólido
+                cr.set_source_rgba(0.86, 0.15, 0.15, 0.32)   # hover directo: más sólido
             else:
                 cr.set_source_rgba(0.86, 0.15, 0.15, 0.18)   # normal hover del card
+            cr.rectangle(sx0, 0, sw, H)
             cr.fill()
-            # NOTE: se eliminó el borde rojo explícito (set_source_rgba(0.86, 0.15,
-            # 0.15, 0.35) + stroke) que generaba el artifact de "línea roja" en
-            # hover: su alpha (0.35) era mucho mayor que el del fill (0.18-0.32),
-            # leyéndose como un contorno rojo flotante. El feedback de hover se
-            # mantiene vía el cambio de opacidad del fill (0.18 -> 0.32 en
-            # pill-hover), ya presente en el bloque.
+            # Pixel-center: translate 0.5px so hairline + X strokes land on
+            # pixel boundaries (elimina el blur sub-pixel de strokes centrados
+            # en coords enteras; sin esto los bordes se pixelan con fringed
+            # AA que se lee como ghosting).
+            cr.translate(0.5, 0.5)
+            # Hairline izquierdo de la franja (mismo lenguaje que los HR)
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.06)
+            cr.set_line_width(1.0)
+            cr.move_to(sx0, r)
+            cr.line_to(sx0, H - r)
+            cr.stroke()
             # X con dos trazos stroke (no fill): más limpio que path cerrado.
-            # ANTIALIAS_NONE en la X: los round caps a 2.5px en un 28x28 crean
-            # fringed semi-transparent pixels (blur). Sin AA la X es nítida y
-            # el pixel-center (translate 0.5) mantiene las esquinas alineadas.
-            mx = cx0 + cs / 2
-            my = cy0 + cs / 2
+            # ANTIALIAS_NONE en la X: los round caps a 2.5px crean fringed
+            # semi-transparent pixels (blur). Sin AA la X es nítida y el
+            # pixel-center (translate 0.5) mantiene las esquinas alineadas.
+            mx = sx0 + sw / 2
+            my = H / 2
             inset = 7
             cr.set_antialias(cairo.ANTIALIAS_NONE)
             cr.set_source_rgba(0.953, 0.482, 0.659, 0.95)   # #f38ba8
@@ -1106,7 +1118,7 @@ class WaylandPopup:
     @staticmethod
     def calc_card_height(app_name, cuerpo, image_path, text_width=_TEXT_COL_W,
                          expanded=False, hide_title=False, font_scale=1.0,
-                         has_avatar=False):
+                         has_avatar=False, persistent=False):
         """Altura de la card según el wrap REAL del cuerpo.
 
         `text_width` es el ancho de la columna de texto (card 360 − pad 14 − icon
@@ -1114,10 +1126,14 @@ class WaylandPopup:
         "\\n") y el texto desbordaba el borde; ahora se cuentan las líneas
         visuales envolviéndolo. Si `expanded`, se muestran todas las líneas;
         si no, se limitan a _MAX_VISIBLE_LINES y se reserva la franja del botón.
+        `persistent` resta el ancho de la franja de descarte (44px), igual que
+        hace _draw con text_col_w — si no, la altura y el wrap divergen.
         `font_scale` aplica la misma escala de resolución que usa _draw.
         `has_avatar` suma el gap del HR full-width (18px) que se dibuja en
         _draw cuando NO hay avatar — si no se suma, el stack colisiona."""
         _body_fs = max(9, round(13 * font_scale))
+        if persistent:
+            text_width -= NotificationWidget._CLOSE_STRIP_W
         text_h = 0
         if app_name:
             text_h += 20
@@ -1155,7 +1171,8 @@ class WaylandPopup:
             card_h = self._card.desired_height()
         else:
             card_h = WaylandPopup.calc_card_height(self.app_name, self.cuerpo, self.image_path,
-                                                  has_avatar=False)
+                                                  has_avatar=False,
+                                                  persistent=(self.duration == 0))
         offset = self._stack_margin * (card_h + gap)
         if "top" in self.corner:
             t, b = base_top + offset, base_bottom

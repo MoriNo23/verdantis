@@ -33,12 +33,11 @@ def rrect(cr, x, y, w, h, r):
 
 def render_close_isolated(path, width=360, height=120, hover=True,
                           hover_close=False):
-    """Render the close button on a card background at the given state."""
+    """Render the dismiss strip (franja de descarte) on a card background."""
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
     cr = cairo.Context(surface)
 
-    pad = 14
-    cs = 28
+    sw = 44   # _CLOSE_STRIP_W
 
     # Card background
     bg_alpha = 0.92 if hover else 0.85
@@ -53,23 +52,28 @@ def render_close_isolated(path, width=360, height=120, hover=True,
     cr.stroke()
 
     if hover:
-        cx_r = width - pad - 6
-        cy_t = 6
-        cx0 = cx_r - cs
-        cy0 = cy_t
-        # Mirror the exact drawing block from _draw (with the crisp fix)
+        sx0 = width - sw
+        # Mirror the exact drawing block from _draw (strip + crisp X fix)
         cr.save()
-        cr.translate(0.5, 0.5)
-        rrect(cr, cx0, cy0, cs, cs, 8)
+        cr.new_path()
+        rrect(cr, 0, 0, width, height, 12)
+        cr.clip()
         if hover_close:
             cr.set_source_rgba(0.86, 0.15, 0.15, 0.32)
         else:
             cr.set_source_rgba(0.86, 0.15, 0.15, 0.18)
+        cr.rectangle(sx0, 0, sw, height)
         cr.fill()
-        # Border red explícito eliminado (ver src/wayland_popup.py): generaba
-        # artifact de línea roja en hover.
-        mx = cx0 + cs / 2
-        my = cy0 + cs / 2
+        cr.translate(0.5, 0.5)
+        # Hairline izquierdo de la franja
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.06)
+        cr.set_line_width(1.0)
+        cr.move_to(sx0, 12)
+        cr.line_to(sx0, height - 12)
+        cr.stroke()
+        # X centrada en la franja (ANTIALIAS_NONE: nítida, sin fringe blur)
+        mx = sx0 + sw / 2
+        my = height / 2
         inset = 7
         cr.set_antialias(cairo.ANTIALIAS_NONE)
         cr.set_source_rgba(*_CLOSE_ACCENT)
