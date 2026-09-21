@@ -96,13 +96,41 @@ def test_icon_from_theme_fallback_to_new_when_no_screen(monkeypatch):
     assert pb is None or isinstance(pb, GdkPixbuf.Pixbuf)
 
 
-def test_notificationwidget_no_avatar_without_image(tmpdir):
+def test_notificationwidget_avatar_falls_back_without_sender_image(tmpdir):
     """
-    Contrato nuevo (Mori): el avatar (slot izquierdo 80px) SOLO aparece si hay
-    imagen real (icon-path o image-data del tab). Sin imagen → _avatar_pb None
-    → el layout no reserva el slot (texto a ancho completo).
+    Contrato nuevo (fallback): sin imagen del sender (image-path/image-data),
+    el avatar cae al icono de la app — match EXACTO del .desktop (logo de
+    Brave / icono de la PWA de YouTube). Con .desktop resolvible → slot 80px.
     """
-    _make_desktop(tmpdir, "NavegadorZ", "navegadorz", "firefox-nightly")
+    png_path = os.path.join(tmpdir, "navegador.png")
+    pix = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 32, 32)
+    pix.fill(0x1E1E2EFF)
+    pix.savev(png_path, "png", [], [])
+    _make_desktop(tmpdir, "NavegadorZ", "navegadorz", png_path)
+    _setup_cache(tmpdir)
+    widget = wp.NotificationWidget(
+        app_name="NavegadorZ",
+        app_icon="",
+        titulo="Título",
+        cuerpo="Cuerpo",
+        icon_path="",
+        image_path="",
+        accent="#80cbc4",
+    )
+    assert widget._avatar_pb is not None, (
+        "sin imagen del sender el avatar debe caer al icono de la app (.desktop exacto)"
+    )
+    # El slot izquierdo se reserva: texto con columna reducida
+    assert widget._eff_text_width() <= 240
+
+
+def test_notificationwidget_no_slot_when_nothing_resolves(tmpdir):
+    """
+    Sin imagen del sender Y sin icono de la app resolvible (desktop con icono
+    inexistente + app_name sin icono de tema) → _avatar_pb None → el layout no
+    reserva el slot (texto a ancho completo).
+    """
+    _make_desktop(tmpdir, "NavegadorZ", "navegadorz", "no_existe_icono_xyz_1234")
     _setup_cache(tmpdir)
     widget = wp.NotificationWidget(
         app_name="NavegadorZ",
@@ -114,9 +142,8 @@ def test_notificationwidget_no_avatar_without_image(tmpdir):
         accent="#80cbc4",
     )
     assert widget._avatar_pb is None, (
-        "sin imagen no debe haber slot de avatar (antes caía al icono de escritorio)"
+        "sin imagen y sin icono de app no debe haber slot de avatar fantasma"
     )
-    # El texto pasa a ancho completo (no se reserva 80px por nada)
     assert widget._eff_text_width() > 240
 
 

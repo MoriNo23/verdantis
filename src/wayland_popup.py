@@ -500,6 +500,22 @@ class NotificationWidget(Gtk.DrawingArea):
             except Exception:
                 pass
 
+        # Fallback del avatar: sin icono del sender (image-data, image-path,
+        # app_icon archivo), el slot izquierdo cae al icono de la app — match
+        # EXACTO de .desktop (logo de Brave; el Name de los .desktop PWA cubre
+        # "YouTube" sin match difuso), luego el tema hicolor. Los directos de
+        # YouTube llegan vía service-worker SOLO con summary/body, y sin este
+        # paso el slot izquierdo quedaba vacío (bug reportado).
+        if not self._avatar_pb:
+            avatar_from_desktop = _get_app_icon_from_desktop(app_name, 80)
+            if avatar_from_desktop:
+                self._avatar_pb = _make_circular(avatar_from_desktop, 80)
+            if not self._avatar_pb:
+                theme_avatar = (_icon_from_theme(app_icon, 80)
+                                or _icon_from_theme(app_name, 80))
+                if theme_avatar:
+                    self._avatar_pb = _make_circular(theme_avatar, 80)
+
         # Banner grande: SOLO image-path (imagen real de la app, ej: descarga).
         # image-data ya no va acá (es el icono, no una imagen para agrandar).
         if image_path and os.path.exists(image_path):
