@@ -85,6 +85,43 @@ def test_icon_from_theme_returns_pixbuf():
     assert isinstance(pb, GdkPixbuf.Pixbuf)
 
 
+def test_resample_scala_con_hyper(monkeypatch):
+    """Reporte: los iconos (avatar 80px y logo de app 16px) se veían blandos
+    en pequeño porque los rescale usaban BILINEAR. Contrato: todo rescale de
+    iconos pasa por _resample con HYPER (nítido al reducir, más limpio al
+    agrandar favicons chicos al slot del avatar)."""
+    calls = []
+    orig = GdkPixbuf.Pixbuf.scale_simple
+
+    def spy(self, w, h, interp):
+        calls.append(interp)
+        return orig(self, w, h, interp)
+
+    monkeypatch.setattr(GdkPixbuf.Pixbuf, "scale_simple", spy)
+    pb = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 32, 32)
+    pb.fill(0x1E1E2EFF)
+    out = wp._resample(pb, 80)
+    assert out.get_width() == 80
+    assert calls and all(c is GdkPixbuf.InterpType.HYPER for c in calls), (
+        "el rescale de iconos debe usar HYPER; si vuelve BILINEAR los "
+        "avatares/logos se ven mal en pequeño (reporte usuario)"
+    )
+
+
+def test_no_rescale_bilinear_en_iconos():
+    """Contrato de fuente: en wayland_popup NO queda ningún `InterpType.BILINEAR`
+    y `scale_simple` solo existe DENTRO de _resample. Cualquier nuevo rescale
+    de iconos (avatar/logo) debe pasar por el helper HYPER; el banner (foto)
+    mantiene su propio path y no aplica."""
+    src = open(wp.__file__, encoding="utf-8").read()
+    assert "InterpType.BILINEAR" not in src, (
+        "rescale de iconos con BILINEAR reintroducido → calidad blanda"
+    )
+    assert src.count("scale_simple(") == 1, (
+        "el único scale_simple debe vivir en _resample (HYPER)"
+    )
+
+
 def test_icon_from_theme_reintenta_en_minusculas(monkeypatch):
     """
     RED del reporte: el lookup de IconTheme es case-sensitive y los senders
