@@ -220,22 +220,33 @@ def _strip_urls(text):
 
 
 def _icon_from_theme(icon_name, size=16):
+    """Icono del tema hicolor/Breeze por nombre.
+
+    El lookup de IconTheme es case-sensitive y los senders mandan app_name
+    capitalizado ("Brave", "YouTube") mientras los iconos del tema viven en
+    minúsculas ("brave"). Sin el reintento en minúsculas el slot izquierdo
+    quedaba vacío en apps reconocibles (reporte)."""
     if not icon_name:
         return None
-    try:
-        # En Wayland, Gtk.IconTheme.get_default() a menudo no resuelve el
-        # tema (no tiene screen asociada) y devuelve None. Usar
-        # get_for_screen() con la screen por defecto es lo correcto en GTK3.
-        screen = Gdk.Screen.get_default()
-        if screen is not None:
-            theme = Gtk.IconTheme.get_for_screen(screen)
-        else:
-            theme = Gtk.IconTheme.new()
-        info = theme.lookup_icon(icon_name, size, 0)
-        if info:
-            return info.load_icon()
-    except Exception:
-        pass
+    attempts = [icon_name]
+    lowered = icon_name.lower()
+    if lowered != icon_name:
+        attempts.append(lowered)
+    for attempt in attempts:
+        try:
+            # En Wayland, Gtk.IconTheme.get_default() a menudo no resuelve el
+            # tema (no tiene screen asociada) y devuelve None. Usar
+            # get_for_screen() con la screen por defecto es lo correcto en GTK3.
+            screen = Gdk.Screen.get_default()
+            if screen is not None:
+                theme = Gtk.IconTheme.get_for_screen(screen)
+            else:
+                theme = Gtk.IconTheme.new()
+            info = theme.lookup_icon(attempt, size, 0)
+            if info:
+                return info.load_icon()
+        except Exception:
+            pass
     return None
 
 

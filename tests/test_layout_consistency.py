@@ -22,10 +22,25 @@ import sys
 os.environ.setdefault("GDK_BACKEND", "offscreen")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+import pytest
+
 import wayland_popup as wp
 
 LONG = "x" * 400
 W = 360
+
+
+@pytest.fixture(autouse=True)
+def _sin_iconos_resolvibles(monkeypatch):
+    """Estos tests validan el layout del path SIN avatar (texto a ancho
+    completo). Con el lookup de iconos case-insensitive (fix Ticket avatar),
+    "App"/"Brave" ahora resuelven iconos de tema ("app"/"brave") y el
+    has_avatar cambiaría el stack: anclar la resolución a None deja el
+    invariante (barra al padding) como el único verificado, sin depender
+    del tema hicolor instalado."""
+    monkeypatch.setattr(wp, "_icon_from_theme", lambda name, size=16: None)
+    monkeypatch.setattr(
+        wp, "_get_app_icon_from_desktop", lambda app_name, size=80: None)
 
 
 def _render(app_name, cuerpo=LONG, expanded=False, hide_title=False):

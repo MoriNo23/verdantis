@@ -21,6 +21,7 @@ mutants/
 E2E_VERIFICATION.md
 QA_*_REPORT_*.md
 tests/qa_size_test.py
+QA_*.log
 
 # Editor / OS
 .vscode/

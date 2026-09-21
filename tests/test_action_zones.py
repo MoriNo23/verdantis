@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 # wayland_popup PRIMERO: fija Gdk 3.0 antes de que el import suelto de Gdk
 # cargue 4.0 y crashee (pitfall documentado en AGENTS.md).
+import pytest
+
 import wayland_popup as wp
 from wayland_popup import NotificationWidget
 
@@ -26,6 +28,18 @@ LONG = "x" * 400
 W = 360
 PAD = 14
 STRIP = 44
+
+
+@pytest.fixture(autouse=True)
+def _sin_iconos_resolvibles(monkeypatch):
+    """Estos tests validan las ZONAS de interacción con texto a ancho completo
+    (sin avatar). Con el lookup de iconos case-insensitive (fix Ticket avatar),
+    "App" ahora resuelve el icono genérico "app" y el has_avatar encogería la
+    columna: anclar la resolución a None deja los anchos de franja/barra como
+    el único verificado, sin depender del tema instalado."""
+    monkeypatch.setattr(wp, "_icon_from_theme", lambda name, size=16: None)
+    monkeypatch.setattr(
+        wp, "_get_app_icon_from_desktop", lambda app_name, size=80: None)
 
 
 class _Ev:

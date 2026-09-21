@@ -85,6 +85,36 @@ def test_icon_from_theme_returns_pixbuf():
     assert isinstance(pb, GdkPixbuf.Pixbuf)
 
 
+def test_icon_from_theme_reintenta_en_minusculas(monkeypatch):
+    """
+    RED del reporte: el lookup de IconTheme es case-sensitive y los senders
+    mandan app_name capitalizado ("Brave", "YouTube") mientras los iconos del
+    tema son minúsculas ("brave"). Con "Brave" el lookup da None → _icon_from_theme
+    debe reintentar en minúsculas o el slot izquierdo queda vacío.
+    """
+    seen = []
+
+    class _Info:
+        def load_icon(self):
+            return GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 16, 16)
+
+    class _Theme:
+        def lookup_icon(self, name, size, flags):
+            seen.append(name)
+            return _Info() if name == "brave" else None
+
+    fake = _Theme()
+    monkeypatch.setattr(Gtk.IconTheme, "get_for_screen",
+                        staticmethod(lambda screen: fake))
+    monkeypatch.setattr(Gtk.IconTheme, "new", staticmethod(lambda: fake))
+
+    pb = wp._icon_from_theme("Brave", 16)
+    assert pb is not None, \
+        "app_name capitalizado debe resolver al icono del tema en minúsculas"
+    assert seen == ["Brave", "brave"], \
+        "sin el reintento en minúsculas el lookup capitalizado da None"
+
+
 def test_icon_from_theme_fallback_to_new_when_no_screen(monkeypatch):
     """
     Si Gdk.Screen.get_default() es None (caso headless/Wayland sin screen),
