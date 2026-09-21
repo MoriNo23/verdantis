@@ -16,6 +16,8 @@ import time
 
 from flask import Flask, jsonify, request, Response
 
+import history_store
+
 from app_info import APP_NAME
 
 app = Flask(__name__)
@@ -36,6 +38,20 @@ def start_dashboard(daemon, host="127.0.0.1", port=8777):
     return srv
 
 
+def _history_records():
+    """Registros de historial (más viejo primero): disco (persistido) con
+    fallback a la memoria del manager (daemon recién arrancado)."""
+    try:
+        recs = history_store.read()
+        if recs:
+            return recs
+    except Exception:
+        pass
+    if _daemon:
+        return _daemon._manager.history
+    return []
+
+
 @app.route("/")
 def index():
     return Response(_DASHBOARD_HTML, content_type="text/html; charset=utf-8")
@@ -43,40 +59,49 @@ def index():
 
 @app.route("/api/history")
 def api_history():
-    if not _daemon:
-        return jsonify([])
-    hist = _daemon._manager.history
     # newest first
-    return jsonify(list(reversed(hist)))
+    return jsonify(list(reversed(_history_records())))
 
 
 @app.route("/api/replay/<int:nid>", methods=["POST"])
 def api_replay(nid):
     if not _daemon:
         return jsonify({"error": "daemon not wired"}), 500
-    # find the notification by id
-    for entry in _daemon._manager.history:
-        if entry["id"] == nid:
-            _daemon._manager.notify(
-                app_name=entry["app_name"],
-                app_icon=entry["app_icon"],
-                summary=entry["summary"],
-                body=entry["body"],
-                actions=entry["actions"],
-                hints=_deserialise_hints(entry["hints"]),
-                expire_timeout=entry["expire_timeout"],
-                replaces_id=0,
-                sender="dashboard-replay",
-            )
-            return jsonify({"ok": True, "replayed": nid})
-    return jsonify({"error": "id not found"}), 404
+    # buscar en disco primero (tiene avatar_file/banner_file guardados); si el
+    # archivo de historial no existe, caer al historial en memoria.
+    entries = _history_records()
+    entry = next((e for e in entries if e["id"] == nid), None)
+    if entry is None:
+        return jsonify({"error": "id not found"}), 404
+    hints = _deserialise_hints(entry.get("hints") or {})
+    # Reproducir "tal cual": el avatar del sender se guardó como PNG en el
+    # directorio propio (los favicons de /tmp son efímeros). Inyectarlo como
+    # image-path; si no había imagen del sender, la reproducción vuelve a
+    # resolver el fallback (desktop/tema) igual que la original.
+    avatar_file = entry.get("avatar_file")
+    if avatar_file:
+        p = history_store.icon_path(avatar_file)
+        if os.path.exists(p):
+            hints["image-path"] = p
+    _daemon._manager.notify(
+        app_name=entry["app_name"],
+        app_icon=entry["app_icon"],
+        summary=entry["summary"],
+        body=entry["body"],
+        actions=entry["actions"],
+        hints=hints,
+        expire_timeout=entry["expire_timeout"],
+        replaces_id=0,
+        sender="dashboard-replay",
+    )
+    return jsonify({"ok": True, "replayed": nid})
 
 
 @app.route("/api/stats")
 def api_stats():
     if not _daemon:
         return jsonify({"error": "daemon not wired"})
-    hist = _daemon._manager.history
+    hist = _history_records()
     apps = {}
     for h in hist:
         a = h["app_name"] or "(unknown)"
