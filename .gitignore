@@ -33,3 +33,6 @@ QA_*.log
 # Config local
 .env
 .env.*
+
+# Logo del proyecto (no es fuente)
+verdantis-logo
