@@ -278,7 +278,7 @@ _AVATAR_GAP = 12     # gap avatar → texto
 _ROW_MIN_H = 80      # alto mínimo de la fila (el avatar define el piso)
 _APP_ROW_H = 20      # fila del app-name
 _TITLE_ROW_H = 22    # fila del título
-_HR_GAP = 18         # respiración del HR full-width (solo con app_name, sin avatar)
+_HR_GAP = 18         # respiro de la fila del app (sin HR: la línea se quitó en el rediseño)
 _BTN_GAP = 8         # gap body → barra expandir
 _CARD_RADIUS = 12    # radio del card
 
@@ -750,12 +750,6 @@ class NotificationWidget(Gtk.DrawingArea):
             cr.fill()
             cr.restore()
 
-        # Subtle translucent edge (shadow-like) — borde sutil blanco estilo Linear
-        cr.set_source_rgba(1.0, 1.0, 1.0, 0.08)
-        cr.set_line_width(1.5)
-        rrect(cr, 0.5, 0.5, W - 1, H - 1, r)
-        cr.stroke()
-
         # --- Layout: real wrapped line count (coincide con _draw) ---
         total_lines = _count_body_lines(self._cuerpo, text_col_w, _body_fs)
         expanded = self._expanded
@@ -776,21 +770,15 @@ class NotificationWidget(Gtk.DrawingArea):
 
         # Avatar (slot izquierdo, centrado verticalmente) — solo si hay imagen real.
         # El pixbuf YA viene circular (lo recorta _make_circular); el blit rect es
-        # transparente en las esquinas. Se agrega un anillo sutil en el borde.
+        # transparente en las esquinas. Sin anillo (rediseño: cero líneas).
         if self._avatar_pb:
             cy = pad + (row_h - icon_size) / 2
             Gdk.cairo_set_source_pixbuf(cr, self._avatar_pb, pad, cy)
             cr.rectangle(pad, cy, icon_size, icon_size)
             cr.fill()
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.15)
-            cr.set_line_width(1.0)
-            cr.arc(pad + icon_size / 2, cy + icon_size / 2, icon_size / 2 - 0.5,
-                   0, 2 * math.pi)
-            cr.stroke()
 
         # --- Text in two passes ---
         ty = pad + (row_h - text_h) / 2
-        hr_info = None  # coordenadas del HR, calculadas en draw_text_pass, trazadas 1 vez afuera
 
         def draw_text_pass(cr, clip_x, is_dark):
             if clip_x < 0:
@@ -824,26 +812,11 @@ class NotificationWidget(Gtk.DrawingArea):
                 PangoCairo.show_layout(cr, ll)
                 yy += _APP_ROW_H
 
-            # Barely-visible hairline under the app_name row (separation cue)
-            if self._app_name:
-                # Sin avatar: el separador ocupa TODO el ancho de la card
-                # (es el único divisor visual entre app y contenido).
-                # El app-name es un label chiquito (10px): necesita aire para
-                # no romper la jerarquía. HR ~14px debajo del fin de la fila,
-                # y 8px más antes del título/body (buenas prácticas de espaciado).
-                # Con avatar: el bloque de 80px ya da aire, HR angosto al lado.
-                # Se calcula aquí (para que yy refleje el layout) pero se traza
-                # UNA vez afuera del closure, sin clip (ver abajo de los 2 passes).
-                if has_avatar:
-                    _hr_y = yy - 6
-                    _hr_x0, _hr_x1 = text_col_x, text_col_x + text_col_w
-                    _hr_alpha = 0.12
-                else:
-                    _hr_y = yy + 14
-                    _hr_x0, _hr_x1 = pad, W - pad
-                    _hr_alpha = 0.28
-                    yy += _HR_GAP  # respiración: 14 gap al HR + 4 antes del título/body
-                hr_info = (_hr_y, _hr_x0, _hr_x1, _hr_alpha)
+            # Sin HR decorativo (rediseño: cero líneas), pero la fila del
+            # app-name conserva su respiro: de _HR_GAP dependen las alturas
+            # de la card (calc_card_height debe seguir en 113/108/108/174/113).
+            if self._app_name and not has_avatar:
+                yy += _HR_GAP  # respiración: 14 gap al HR + 4 antes del título/body
 
             if not self._hide_title:
                 cr.set_source_rgb(*tcol)
@@ -902,14 +875,11 @@ class NotificationWidget(Gtk.DrawingArea):
                     cr.rectangle((0 if not is_dark else wx), 0,
                                  (clip_x if not is_dark else W - wx), H)
                     cr.clip()
-                cr.set_source_rgba(accent_r, accent_g, accent_b, 0.18)
+                # Sin stroke de contorno; el affordance lo da el fill 22%
+                # (subido de 18% al quitar el borde).
+                cr.set_source_rgba(accent_r, accent_g, accent_b, 0.22)
                 rrect(cr, bar_x0, btn_y, bar_w, btn_h, 8)
                 cr.fill()
-                # borde sutil de la barra
-                cr.set_source_rgba(accent_r, accent_g, accent_b, 0.35)
-                cr.set_line_width(1.0)
-                rrect(cr, bar_x0, btn_y, bar_w, btn_h, 8)
-                cr.stroke()
                 if is_dark:  # dark pass: texto en la parte cubierta
                     cr.set_source_rgb(0.85, 0.95, 0.85)
                 else:
@@ -948,25 +918,6 @@ class NotificationWidget(Gtk.DrawingArea):
         draw_text_pass(cr, wx, True)
         cr.restore()
 
-        # Hairline del app_name: se traza UNA vez, fuera de los 2 passes
-        # (sin clip) para que no se recorte por el wipe ni se duplique.
-        if hr_info:
-            _hr_y, _hr_x0, _hr_x1, _hr_alpha = hr_info
-            cr.set_source_rgba(1.0, 1.0, 1.0, _hr_alpha)
-            cr.set_line_width(1.0)
-            cr.move_to(_hr_x0, _hr_y + 0.5)
-            cr.line_to(_hr_x1, _hr_y + 0.5)
-            cr.stroke()
-
-        # Separador sutil entre línea de app y título (solo si ambos existen)
-        if self._app_name and not self._hide_title:
-            sep_y = ty + 20 - 1
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.06)
-            cr.set_line_width(1.0)
-            cr.move_to(text_col_x, sep_y + 0.5)
-            cr.line_to(text_col_x + text_col_w, sep_y + 0.5)
-            cr.stroke()
-
         # Image at bottom
         if self._image_pb:
             iy = pad + row_h + 8
@@ -1002,7 +953,7 @@ class NotificationWidget(Gtk.DrawingArea):
             cr.save()
             # Cairo: save/restore NO guarda el path actual (no es parte del
             # graphics state), así que un sub-path residual de bloques previos
-            # (texto Pango, wipe clip, HR...) sobreviviría al restore y el
+            # (texto Pango, wipe clip...) sobreviviría al restore y el
             # próximo stroke/fill lo dibujaría como "línea fantasma".
             # new_path() descarta cualquier sub-path huérfano de este frame.
             cr.new_path()
@@ -1015,17 +966,11 @@ class NotificationWidget(Gtk.DrawingArea):
                 cr.set_source_rgba(0.86, 0.15, 0.15, 0.18)   # normal hover del card
             cr.rectangle(sx0, 0, sw, H)
             cr.fill()
-            # Pixel-center: translate 0.5px so hairline + X strokes land on
+            # Pixel-center: translate 0.5px so the X strokes land on
             # pixel boundaries (elimina el blur sub-pixel de strokes centrados
             # en coords enteras; sin esto los bordes se pixelan con fringed
             # AA que se lee como ghosting).
             cr.translate(0.5, 0.5)
-            # Hairline izquierdo de la franja (mismo lenguaje que los HR)
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.06)
-            cr.set_line_width(1.0)
-            cr.move_to(sx0, r)
-            cr.line_to(sx0, H - r)
-            cr.stroke()
             # X con dos trazos stroke (no fill): más limpio que path cerrado.
             # ANTIALIAS_NONE en la X: los round caps a 2.5px crean fringed
             # semi-transparent pixels (blur). Sin AA la X es nítida y el
