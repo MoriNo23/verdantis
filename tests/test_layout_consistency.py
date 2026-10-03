@@ -40,7 +40,7 @@ def _sin_iconos_resolvibles(monkeypatch):
     del tema hicolor instalado."""
     monkeypatch.setattr(wp, "_icon_from_theme", lambda name, size=16: None)
     monkeypatch.setattr(
-        wp, "_get_app_icon_from_desktop", lambda app_name, size=80: None)
+        wp, "_get_app_icon_from_desktop", lambda app_name, size=80, mode="cover": None)
 
 
 def _render(app_name, cuerpo=LONG, expanded=False, hide_title=False):

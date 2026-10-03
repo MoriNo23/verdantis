@@ -223,3 +223,56 @@ def test_local_path_strips_file_uri():
     assert _local_path("file:///tmp/logo.png") == "/tmp/logo.png"
     assert _local_path("/tmp/logo.png") == "/tmp/logo.png"
     assert _local_path("") == ""
+
+
+# ── app_icon: el daemon NO descarta los nombres de tema ────────────────────
+#
+# 43.5% de las notificaciones reales (dataset: ~/.local/share/verdantis/
+# history.jsonl, 1000 entradas) mandan un NOMBRE DE TEMA pelado en app_icon
+# ("network-wireless-disconnected", "dialog-warning", ...). La normalización
+# path-o-vacío los borraba y el popup recibía "", dejando el
+# _icon_from_theme(app_icon) del widget como código muerto.
+
+def _notificar(m, app_icon, app_name="Gestión de redes"):
+    """notify() real + pump → devuelve el WaylandPopup construido."""
+    m.notify(app_name=app_name, app_icon=app_icon, summary="s", body="b",
+             actions=[], hints={}, expire_timeout=5000)
+    m._pump()
+    return m._active[0][1]
+
+
+def test_app_icon_nombre_de_tema_llega_al_popup():
+    """Un nombre de icono del tema (sin archivo) debe llegar CRUDO al popup:
+    el daemon solo normaliza cuando hay un archivo; si no, pasa el string."""
+    m = _batching_manager()
+    popup = _notificar(m, "network-wireless-disconnected")
+    assert popup.app_icon == "network-wireless-disconnected", (
+        "el daemon descartó el nombre de tema (llega como %r): el popup no "
+        "puede resolver el logo por tema" % (popup.app_icon,)
+    )
+
+
+def test_app_icon_archivo_existente_se_normaliza(tmpdir):
+    """Con archivo real, gana el path normalizado (file:// → path plano)."""
+    import gi
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+    png = os.path.join(str(tmpdir), "logo.png")
+    pb = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 16, 16)
+    pb.fill(0x1E1E2EFF)
+    pb.savev(png, "png", [], [])
+
+    m = _batching_manager()
+    popup = _notificar(m, "file://" + png, app_name="TestApp")
+    assert popup.app_icon == png, (
+        "un app_icon con archivo debe llegar normalizado (sin file://): %r"
+        % (popup.app_icon,)
+    )
+
+
+def test_app_icon_archivo_inexistente_no_inventa_path():
+    """Si el archivo no existe, se pasa el string crudo tal cual (el widget
+    decide: existe → archivo; no → .desktop exacto → tema)."""
+    m = _batching_manager()
+    popup = _notificar(m, "/tmp/no-existe-este-icono-xyz.png", app_name="TestApp")
+    assert popup.app_icon == "/tmp/no-existe-este-icono-xyz.png"

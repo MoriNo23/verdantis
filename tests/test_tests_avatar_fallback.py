@@ -36,7 +36,7 @@ def test_metatest_avatar_test_detects_missing_fallback(tmp_path):
     orig = wp._get_app_icon_from_desktop
     try:
         # Versión bugueada: nunca resuelve el icono de escritorio
-        wp._get_app_icon_from_desktop = lambda app, size: None
+        wp._get_app_icon_from_desktop = lambda app, size=80, mode="cover": None
         w = NotificationWidget("Brave", "", "T", "cuerpo", None, None,
                                "#80cbc4")
         # Con el lookup de .desktop roto, el avatar NO puede provenir del

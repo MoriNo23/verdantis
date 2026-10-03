@@ -70,18 +70,21 @@ def test_metatest_source_has_zone_markers():
     assert "bar_x1 = W - pad - strip_w" in src, (
         "Metatest: la barra debe terminar antes de la franja de cierre"
     )
-    assert "strip_w = self._CLOSE_STRIP_W if self._persistent else 0" in src, (
-        "Metatest: la reserva del ancho de franja debe estar en el layout"
+    assert "strip_w = self._strip_w()" in src, (
+        "Metatest: la reserva del ancho de franja debe salir del gate "
+        "hover-dependiente _strip_w (sin hover la franja no se dibuja y su "
+        "ancho no se reserva)"
     )
 
 
 def test_metatest_layout_reservation_propagates():
-    """Si calc_card_height perdiera el flag persistent, el wrap divergiría
-    del _draw real (texto bajo la franja). El predicado del test de reserva
-    debe detectar el texto 44px más ancho."""
-    wide = wp._count_body_lines("x" * 400, wp._TEXT_COL_W, 14)
-    narrow = wp._count_body_lines("x" * 400, wp._TEXT_COL_W - 44, 14)
+    """Si el wrap perdiera la reserva de la franja, el texto quedaría debajo
+    del tinte al hacer hover. El predicado del test de reserva debe detectar
+    el texto 44px más ancho."""
+    wide = wp._count_body_lines("x" * 400, wp._CARD_WIDTH - 28, 13)
+    narrow = wp._count_body_lines("x" * 400, wp._CARD_WIDTH - 28 - 44, 13)
     assert narrow > wide, (
-        "Metatest: el wrap a 44px menos da más líneas; si el flag se perdiera, "
-        "test_persistent_reserves_strip_in_text_width lo detecta"
+        "Metatest: el wrap a 44px menos da más líneas; si el gate _strip_w "
+        "dejara de descontarse, test_persistent_text_width_reserves_strip_only_"
+        "on_hover lo detecta"
     )

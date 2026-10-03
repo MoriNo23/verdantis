@@ -6,8 +6,10 @@ Especificación (Variante 1 aprobada, adaptada al stack cairo):
   - CERRAR: franja vertical derecha de 44px × altura del card, hover-only en
     persistentes (antes: pill 28×28 en la esquina). Click en CUALQUIER punto
     de la franja cierra (on_close) sin disparar on_click (que abriría el
-    video/URL). El ancho de la franja está RESERVADO: la columna de texto
-    de los persistentes es 44px más angosta (el texto nunca queda debajo).
+    video/URL). El ancho de la franja se reclama SOLO con hover: la columna
+    de texto del persistente pasa de 332 a 288 px (240 → 196 con avatar) y el
+    texto re-wrappea, así nunca queda debajo del tinte. Sin hover la columna
+    usa el ancho completo y la barra "Ver más" llega al pad derecho.
   - EXPANDIR: barra full-width inferior — TODO el ancho de la franja es
     clickeable (antes solo el pill), alto _BTN_H sube 20 → 28.
 """
@@ -39,7 +41,7 @@ def _sin_iconos_resolvibles(monkeypatch):
     el único verificado, sin depender del tema instalado."""
     monkeypatch.setattr(wp, "_icon_from_theme", lambda name, size=16: None)
     monkeypatch.setattr(
-        wp, "_get_app_icon_from_desktop", lambda app_name, size=80: None)
+        wp, "_get_app_icon_from_desktop", lambda app_name, size=80, mode="cover": None)
 
 
 class _Ev:
@@ -47,6 +49,16 @@ class _Ev:
     def __init__(self, x, y):
         self.x = x
         self.y = y
+
+
+def _pixbuf_16():
+    """Pixbuf 16×16 opaco — avatar sintético para fijar el ancho de columna."""
+    import gi
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+    pb = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 16, 16)
+    pb.fill(0x1E1E2EFF)
+    return pb
 
 
 def _draw_widget(persistent=False, hover=False, cuerpo=LONG, expanded=False):
@@ -139,41 +151,92 @@ def test_expand_bar_height_is_28():
 
 
 def test_expand_strip_reserves_close_strip():
-    """En persistentes la barra termina ANTES de la franja de cierre
+    """CON hover, la barra "Ver más" termina ANTES de la franja de cierre
     (no se solapan; el click no es ambiguo)."""
-    w, h = _draw_widget(persistent=True, cuerpo=LONG)
+    w, h = _draw_widget(persistent=True, hover=True, cuerpo=LONG)
     assert w._expand_rect is not None
     assert w._expand_rect[2] <= W - wp.NotificationWidget._CLOSE_STRIP_W
 
 
+def test_expand_strip_is_full_width_without_hover():
+    """SIN hover la franja no se dibuja y su ancho NO se reserva: la barra
+    "Ver más" llega al pad derecho como en un toast estándar. (El espacio de
+    la franja solo se reclama mientras el puntero está encima.)"""
+    w, h = _draw_widget(persistent=True, hover=False, cuerpo=LONG)
+    assert w._expand_rect is not None
+    assert w._expand_rect[2] >= W - PAD - 2, (
+        "sin hover la franja no existe: la barra debe llegar al pad derecho, "
+        "no terminar en %s" % (w._expand_rect[2],)
+    )
+
+
 # ---------------------------------------------------------------------------
-# Reserva de layout en persistentes
+# La franja solo existe con hover — y su ancho solo se reserva con hover
 # ---------------------------------------------------------------------------
 
-def test_persistent_reserves_strip_in_text_width():
-    """calc_card_height(persistent=True): columna 44px más angosta →
-    el mismo texto envuelve a más líneas → card más alta (visible en
-    expandido; colapsado el cap de 3 líneas iguala ambas)."""
+def test_persistent_text_width_reserves_strip_only_on_hover():
+    """El wrap del persistente depende del hover: sin puntero la columna usa
+    el ancho completo (332); con hover cede los 44px de la franja (288) y el
+    mismo texto envuelve a más líneas → card más alta (visible en expandido;
+    colapsado el cap de 3 líneas iguala ambas)."""
     assert wp._count_body_lines(LONG, wp._TEXT_COL_W - STRIP, 14) > \
         wp._count_body_lines(LONG, wp._TEXT_COL_W, 14), (
         "el wrap a 44px menos debe dar más líneas"
     )
-    h_plain = wp.WaylandPopup.calc_card_height("App", LONG, "", expanded=True)
-    h_persist = wp.WaylandPopup.calc_card_height(
-        "App", LONG, "", expanded=True, persistent=True)
-    assert h_persist > h_plain, (
-        "el persistente debe reservar el ancho de la franja en el wrap"
+    w = NotificationWidget(
+        "App", "", "T", LONG, None, None, "#80cbc4", persistent=True,
+    )
+    w._expanded = True
+    w._hover = False
+    assert w._eff_text_width() == wp._CARD_WIDTH - 2 * PAD
+    h_sin_hover = w.desired_height()
+    h_esperado_sin_hover = wp.WaylandPopup.calc_card_height(
+        "App", LONG, "", text_width=wp._CARD_WIDTH - 2 * PAD, expanded=True,
+        font_scale=w._font_scale, has_avatar=False,
+    )
+    assert h_sin_hover == h_esperado_sin_hover, (
+        "sin hover el persistente debe wrappear a ancho completo"
+    )
+
+    w._hover = True
+    h_con_hover = w.desired_height()
+    assert h_con_hover > h_sin_hover, (
+        "con hover el persistente debe reservar el ancho de la franja en el wrap"
     )
 
 
 def test_eff_text_width_shrinks_for_persistent():
-    """_eff_text_width (medición de desired_height) refleja la reserva."""
+    """_eff_text_width (medición de desired_height) refleja el hover.
+
+    Sin avatar: 332 px sin hover, 288 px con hover (332 − 44 de la franja).
+    Con avatar: 240 px sin hover, 196 px con hover."""
+    base = wp._CARD_WIDTH - 14 - 14
+    strip = wp.NotificationWidget._CLOSE_STRIP_W
+    assert (base, base - strip) == (332, 288), (
+        "las columnas del contrato son 332 sin hover y 288 con hover"
+    )
+
     w = NotificationWidget(
         "App", "", "T", LONG, None, None, "#80cbc4", persistent=True,
     )
-    base = wp._CARD_WIDTH - 14 - 14
-    assert w._eff_text_width() == base - wp.NotificationWidget._CLOSE_STRIP_W
+    w._hover = False
+    assert w._eff_text_width() == base, (
+        "sin hover el persistente usa el ancho completo: los 44px de la franja "
+        "no se reservan mientras no se dibuje"
+    )
+    w._hover = True
+    assert w._eff_text_width() == base - strip
+
+    # Con avatar la columna es 240 sin hover y 196 con hover.
+    w._avatar_pb = _pixbuf_16()
+    w._hover = False
+    assert w._eff_text_width() == 240
+    w._hover = True
+    assert w._eff_text_width() == 196
+
+    # No persistente: la franja nunca se dibuja → jamás se reserva su ancho.
     w2 = NotificationWidget(
         "App", "", "T", LONG, None, None, "#80cbc4", persistent=False,
     )
+    w2._hover = True
     assert w2._eff_text_width() == base

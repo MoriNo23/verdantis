@@ -18,7 +18,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 
 
 def _is_browser(app_name, desktop_entry):
@@ -399,7 +399,12 @@ class NotificationManager:
             "accent": hints.get("accent", "#80cbc4"),
             "urgency": urgency,
             "app_name": app_name,
-            "app_icon": app_icon_file,
+            # Path normalizado si el icono es un archivo existente; si no, el
+            # string CRUDO del sender. Sin este "or app_icon" el 43.5% de las
+            # notificaciones reales que mandan un nombre de tema pelado
+            # ("network-wireless-disconnected", "dialog-warning", ...) llegaba
+            # como "" y el popup no podía resolver el logo por tema.
+            "app_icon": app_icon_file or app_icon,
             "on_close": lambda nid=nid: self._on_closed(nid),
             "on_click": lambda nid=nid: self._on_action_invoked(nid),
         }
