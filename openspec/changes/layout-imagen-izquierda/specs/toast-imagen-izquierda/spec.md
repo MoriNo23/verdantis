@@ -50,6 +50,18 @@ El texto de la fila de app SHALL tener su caja de tinta centrada verticalmente e
 - **WHEN** el nombre de la app tiene descendente ("Q", "J") o la escala de resolución cambia el tamaño de fuente
 - **THEN** el centro de la tinta sigue coincidiendo con el centro del icono (±2 px)
 
+### Requirement: La imagen izquierda no se pisa con la barra "Ver más"
+
+El slot de imagen izquierda SHALL permanecer completamente visible: la barra "Ver más" es full-width por diseño (anti-misclick) y ocupa la banda inferior de la misma fila, así que el slot SHALL centrarse contra el bloque de TEXTO —excluyendo la barra— y no contra la fila entera. Ningún pixel del slot SHALL quedar bajo la banda de la barra.
+
+#### Scenario: Con overflow el slot no queda bajo la barra
+- **WHEN** un toast con overflow muestra su barra "Ver más" y el bloque de texto crece por encima del alto del slot
+- **THEN** el borde inferior del slot queda por encima del borde superior de la barra y el círculo se dibuja completo
+
+#### Scenario: Con contenido corto el slot no se sale de la fila
+- **WHEN** el texto es más corto que el slot de 80 px
+- **THEN** el slot se acota a la fila y no se desplaza hacia arriba ni hacia abajo
+
 ### Requirement: Columna de texto única
 
 Todos los toasts SHALL usar la misma columna de texto de 240 px (360 − 14 − 80 − 12 − 14). La variante de columna ancha sin imagen desaparece, y las fuentes de título y cuerpo son las mismas para todos los toasts.
