@@ -18,7 +18,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 
 
 def _is_browser(app_name, desktop_entry):
@@ -188,7 +188,8 @@ class NotificationManager:
     STACK_GAP = 8
     # Delay entre notificaciones de un mismo burst: evita que lleguen todas a la
     # vez cuando el sender dispara un flood (ej: 10 notis en <100ms). La cola se
-    # drena una por vez, cada STAGGER_MS, respetando prioridad (urgency).
+    # drena una por vez, cada STAGGER_MS, en orden de LLEGADA (spec
+    # `toast-orden-llegada`).
     STAGGER_MS = 400
     # Holdback del auto-close por posición en el stack: evita que un burst de
     # notificaciones (misma urgencia, llegadas juntas) venza TODAS a la vez.
@@ -239,8 +240,9 @@ class NotificationManager:
 
     def _pump(self):
         """Muestra a lo sumo UNA notificación pendiente por tick, respetando
-        MAX_VISIBLE y el orden de prioridad. Re-agenda si queda pendiente y hay
-        hueco. Un-shot: retorna False para que GLib no lo repita."""
+        MAX_VISIBLE y el orden de llegada (FIFO, sin reordenar por `urgency`).
+        Re-agenda si queda pendiente y hay hueco. Un-shot: retorna False para que
+        GLib no lo repita."""
         self._pump_scheduled = False
         if self._pending and len(self._active) < self.MAX_VISIBLE:
             nid, kwargs, _urg = self._pending.pop(0)
@@ -249,11 +251,6 @@ class NotificationManager:
             self._pump_scheduled = True
             self._schedule(self.STAGGER_MS, self._pump)
         return False
-
-    def _sort_pending(self):
-        """Ordena la cola por urgencia descendente (critical primero); dentro de
-        la misma urgencia conserva el orden FIFO (sort estable de Python)."""
-        self._pending.sort(key=lambda item: item[2], reverse=True)
 
     def _extract_url(self, hints):
         url = None
@@ -417,10 +414,15 @@ class NotificationManager:
 
         # Batching: toda notificación entra a la cola pendiente y se muestra
         # una por vez cada STAGGER_MS (ver _pump). Así un burst no aparece
-        # todo de golpe: se van espaciando con delay controlado. La prioridad
-        # (urgency) reordena la cola para que las críticas salgan primero.
+        # todo de golpe: se van espaciando con delay controlado.
+        #
+        # La cola es FIFO POR LLEGADA y nada la reordena (spec
+        # `toast-orden-llegada`): antes `_sort_pending` la ordenaba por
+        # `urgency`, y la pila terminaba apilándose por tipo — un critical
+        # tardío adelantaba a los que ya esperaban y un low se iba al fondo.
+        # La `urgency` sigue viva donde sirve: duración y opacidad del card
+        # (WaylandPopup.__init__), nunca la posición.
         self._pending.append((nid, kwargs, urgency))
-        self._sort_pending()
         self._ensure_pump()
 
         # Capture for dashboard history + replay
@@ -547,7 +549,8 @@ class NotificationManager:
         # Drena la cola pendiente (una por tick vía _pump); si hay hueco ya,
         # mostramos la siguiente de inmediato y re-agendamos el resto.
         if self._pending and len(self._active) < self.MAX_VISIBLE:
-            self._sort_pending()
+            # La siguiente en entrar es la primera en LLEGAR (FIFO, sin
+            # reordenar por `urgency` — ver spec `toast-orden-llegada`).
             nid2, qk2, _ = self._pending.pop(0)
             self._show_popup(nid2, qk2)
             self._ensure_pump()
