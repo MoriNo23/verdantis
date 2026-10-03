@@ -33,6 +33,14 @@ que coinciden con los patrones reales del repo:
 Regla: si una skill coincide con la tarea, cargarla vía `skill <name>` y seguir
 sus constraints; no improvisar patrones del stack a mano.
 
+## Skill — input (fuera del stack de render)
+
+- `ydotool-uinput` — ydotool 1.0.4 (Debian trixie) por `/dev/uinput` en Wayland/KWin:
+  mover cursor, clicks, wheel y tipeo para pruebas manuales. Cargarla cuando haya
+  que interactuar con el desktop sin X11. OJO: `--absolute` está roto (KWin clava
+  el cursor en 1,1) y la posición se verifica con `kdotool getmouselocation`, nunca
+  con `xdotool` (Xwayland devuelve posiciones viejas).
+
 ## Dev environment
 
 - Python 3.13 en `.venv/` (venv clásico; la migración a uv está BLOQUEADA, ver
