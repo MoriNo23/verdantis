@@ -21,8 +21,13 @@ from wayland_popup import NotificationWidget
 from render_helpers import alloc_and_draw, surface_pixels
 
 W = wp._CARD_WIDTH       # 360
-SLOT = 16                # slot del logo
+SLOT = 16                # slot del logo de la fila de app
 OFFSET = 20              # desplazamiento del texto tras el slot
+# Slot de imagen izquierda (contrato nuevo: 80 px) + su gap: la región de
+# comparación del texto tiene que empezar DESPUÉS de él, porque con placeholder
+# pinta un square gris y con logo resuelto otro color.
+SLOT_80 = 80
+GAP = 12
 
 
 def _pixbuf(w, h, rgba):
@@ -37,7 +42,7 @@ def _construir(monkeypatch, app_name="App", app_icon="", theme_icon=None):
 
     `theme_icon=None` anula toda la resolución (ni .desktop ni tema): ese es el
     caso "sender desconocido" que debe caer al placeholder. Con un pixbuf, el
-    tema lo devuelve solo para el slot de 16 px (si no, el fallback del avatar
+    tema lo devuelve solo para el slot de 16 px (si no, el fallback de la imagen
     también lo resolvería y cambiaría el ancho de la columna, que es otra cosa)."""
     monkeypatch.setattr(
         wp, "_get_app_icon_from_desktop",
@@ -158,9 +163,13 @@ def _render(w):
 
 
 def _region_texto(w):
-    """Píxeles desde donde arranca el texto de la app (`_PAD + 20`) hasta el
-    borde derecho. Empieza DESPUÉS del slot (16 px) + su hueco (4 px) para no
-    incluir el borde antialiaseado del fill del icono."""
+    """Píxeles desde donde arranca el texto de la app hasta el borde derecho.
+
+    Empieza DESPUÉS de todo lo que puede cambiar entre los dos casos: el logo
+    de 16 px de la fila (con su hueco) y, desde el contrato nuevo, el slot de
+    imagen izquierda de 80 px + su gap — que con placeholder pinta un square
+    gris y con logo resuelto un icono de otro color. Lo que sigue a la derecha
+    es el texto, y debe ser idéntico píxel a píxel en ambos casos."""
     px = _render(w)
-    x0 = wp._PAD + OFFSET
+    x0 = wp._PAD + SLOT_80 + GAP + OFFSET
     return tuple(px[y][x] for y in range(len(px)) for x in range(x0, W))

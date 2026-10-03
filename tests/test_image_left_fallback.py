@@ -1,6 +1,9 @@
 """
-RED: fallback del avatar — sin icono del sender, el slot izquierdo cae al
-icono de la app (match EXACTO de .desktop primero, luego tema hicolor).
+RED: cadena de la imagen izquierda — sin icono del sender, el slot izquierdo
+cae al icono de la app (match EXACTO de .desktop primero, luego tema hicolor)
+y, si NADA resuelve, al placeholder con la inicial (el slot nunca desaparece:
+spec `toast-imagen-izquierda`, requirement "La imagen izquierda siempre está
+presente").
 
 Origen del bug (reportado): los directos de YouTube llegan vía service-worker
 SIN image-data (icono del tab) ni image-path; antes el slot izquierdo quedaba
@@ -73,48 +76,63 @@ def _build(app_name, icon_path=None, image_data_raw=None):
     )
 
 
-def test_avatar_falls_back_to_desktop_icon(tmp_path):
-    """Sin icono del sender, el avatar sale del .desktop exacto (logo de Brave)."""
+def test_image_left_falls_back_to_desktop_icon(tmp_path):
+    """Sin icono del sender, el slot muestra el .desktop exacto (logo de Brave)."""
     _inject_desktop("Brave", _png(tmp_path, "brave.png", RED))
     w = _build("Brave")
-    assert w._avatar_pb is not None, (
-        "sin image-data ni image-path el avatar debe caer al .desktop de la app"
+    assert w._image_left_pb is not None, (
+        "sin image-data ni image-path el slot debe caer al .desktop de la app"
     )
-    # El avatar viene del .desktop (rojo sólido inyectado), no de la nada
-    assert _center_pixel(w._avatar_pb) == (255, 0, 0, 255), (
-        "el avatar no proviene del icono del .desktop inyectado"
+    # La imagen izquierda viene del .desktop (rojo sólido inyectado), no de la nada
+    assert _center_pixel(w._image_left_pb) == (255, 0, 0, 255), (
+        "el slot no proviene del icono del .desktop inyectado"
     )
 
 
-def test_avatar_fallback_pwa_youtube(tmp_path):
+def test_image_left_fallback_pwa_youtube(tmp_path):
     """YouTube (PWA): el .desktop brave-<appid> con Name=YouTube resuelve por
     match exacto de Name, igual que el app row a 16px."""
     _inject_desktop("YouTube", _png(tmp_path, "youtube.png", RED))
     w = _build("YouTube")
-    assert w._avatar_pb is not None
-    assert _center_pixel(w._avatar_pb) == (255, 0, 0, 255)
+    assert w._image_left_pb is not None
+    assert _center_pixel(w._image_left_pb) == (255, 0, 0, 255)
 
 
-def test_avatar_fallback_unknown_app_no_slot(tmp_path):
-    """App desconocida (sin .desktop ni icono de tema): SIN slot — el layout
-    no reserva espacio por nada (has_avatar=False)."""
+def test_image_left_fallback_unknown_app_placeholder(tmp_path):
+    """App desconocida (sin .desktop ni icono de tema): el slot NO desaparece,
+    cae al placeholder de 80 px con la inicial del nombre de la app.
+
+    CONTRATO NUEVO (spec `toast-imagen-izquierda`): antes esta app se quedaba
+    sin slot y el layout saltaba a la variante ancha. Este test está ROJO a
+    propósito contra el código actual."""
     w = _build("zzz_no_existe_xa")
-    assert w._avatar_pb is None
-    assert not w._avatar_pb  # has_avatar falsy: sin slot izquierdo
+    assert w._image_left_pb is not None, (
+        "nada resuelve -> el slot de imagen izquierda debe caer al placeholder "
+        "80x80 con la inicial, nunca desaparecer (spec: La imagen izquierda "
+        "siempre está presente)"
+    )
+    assert (w._image_left_pb.get_width(), w._image_left_pb.get_height()) == (80, 80), (
+        "el placeholder del slot es de 80x80, no %sx%s"
+        % (w._image_left_pb.get_width(), w._image_left_pb.get_height())
+    )
+    assert w._eff_text_width() == 240, (
+        "con el slot siempre presente la columna de texto es la única del "
+        "contrato (240 px), no la variante ancha: %s" % (w._eff_text_width(),)
+    )
 
 
-def test_avatar_sender_icon_beats_fallback(tmp_path):
+def test_image_left_sender_icon_beats_fallback(tmp_path):
     """Precedencia intacta: si el sender manda icono real, ese gana — el
     fallback NO pisa al icono del tab."""
     _inject_desktop("Brave", _png(tmp_path, "brave.png", RED))
     sender_icon = _png(tmp_path, "tab.png", GREEN)
     w = _build("Brave", icon_path=sender_icon)
-    assert w._avatar_pb is not None
-    # El avatar viene del icono del sender (verde), no del .desktop (rojo)
-    assert _center_pixel(w._avatar_pb) == (0, 255, 0, 255)
+    assert w._image_left_pb is not None
+    # El slot viene del icono del sender (verde), no del .desktop (rojo)
+    assert _center_pixel(w._image_left_pb) == (0, 255, 0, 255)
 
 
-def test_avatar_fallback_image_data_beats_desktop(tmp_path):
+def test_image_left_fallback_image_data_beats_desktop(tmp_path):
     """image-data (icono del tab real) también gana sobre el fallback."""
     _inject_desktop("Brave", _png(tmp_path, "brave.png", RED))
     tab_png = _png(tmp_path, "tabdata.png", GREEN)
@@ -123,5 +141,5 @@ def test_avatar_fallback_image_data_beats_desktop(tmp_path):
     image_data_raw = (w, h, pb.get_rowstride(), True, 8, 4,
                       bytes(pb.get_pixels()))
     w = _build("Brave", image_data_raw=image_data_raw)
-    assert w._avatar_pb is not None
-    assert _center_pixel(w._avatar_pb) == (0, 255, 0, 255)
+    assert w._image_left_pb is not None
+    assert _center_pixel(w._image_left_pb) == (0, 255, 0, 255)

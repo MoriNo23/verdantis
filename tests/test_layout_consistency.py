@@ -27,15 +27,30 @@ W = 360
 
 @pytest.fixture(autouse=True)
 def _sin_iconos_resolvibles(monkeypatch):
-    """Estos tests validan el layout del path SIN avatar (texto a ancho
-    completo). Con el lookup de iconos case-insensitive (fix Ticket avatar),
-    "App"/"Brave" ahora resuelven iconos de tema ("app"/"brave") y el
-    has_avatar cambiaría el stack: anclar la resolución a None deja el
-    invariante (barra al padding) como el único verificado, sin depender
-    del tema hicolor instalado."""
+    """Estos tests validan el layout del path con y sin slot resuelto. Con el
+    lookup de iconos case-insensitive, "App"/"Brave" resuelven iconos de tema
+    ("app"/"brave") y la procedencia del slot cambiaría el stack: anclar la
+    resolución a None deja el invariante (barra al padding) como el único
+    verificado, sin depender del tema hicolor instalado."""
     monkeypatch.setattr(wp, "_icon_from_theme", lambda name, size=16: None)
     monkeypatch.setattr(
         wp, "_get_app_icon_from_desktop", lambda app_name, size=80, mode="cover": None)
+
+
+def _rows(app_name, hide_title, con_slot):
+    """`_rows_above_body` tolerant a la firma.
+
+    El contrato nuevo elimina el tercer argumento (`has_avatar`: con el slot
+    siempre presente ya no hay dos variantes de stack). Se pasa si la firma lo
+    acepta y se reintenta sin él si no, para que el rojo de los asserts sea el
+    del VALOR esperado y no un TypeError de una firma que cambió. Un TypeError
+    que no sea de firma se propaga (el helper no debe tapar bugs del test)."""
+    try:
+        return wp._rows_above_body(app_name, hide_title, con_slot)
+    except TypeError as e:
+        if "argument" not in str(e):
+            raise
+        return wp._rows_above_body(app_name, hide_title)
 
 
 def _render(app_name, cuerpo=LONG, expanded=False, hide_title=False):
@@ -82,15 +97,20 @@ def test_expand_bar_flush_hide_title():
 def test_rows_above_body_single_source():
     """`_rows_above_body` es LA fuente del stack superior al body.
 
-    Valores: app 20 + título 22 + HR 18 (el HR SOLO con app_name y sin
-    avatar — sin app_name no hay HR que respire, el +18 fantasma era el
-    bug del desborde)."""
-    f = wp._rows_above_body
-    assert f("App", False, False) == 20 + 22 + 18
-    assert f("App", False, True) == 20 + 22          # avatar: sin HR
-    assert f("App", True, False) == 20 + 18          # título oculto
-    assert f("", False, False) == 22                 # SIN app: sin HR fantasma
-    assert f("", True, False) == 0
+    CONTRATO NUEVO (spec `toast-imagen-izquierda`, D4): con el slot siempre
+    presente el respiro del HR (18 px) desaparece para TODOS los toasts — la
+    distancia app→título/body es la misma con imagen real, con icono de app o
+    con placeholder. Antes el +18 solo se aplicaba al path sin slot y el
+    `has_avatar` condicional partía la fuente del stack en dos.
+
+    El tercer argumento histórico (`has_avatar`) ya no pertenece al contrato,
+    por eso `_rows` reintenta sin él: así el rojo de este test es el del VALOR
+    y no el de una firma que cambió."""
+    assert _rows("App", False, False) == 20 + 22
+    assert _rows("App", False, True) == 20 + 22      # slot resuelto: sin HR
+    assert _rows("App", True, False) == 20           # título oculto
+    assert _rows("", False, False) == 22             # SIN app
+    assert _rows("", True, False) == 0
 
 
 def test_short_content_fits_card():

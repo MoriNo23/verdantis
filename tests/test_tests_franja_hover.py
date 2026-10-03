@@ -6,7 +6,7 @@ El bug que estos tests cubren es doble y va por el MISMO camino de código:
 
   1. la franja/X se dibujaba sin puntero encima, y
   2. sus 44 px se reservaban de forma permanente (el persistente wrappeaba a
-     288 px aunque la franja no estuviera en pantalla).
+     la columna de hover aunque la franja no estuviera en pantalla).
 
 Ambos cuelgan del gate `_strip_w()`, la única autoridad de "cuánto ancho
 reclama la franja" (la consumen `_eff_text_width`, el posicionamiento de
@@ -54,8 +54,9 @@ def test_metatest_gate_hover_dependiente_existe():
 
 
 def _pin_sin_iconos(monkeypatch):
-    """Texto a ancho completo (sin avatar): las columnas del contrato son
-    332/288 y no 240/196, sin depender de los iconos del tema instalados."""
+    """Los anchos de columna son lo único verificado here: los del contrato son
+    240/196 (columna única con franja en hover), sin depender de los iconos del
+    tema instalados."""
     monkeypatch.setattr(wp, "_icon_from_theme", lambda name, size=16: None)
     monkeypatch.setattr(
         wp, "_get_app_icon_from_desktop", lambda app_name, size=80, mode="cover": None)
@@ -63,20 +64,22 @@ def _pin_sin_iconos(monkeypatch):
 
 def test_metatest_bug_detecta_la_reserva_permanente(monkeypatch):
     """Con el bug inyectado, el predicado de 1.1
-    (`test_eff_text_width_shrinks_for_persistent`: 332 sin hover) queda en
-    rojo: el persistente mide 288 px aunque la franja no se dibuje."""
+    (`test_eff_text_width_shrinks_for_persistent`: 240 sin hover) queda en
+    rojo: el persistente mide 196 px aunque la franja no se dibuje."""
     _pin_sin_iconos(monkeypatch)
     monkeypatch.setattr(NotificationWidget, "_strip_w", _strip_w_bugueado)
     w = _widget_persistente()
     w._hover = False
-    assert w._eff_text_width() == 288, (
-        "Metatest roto: con el bug inyectado el persistente sin hover no mide "
-        "la columna de hover (288) — si no se cumpliera, el test de 1.1 no "
-        "detectaría la reserva permanente de 44 px (sería un placebo)"
+    assert w._eff_text_width() == 196, (
+        "con el bug inyectado el persistente sin hover debe medir la columna "
+        "de hover (196 = 240 − 44). Si no se cumpliera, el test de 1.1 no "
+        "detectaría la reserva permanente de 44 px (sería un placebo). Hoy mide "
+        "%s porque la columna del contrato viejo (path sin slot) es 332."
+        % (w._eff_text_width(),)
     )
-    assert w._eff_text_width() != 332, (
+    assert w._eff_text_width() != 240, (
         "el bug debe dejar el persistente sin hover en la columna de hover, "
-        "no en el ancho completo que exige el contrato"
+        "no en la columna del card (240) que exige el contrato"
     )
 
 
@@ -105,15 +108,15 @@ def test_metatest_bug_hace_caer_el_test_de_re_wrap(monkeypatch):
 
 def test_metatest_la_version_real_distingue_los_dos_estados(monkeypatch):
     """Contraparte de los dos metatests anteriores (smoke): con el gate real,
-    la columna y la altura SÍ dependen del hover — 332 → 288."""
+    la columna y la altura SÍ dependen del hover — 240 → 196."""
     _pin_sin_iconos(monkeypatch)
     w = _widget_persistente()
     w._expanded = True
     w._hover = False
-    assert w._eff_text_width() == 332
+    assert w._eff_text_width() == 240
     h_sin = w.desired_height()
     w._hover = True
-    assert w._eff_text_width() == 288
+    assert w._eff_text_width() == 196
     h_con = w.desired_height()
     assert h_con > h_sin
 

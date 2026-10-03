@@ -4,7 +4,13 @@ RED: historial de notificaciones persistido.
 Objetivo (pedido): cada Notify se archiva en un JSONL ligero bajo el XDG
 data home (~/.local/share/verdantis/) con los bytes del icono/imagen cuando
 el sender los manda — para reproducir "cómo se veía X app tal cual" y
-diagnosticar (avatar_source dice de dónde salió el slot izquierdo).
+diagnosticar (`avatar_source` dice de dónde salió el slot izquierdo).
+
+EXCEPCIÓN DE TERMINOLOGÍA: `avatar_source` / `avatar_file` son CLAVES DE
+PERSISTENCIA (las escribe verdantis_daemon, las lee el dashboard y nombran el
+archivo `n<id>_avatar.png` en disco), no vocabulario del layout: el rename de
+"imagen izquierda" del change layout-imagen-izquierda no las cubre, así que
+este archivo las conserva a propósito.
 
 El directorio se inyecta con set_data_dir (tests nunca tocan ~/.local).
 """
@@ -73,9 +79,9 @@ def test_copy_icon_with_size_cap(tmp_path):
     big = os.path.join(str(tmp_path), "big.png")
     with open(big, "wb") as f:
         f.write(b"\x00" * (history_store.MAX_ICON_BYTES + 1))
-    assert history_store.copy_icon(1, big, "avatar") is None
+    assert history_store.copy_icon(1, big, "image_left") is None
     small = _png(tmp_path, "small.png")
-    fname = history_store.copy_icon(1, small, "avatar")
+    fname = history_store.copy_icon(1, small, "image_left")
     assert fname and os.path.exists(history_store.icon_path(fname))
 
 

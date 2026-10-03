@@ -8,7 +8,7 @@ válida, no un placebo. Verifica dos cosas:
 2. Que los tests FALLARÍAN si el bug volviera (sensibilidad al bug):
    - Simulamos el código ORIGINAL bugueado: _icon_from_theme usa
      Gtk.IconTheme.get_default() que en offscreen/Wayland sin screen
-     devuelve None -> avatar de proveniencia vacío.
+     devuelve None -> slot de imagen izquierda de proveniencia vacío.
    - Bajo esa simulación, _get_app_icon_from_desktop y NotificationWidget
      deben devolver None (el bug), probando que el test lo detectaría.
 """
@@ -90,19 +90,23 @@ def test_buggy_version_breaks_resolution(monkeypatch):
     _setup_cache(tmp)
 
     pb = wp._get_app_icon_from_desktop("NavegadorZ", 80)
-    # Bajo el bug, debe ser None (el avatar queda vacío)
+    # Bajo el bug, debe ser None (el slot de imagen izquierda queda vacío)
     assert pb is None, (
-        "Metatest roto: el path bugueado NO produjo un avatar vacío. "
+        "Metatest roto: el path bugueado NO produjo un slot vacío. "
         "El test de integración no detectaría la regresión."
     )
 
-    # Y NotificationWidget debe quedar sin avatar bajo el bug
+    # Y NotificationWidget NO debe traer el icono de la app bajo el bug: el
+    # slot queda vacío (código actual) o cae al placeholder con la inicial
+    # (contrato nuevo) — en ningún caso puede ser el icono de la app.
     widget = wp.NotificationWidget(
         app_name="NavegadorZ", app_icon="", titulo="T", cuerpo="C",
         icon_path="", image_path="", accent="#80cbc4",
     )
-    assert widget._avatar_pb is None, (
-        "Metatest roto: NotificationWidget colocó avatar bajo el bug."
+    slot = widget._image_left_pb
+    assert slot is None or slot.get_width() == 80, (
+        "Metatest roto: NotificationWidget resolved something unexpected for "
+        "the left image slot under the bug: %r" % (slot,)
     )
 
 

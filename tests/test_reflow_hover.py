@@ -21,7 +21,7 @@ import wayland_popup as wp
 from wayland_popup import NotificationWidget, WaylandPopup
 
 W = wp._CARD_WIDTH
-LONG = ("Cuerpo largo para que el re-wrap a 288 px cambie el número de líneas "
+LONG = ("Cuerpo largo para que el re-wrap a 196 px cambie el número de líneas "
         "y con él el alto del card, que es lo que dispara el resize.")
 
 

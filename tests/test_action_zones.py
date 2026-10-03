@@ -7,9 +7,9 @@ Especificación (Variante 1 aprobada, adaptada al stack cairo):
     persistentes (antes: pill 28×28 en la esquina). Click en CUALQUIER punto
     de la franja cierra (on_close) sin disparar on_click (que abriría el
     video/URL). El ancho de la franja se reclama SOLO con hover: la columna
-    de texto del persistente pasa de 332 a 288 px (240 → 196 con avatar) y el
-    texto re-wrappea, así nunca queda debajo del tinte. Sin hover la columna
-    usa el ancho completo y la barra "Ver más" llega al pad derecho.
+    de texto del persistente pasa de 240 a 196 px y el texto re-wrappea, así
+    nunca queda debajo del tinte. Sin hover la columna del card (240 px) queda
+    intacta y la barra "Ver más" llega al pad derecho.
   - EXPANDIR: barra full-width inferior — TODO el ancho de la franja es
     clickeable (antes solo el pill), alto _BTN_H sube 20 → 28.
 """
@@ -30,11 +30,11 @@ STRIP = 44
 
 @pytest.fixture(autouse=True)
 def _sin_iconos_resolvibles(monkeypatch):
-    """Estos tests validan las ZONAS de interacción con texto a ancho completo
-    (sin avatar). Con el lookup de iconos case-insensitive (fix Ticket avatar),
-    "App" ahora resuelve el icono genérico "app" y el has_avatar encogería la
-    columna: anclar la resolución a None deja los anchos de franja/barra como
-    el único verificado, sin depender del tema instalado."""
+    """Estos tests validan las ZONAS de interacción. Con el lookup de iconos
+    case-insensitive, "App" resuelve el icono genérico "app" del tema y eso
+    cambiaría la procedencia del slot: anclar la resolución a None (el slot
+    queda en placeholder) deja los anchos de franja/barra como el único
+    verificado, sin depender del tema instalado."""
     monkeypatch.setattr(wp, "_icon_from_theme", lambda name, size=16: None)
     monkeypatch.setattr(
         wp, "_get_app_icon_from_desktop", lambda app_name, size=80, mode="cover": None)
@@ -48,7 +48,7 @@ class _Ev:
 
 
 def _pixbuf_16():
-    """Pixbuf 16×16 opaco — avatar sintético para fijar el ancho de columna."""
+    """Pixbuf 16×16 opaco — imagen izquierda sintética para el slot."""
     import gi
     gi.require_version("GdkPixbuf", "2.0")
     from gi.repository import GdkPixbuf
@@ -170,11 +170,32 @@ def test_expand_strip_is_full_width_without_hover():
 # La franja solo existe con hover — y su ancho solo se reserva con hover
 # ---------------------------------------------------------------------------
 
+def _calc_card_height(*args, **kw):
+    """`calc_card_height` tolerant a la firma.
+
+    El contrato nuevo quita el kwarg `has_avatar` (el slot está siempre
+    presente: no hay dos variantes de stack). Se pasa si la firma lo acepta y
+    se reintenta sin él si no, para que el rojo sea el del VALOR esperado. Un
+    TypeError que NO sea de firma se propaga: si no, el helper escondería un
+    bug real del test."""
+    if "has_avatar" in kw:
+        try:
+            return wp.WaylandPopup.calc_card_height(*args, **kw)
+        except TypeError as e:
+            if "argument" not in str(e):
+                raise
+    return wp.WaylandPopup.calc_card_height(
+        *args, **{k: v for k, v in kw.items() if k != "has_avatar"})
+
+
 def test_persistent_text_width_reserves_strip_only_on_hover():
-    """El wrap del persistente depende del hover: sin puntero la columna usa
-    el ancho completo (332); con hover cede los 44px de la franja (288) y el
-    mismo texto envuelve a más líneas → card más alta (visible en expandido;
-    colapsado el cap de 3 líneas iguala ambas)."""
+    """El wrap del persistente depende del hover: sin puntero la columna es la
+    del card (240 px); con hover cede los 44px de la franja (196 px) y el mismo
+    texto envuelve a más líneas → card más alta (visible en expandido;
+    colapsado el cap de 3 líneas iguala ambas).
+
+    CONTRATO NUEVO (spec `toast-franja-descarte`): 240 sin hover, 196 con hover,
+    sin columna ancha de 332/288 para los toasts sin imagen."""
     assert wp._count_body_lines(LONG, wp._TEXT_COL_W - STRIP, 14) > \
         wp._count_body_lines(LONG, wp._TEXT_COL_W, 14), (
         "el wrap a 44px menos debe dar más líneas"
@@ -184,14 +205,17 @@ def test_persistent_text_width_reserves_strip_only_on_hover():
     )
     w._expanded = True
     w._hover = False
-    assert w._eff_text_width() == wp._CARD_WIDTH - 2 * PAD
+    assert w._eff_text_width() == wp._TEXT_COL_W == 240, (
+        "sin hover el persistente usa la columna del card (240 px): %s"
+        % (w._eff_text_width(),)
+    )
     h_sin_hover = w.desired_height()
-    h_esperado_sin_hover = wp.WaylandPopup.calc_card_height(
-        "App", LONG, "", text_width=wp._CARD_WIDTH - 2 * PAD, expanded=True,
+    h_esperado_sin_hover = _calc_card_height(
+        "App", LONG, "", text_width=wp._TEXT_COL_W, expanded=True,
         font_scale=w._font_scale, has_avatar=False,
     )
     assert h_sin_hover == h_esperado_sin_hover, (
-        "sin hover el persistente debe wrappear a ancho completo"
+        "sin hover el persistente debe wrappear a la columna del card"
     )
 
     w._hover = True
@@ -204,12 +228,14 @@ def test_persistent_text_width_reserves_strip_only_on_hover():
 def test_eff_text_width_shrinks_for_persistent():
     """_eff_text_width (medición de desired_height) refleja el hover.
 
-    Sin avatar: 332 px sin hover, 288 px con hover (332 − 44 de la franja).
-    Con avatar: 240 px sin hover, 196 px con hover."""
-    base = wp._CARD_WIDTH - 14 - 14
+    Columna ÚNICA del contrato nuevo (spec `toast-imagen-izquierda`,
+    requirement "Columna de texto única"): 240 px siempre, 196 px en
+    persistente con hover. Antes eran 332/288 sin slot resuelto."""
+    base = wp._TEXT_COL_W
     strip = wp.NotificationWidget._CLOSE_STRIP_W
-    assert (base, base - strip) == (332, 288), (
-        "las columnas del contrato son 332 sin hover y 288 con hover"
+    assert (base, base - strip) == (240, 196), (
+        "las columnas del contrato son 240 sin hover y 196 con hover, no "
+        "332/288 (la columna ancha murió con la variante sin imagen)"
     )
 
     w = NotificationWidget(
@@ -217,14 +243,14 @@ def test_eff_text_width_shrinks_for_persistent():
     )
     w._hover = False
     assert w._eff_text_width() == base, (
-        "sin hover el persistente usa el ancho completo: los 44px de la franja "
-        "no se reservan mientras no se dibuje"
+        "sin hover el persistente usa la columna del card: los 44px de la "
+        "franja no se reservan mientras no se dibuje"
     )
     w._hover = True
     assert w._eff_text_width() == base - strip
 
-    # Con avatar la columna es 240 sin hover y 196 con hover.
-    w._avatar_pb = _pixbuf_16()
+    # El slot (imagen real) NO cambia la columna: es la misma para todos.
+    w._image_left_pb = _pixbuf_16()
     w._hover = False
     assert w._eff_text_width() == 240
     w._hover = True

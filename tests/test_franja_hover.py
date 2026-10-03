@@ -7,9 +7,10 @@ también se reservaba de forma permanente: los persistentes wrappeaban a
 
   - SIN puntero encima: el persistente se dibuja IDÉNTICO a un toast no
     persistente (cero píxeles de tinte y cero píxeles de X). Su columna de
-    texto usa el ancho completo (332 px, o 240 con avatar).
+    texto es la del card: 240 px (spec `toast-franja-descarte`, requirement
+    "Sin hover el texto del persistente usa el ancho completo").
   - CON puntero encima: la franja reclama sus 44 px derechos, el texto
-    re-wrappea a la columna reducida (288/196) y la X aparece centrada.
+    re-wrappea a la columna reducida (196 px) y la X aparece centrada.
 
 Los tests son DIFERENCIALES (persistente vs. no persistente con el mismo
 cuerpo): así detectan cualquier píxel de franja aunque el tinte se solape
@@ -25,14 +26,15 @@ from render_helpers import alloc_and_draw, surface_pixels
 
 W = wp._CARD_WIDTH              # 360
 STRIP = NotificationWidget._CLOSE_STRIP_W   # 44
-SHORT = "Una linea corta que no re-wrappea."
+SHORT = "Una linea corta."   # cabe en UNA línea en 196 y en 240: el caso "el
+                             # re-wrap no cambia nada" (franja que no toca texto)
 LONG = "Parrafo largo que se re-wrappea al cambiar el ancho de la columna " \
        "de texto del card y por lo tanto ocupa varias lineas al ancho completo."
 
 
 def _sin_iconos_resolvibles(monkeypatch):
-    """Texto a ancho completo (sin avatar): los anchos de columna son los
-    únicos verificados, sin depender de los iconos del tema instalados."""
+    """Los anchos de columna son los únicos verificados, sin depender de los
+    iconos del tema instalados."""
     monkeypatch.setattr(wp, "_icon_from_theme", lambda name, size=16: None)
     monkeypatch.setattr(
         wp, "_get_app_icon_from_desktop", lambda app_name, size=80, mode="cover": None)
@@ -159,16 +161,17 @@ def test_no_persistente_no_dibuja_franja_con_hover(monkeypatch):
 # Re-wrap dinámico: la franja nunca pisa texto
 # ---------------------------------------------------------------------------
 
-def test_con_hover_el_texto_re_wrappea_a_288(monkeypatch):
-    """El re-wrap es real: un body que cabía en N líneas a 332 px necesita más
-    líneas a 288 px, y el texto dibujado cambia de ancho."""
+def test_con_hover_el_texto_re_wrappea_a_196(monkeypatch):
+    """El re-wrap es real: un body que cabía en N líneas a 240 px necesita más
+    líneas a 196 px, y el texto dibujado cambia de ancho."""
     w_sin, h_sin, _ = _render(LONG, True, False, monkeypatch, expanded=True)
     w_con, h_con, _ = _render(LONG, True, True, monkeypatch, expanded=True)
-    assert w_sin._eff_text_width() == 332 and w_con._eff_text_width() == 288, (
-        "las columnas del contrato: 332 sin hover, 288 con hover"
+    assert w_sin._eff_text_width() == 240 and w_con._eff_text_width() == 196, (
+        "las columnas del contrato: 240 sin hover, 196 con hover (spec "
+        "toast-franja-descarte)"
     )
     assert h_con > h_sin, (
-        "el re-wrap a 288 px debe cambiar la altura requerida del card "
+        "el re-wrap a 196 px debe cambiar la altura requerida del card "
         "(expandido: %s → %s)" % (h_sin, h_con)
     )
 
@@ -201,7 +204,7 @@ def _con_resize(cuerpo, expanded=True):
 
 
 def test_hover_cambia_el_alto_por_la_via_de_resize(monkeypatch):
-    """Entrar al hover re-wrappea a 288 px y, si el alto cambia, se pide el
+    """Entrar al hover re-wrappea a 196 px y, si el alto cambia, se pide el
     redimensionado por la vía existente (la de toggle_expanded)."""
     monkeypatch.setattr(wp, "_icon_from_theme", lambda name, size=16: None)
     monkeypatch.setattr(
@@ -213,7 +216,7 @@ def test_hover_cambia_el_alto_por_la_via_de_resize(monkeypatch):
     assert pedidas, "entrar al hover debe pedir el resize si el alto cambió"
     h_con = pedidas[-1]
     assert h_con > h_sin, (
-        "el re-wrap a 288 px debe agrandar el card (expandido: %s → %s)"
+        "el re-wrap a 196 px debe agrandar el card (expandido: %s → %s)"
         % (h_sin, h_con)
     )
 
