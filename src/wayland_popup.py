@@ -130,7 +130,8 @@ def _get_app_icon_from_desktop(app_name, size=80, mode="cover"):
     mostraba el icono de la web app xat. Exacto o nada → cae al tema.)
 
     `mode` se pasa al `_resample` del path absoluto: el logo de 16px pide
-    "contain" (sin recortes) y el avatar 80px el default "cover"."""
+    "contain" (sin recortes) y la imagen izquierda de 80px el default
+    "cover"."""
     path = _exact_desktop_file(app_name)
     if not path:
         return None
@@ -276,14 +277,23 @@ _TEXT_COL_W = _CARD_WIDTH - 14 - 80 - 12 - 14  # 240: pad, icon, gap, pad
 # tests/test_layout_consistency.py (la barra flotaba 8px y, sin app_name,
 # desbordaba la card 30px).
 _PAD = 14            # padding interior del card
-_AVATAR_W = 80       # slot izquierdo del avatar
-_AVATAR_GAP = 12     # gap avatar → texto
-_ROW_MIN_H = 80      # alto mínimo de la fila (el avatar define el piso)
+_IMAGE_LEFT_W = 80   # slot izquierdo de imagen (siempre presente)
+_IMAGE_LEFT_GAP = 12 # gap slot → columna de texto
+_ROW_MIN_H = 80      # alto mínimo de la fila (el slot de 80 px define el piso)
 _APP_ROW_H = 20      # fila del app-name
+_APP_ICON_BOX = 16   # slot cuadrado del logo de app en la fila de app
 _TITLE_ROW_H = 22    # fila del título
-_HR_GAP = 18         # respiro de la fila del app (sin HR: la línea se quitó en el rediseño)
 _BTN_GAP = 8         # gap body → barra expandir
 _CARD_RADIUS = 12    # radio del card
+
+# Tamaños de fuente NOMINALES del card — fuente única: los consumen `_draw`
+# (dibujado) y `calc_card_height` (medición del alto), los dos escalados por
+# `font_scale`. Antes cada uno hardcodeaba los suyos (11/11 en `_draw` con slot,
+# 13 en `calc_card_height`): al ser siempre el slot la columna medía una cosa y
+# se dibujaba otra, y la barra "Ver más" dejaba de anclar al padding inferior.
+_TITLE_FS = 11
+_BODY_FS = 11
+_APP_FS = 10
 
 # Placeholder del logo de 16px (último eslabón de la cadena de iconos):
 # square de la surface Catppuccin del toast + inicial en el color de la fila de
@@ -293,20 +303,20 @@ _PLACEHOLDER_BG = "#313244"
 _PLACEHOLDER_FG = "#a6adc8"
 
 
-def _rows_above_body(app_name, hide_title, has_avatar):
+def _rows_above_body(app_name, hide_title):
     """Filas apiladas por encima del body — fuente única del stack.
 
     _draw la usa para posicionar (yy/body_top) y calc_card_height para
-    reservar altura; ambos deben pasar por acá o divergen. El gap del HR
-    solo existe con app_name (el HR no se dibuja sin él): el bloque del
-    botón lo sumaba igual con solo mirar el avatar, y desbordaba la card."""
+    reservar altura; ambos deben pasar por acá o divergen. Con el slot de
+    imagen izquierda siempre presente (spec `toast-imagen-izquierda`) el stack
+    es el MISMO para todos los toasts: no existe el respiro condicional que
+    solo se sumaba en la variante sin imagen, así que la distancia app→título
+    es idéntica venga la imagen que venga."""
     rows = 0
     if app_name:
         rows += _APP_ROW_H
     if not hide_title:
         rows += _TITLE_ROW_H
-    if app_name and not has_avatar:
-        rows += _HR_GAP
     return rows
 
 # Tags de markup que Pango SOPORTA de verdad. Pango NO conoce <a> ni <img>:
@@ -399,14 +409,15 @@ def _make_circular(pixbuf, size):
 def _resample(pixbuf, size, interp=GdkPixbuf.InterpType.HYPER, mode="cover"):
     """Escala al slot `size`×`size` con HYPER.
 
-    Reporte: los iconos (avatar 80px y logo de app 16px) se veían blandos en
-    pequeño — los rescale usaban BILINEAR. HYPER es nítido al reducir y
-    considerablemente más limpio al agrandar favicons chicos al slot del
-    avatar (medido en el repo: upscale 32→80 HYPER +12% energía de borde).
+    Reporte: los iconos (imagen izquierda de 80px y logo de app 16px) se veían
+    blandos en pequeño — los rescale usaban BILINEAR. HYPER es nítido al reducir
+    y considerablemente más limpio al agrandar favicons chicos al slot de la
+    imagen izquierda (medido en el repo: upscale 32→80 HYPER +12% energía de
+    borde).
 
     `mode` decide qué se hace con los iconos NO cuadrados:
       - "cover" (default): recorta el cuadrado central y escala. Es lo correcto
-        para el avatar 80px, cuyo clip circular es por diseño.
+        para la imagen izquierda de 80px, cuyo clip circular es por diseño.
       - "contain": escala preservando el aspect ratio y composita centrado
         sobre un pixbuf transparente (letterbox). Es lo del logo de 16px: con
         cover, un icono panorámico perdía sus extremos laterales dentro del
@@ -479,8 +490,11 @@ class NotificationWidget(Gtk.DrawingArea):
     # Fuente: Manrope (geométrica, moderna). Empaquetada en src/fonts/ y
     # registrada via fontconfig al importar (sin instalar system-wide).
     # Más legible que Cantarell a tamaños chicos en fondo oscuro.
-    _BODY_FONT = "Manrope 13"
-    _TITLE_FONT = "Manrope Bold 12"
+    # Tamaños NOMINALES: el tamaño real de cada fila lo escalan `_draw` y
+    # `calc_card_height` desde las constantes de módulo (_TITLE_FS/_BODY_FS/
+    # _APP_FS), que son la fuente única del par dibujado/medido.
+    _BODY_FONT = "Manrope 11"
+    _TITLE_FONT = "Manrope Bold 11"
     _APP_FONT = "Manrope 10"
     _BTN_FONT_SIZE = 10         # botón Ver más/menos + pill de cerrar
 
@@ -545,7 +559,7 @@ class NotificationWidget(Gtk.DrawingArea):
         self._right_body = _hex_rgb("#c8e6c8")
         self._right_app = _hex_rgb("#8cb88c")
         self._app_icon_pb = None
-        self._avatar_pb = None
+        self._image_left_pb = None
         self._image_pb = None
 
         # Logo de 16px de la fila de app: cadena archivo → .desktop exacto →
@@ -580,15 +594,15 @@ class NotificationWidget(Gtk.DrawingArea):
         if icon_path and os.path.exists(icon_path):
             try:
                 raw = GdkPixbuf.Pixbuf.new_from_file(icon_path)
-                self._avatar_pb = _make_circular(raw, 80)
+                self._image_left_pb = _make_circular(raw, _IMAGE_LEFT_W)
             except Exception:
                 pass
 
-        # Avatar = ICONO DEL TAB (lo que manda el navegador como image-data).
-        # Antes image-data iba al banner grande (favicon gigante estirado) y el
-        # slot izquierdo caía al icono de escritorio (Brave). Ahora: image-data
-        # primero; sin imagen real → SIN slot (no se reserva espacio por nada).
-        if not self._avatar_pb and image_data_raw:
+        # El slot de la IZQUIERDA muestra el ICONO DEL TAB (lo que manda el
+        # navegador como image-data). Antes image-data iba al banner grande
+        # (favicon gigante estirado) y el slot caía al icono de escritorio
+        # (Brave). Ahora el image-data es el primer eslabón de la cadena.
+        if not self._image_left_pb and image_data_raw:
             try:
                 w, h, rowstride, has_alpha, bps, n_channels, data = image_data_raw
                 raw = GdkPixbuf.Pixbuf.new_from_bytes(
@@ -599,25 +613,42 @@ class NotificationWidget(Gtk.DrawingArea):
                     w, h,
                     rowstride,
                 )
-                self._avatar_pb = _make_circular(raw, 80)
+                self._image_left_pb = _make_circular(raw, _IMAGE_LEFT_W)
             except Exception:
                 pass
 
-        # Fallback del avatar: sin icono del sender (image-data, image-path,
+        # Segundo eslabón: sin icono del sender (image-data, image-path,
         # app_icon archivo), el slot izquierdo cae al icono de la app — match
         # EXACTO de .desktop (logo de Brave; el Name de los .desktop PWA cubre
         # "YouTube" sin match difuso), luego el tema hicolor. Los directos de
         # YouTube llegan vía service-worker SOLO con summary/body, y sin este
         # paso el slot izquierdo quedaba vacío (bug reportado).
-        if not self._avatar_pb:
-            avatar_from_desktop = _get_app_icon_from_desktop(app_name, 80)
-            if avatar_from_desktop:
-                self._avatar_pb = _make_circular(avatar_from_desktop, 80)
-            if not self._avatar_pb:
-                theme_avatar = (_icon_from_theme(app_icon, 80)
-                                or _icon_from_theme(app_name, 80))
-                if theme_avatar:
-                    self._avatar_pb = _make_circular(theme_avatar, 80)
+        if not self._image_left_pb:
+            icon_from_desktop = _get_app_icon_from_desktop(
+                app_name, _IMAGE_LEFT_W)
+            if icon_from_desktop:
+                self._image_left_pb = _make_circular(
+                    icon_from_desktop, _IMAGE_LEFT_W)
+            if not self._image_left_pb:
+                theme_icon = (_icon_from_theme(app_icon, _IMAGE_LEFT_W)
+                              or _icon_from_theme(app_name, _IMAGE_LEFT_W))
+                if theme_icon:
+                    self._image_left_pb = _make_circular(
+                        theme_icon, _IMAGE_LEFT_W)
+
+        # Último eslabón de la cadena del slot: si NADA resolvió (ni imagen de la
+        # notificación ni icono de app), se sintetiza el placeholder con la
+        # INICIAL del nombre de la app — el mismo lenguaje visual del logo de
+        # 16 px, escalado al slot y pasado por el clip circular como cualquier
+        # otro contenido. El slot deja de poder quedar vacío, y con él la
+        # variante de layout "sin imagen" (columna ancha, fuentes 12/13, gap del
+        # HR): un toast sin icono resoluble se ve igual de coherente que el resto
+        # (spec `toast-imagen-izquierda`, "La imagen izquierda siempre está
+        # presente").
+        if not self._image_left_pb:
+            self._image_left_pb = _make_circular(
+                _make_placeholder_icon(self._app_name, _IMAGE_LEFT_W),
+                _IMAGE_LEFT_W)
 
         # Banner grande: SOLO image-path (imagen real de la app, ej: descarga).
         # image-data ya no va acá (es el icono, no una imagen para agrandar).
@@ -809,15 +840,15 @@ class NotificationWidget(Gtk.DrawingArea):
     def _eff_text_width(self):
         """Ancho real de la columna de texto en el estado actual.
 
-        Con avatar: 360 - 14 - 80 - 12 - 14 = 240 (igual que _TEXT_COL_W).
-        Sin avatar (no hay imagen): texto a ancho completo (~332).
+        Con el slot de imagen izquierda SIEMPRE presente (spec
+        `toast-imagen-izquierda`, "Columna de texto única") la columna es una
+        sola para todos los toasts: 360 − 14 − 80 − 12 − 14 = 240. Antes un
+        toast sin imagen resuelta se iba a ancho completo (~332) con otras
+        fuentes, y la barra "Ver más" aterrizaba en otro lugar.
         Persistentes CON hover: menos el ancho de la franja de descarte (44px),
         que _draw reserva para que el texto no quede bajo el tinte. Sin hover
         la franja no se dibuja y no se le cede ancho al texto."""
-        base = _CARD_WIDTH - _PAD - _PAD
-        if self._avatar_pb:
-            base -= _AVATAR_W + _AVATAR_GAP
-        return base - self._strip_w()
+        return _TEXT_COL_W - self._strip_w()
 
     def desired_height(self):
         """Altura en el estado actual (colapsado/expandido/hover) para
@@ -832,7 +863,6 @@ class NotificationWidget(Gtk.DrawingArea):
             self._app_name, self._cuerpo, "",
             text_width=self._eff_text_width(), expanded=self._expanded,
             hide_title=self._hide_title, font_scale=self._font_scale,
-            has_avatar=bool(self._avatar_pb),
         )
         if self._image_pb is not None:
             h += 8 + 140
@@ -885,25 +915,24 @@ class NotificationWidget(Gtk.DrawingArea):
         cr.restore()
         wx = self._wipe_x(W)
         pad = _PAD
-        gap = _AVATAR_GAP
-        # Slot izquierdo SOLO si hay avatar real (icono del tab). Sin imagen:
-        # no se reserva espacio (texto a ancho completo).
-        icon_size = _AVATAR_W if self._avatar_pb else 0
-        text_col_x = pad + icon_size + (gap if icon_size else 0)
+        # El slot de imagen izquierda está SIEMPRE (spec
+        # `toast-imagen-izquierda`): la cadena termina en el placeholder con la
+        # inicial, así que la columna de texto no depende de qué resolviera.
+        icon_size = _IMAGE_LEFT_W
+        text_col_x = pad + icon_size + _IMAGE_LEFT_GAP
         # Persistentes CON hover: la franja vertical de descarte (44px) se
         # RESERVA en la columna de texto — el texto nunca queda debajo del
         # tint. Sin hover la franja no se dibuja y no se le cede ancho.
         strip_w = self._strip_w()
         text_col_w = W - text_col_x - pad - strip_w
 
-        # Circle-cut (avatar) steals ~80px of horizontal space: shrink body &
-        # summary fonts so the same text stays legible at the narrower width.
-        # Also apply screen-resolution scaling (self._font_scale).
-        has_avatar = bool(self._avatar_pb)
+        # Fuentes nominales por fila, escaladas por resolución
+        # (self._font_scale). Las MISMAS constantes mide calc_card_height: si
+        # divergieran, la barra "Ver más" dejaría de anclar al padding inferior.
         fs = self._font_scale
-        _title_fs = max(9, round((11 if has_avatar else 12) * fs))
-        _body_fs = max(9, round((11 if has_avatar else 13) * fs))
-        _app_fs = max(8, round(10 * fs))
+        _title_fs = max(9, round(_TITLE_FS * fs))
+        _body_fs = max(9, round(_BODY_FS * fs))
+        _app_fs = max(8, round(_APP_FS * fs))
 
         # Helper: rounded rect path (clockwise, outer corners)
         def rrect(cr, x, y, w, h, r):
@@ -950,25 +979,30 @@ class NotificationWidget(Gtk.DrawingArea):
             _, body_h = _body_metrics(self._cuerpo, text_col_w, _body_fs, max_lines=cap)
         has_more = total_lines > self._MAX_VISIBLE_LINES   # overflow => mostrar botón (debe persistir al expandir para poder contraer)
 
-        text_h = _rows_above_body(self._app_name, self._hide_title, has_avatar)
+        text_h = _rows_above_body(self._app_name, self._hide_title)
         text_h += body_h
         if has_more:
             text_h += self._BTN_H + _BTN_GAP   # franja del botón expandir/contraer
-        # Piso de la fila: coincide con calc_card_height (max con 80) — antes
-        # _draw usaba max(text_h, icon_size) y sin avatar el piso se perdía.
+        # Piso de la fila: coincide con calc_card_height (max con 80) — el slot
+        # de imagen izquierda sigue respirando con contenido corto.
         row_h = max(text_h, icon_size, _ROW_MIN_H)
 
-        # Avatar (slot izquierdo, centrado verticalmente) — solo si hay imagen real.
-        # El pixbuf YA viene circular (lo recorta _make_circular); el blit rect es
-        # transparente en las esquinas. Sin anillo (rediseño: cero líneas).
-        if self._avatar_pb:
-            cy = pad + (row_h - icon_size) / 2
-            Gdk.cairo_set_source_pixbuf(cr, self._avatar_pb, pad, cy)
-            cr.rectangle(pad, cy, icon_size, icon_size)
-            cr.fill()
+        # Imagen izquierda (slot de 80 px, clip circular), centrada verticalmente
+        # en su fila. El pixbuf YA viene circular (lo recorta _make_circular);
+        # el blit rect es transparente en las esquinas. Sin anillo (rediseño:
+        # cero líneas).
+        cy = pad + (row_h - icon_size) / 2
+        Gdk.cairo_set_source_pixbuf(cr, self._image_left_pb, pad, cy)
+        cr.rectangle(pad, cy, icon_size, icon_size)
+        cr.fill()
 
         # --- Text in two passes ---
-        ty = pad + (row_h - text_h) / 2
+        # El bloque de texto arranca AL TOP de la fila, alineado con el borde
+        # superior del slot (spec `toast-imagen-izquierda`). Antes se centraba
+        # con `(row_h - text_h) / 2` y, con el piso de 80 px del slot, la fila
+        # de app y el título quedaban hundidos ~10 px. El slot conserva su
+        # centrado `cy`; el sobrante queda bajo el body.
+        ty = pad
 
         def draw_text_pass(cr, clip_x, is_dark):
             if clip_x < 0:
@@ -988,26 +1022,33 @@ class NotificationWidget(Gtk.DrawingArea):
                 # lleno, así que el offset del texto es una constante.
                 if self._app_icon_pb:
                     Gdk.cairo_set_source_pixbuf(cr, self._app_icon_pb, text_col_x, yy)
-                    cr.rectangle(text_col_x, yy, 16, 16)
+                    cr.rectangle(text_col_x, yy, _APP_ICON_BOX, _APP_ICON_BOX)
                     cr.fill()
                 cr.set_source_rgb(*acol)
                 # Label de app (puede ser "Brave - <tab>") con elipsis real de Pango
                 label = self._app_label or self._app_name
+                # tx = text_col_x + 20 (logo 16 + 4): constante, nunca condicional
+                # al logo (fija tests/test_placeholder_icono.py).
                 tx = text_col_x + 20
                 ll = PangoCairo.create_layout(cr)
                 ll.set_font_description(Pango.FontDescription("Manrope " + str(_app_fs)))
                 ll.set_text(label, -1)
                 ll.set_width(int(max(1, text_col_w - tx + text_col_x) * Pango.SCALE))
                 ll.set_ellipsize(Pango.EllipsizeMode.END)
-                cr.move_to(tx, yy + 3)
+                # El texto se CENTRA en el logo: se mide su CAJA DE TINTA real y
+                # se la alinea con la línea media del slot de 16 px. Con un
+                # desplazamiento fijo el texto caía ~5 px bajo el centro (y la
+                # base se salía del icono), y el error crecía con cada cambio
+                # de fuente. `PangoCairo.show_layout` ancla la esquina superior
+                # izquierda de la caja, no la baseline: por eso el centro se
+                # corrige con los extents de tinta y no con `y + ascent`.
+                # Mismo criterio que el centrado de la inicial en
+                # `_make_placeholder_icon`.
+                ink, _logical = ll.get_pixel_extents()
+                centro_logo = yy + _APP_ICON_BOX / 2
+                cr.move_to(tx, centro_logo - (ink.y + ink.height / 2))
                 PangoCairo.show_layout(cr, ll)
                 yy += _APP_ROW_H
-
-            # Sin HR decorativo (rediseño: cero líneas), pero la fila del
-            # app-name conserva su respiro: de _HR_GAP dependen las alturas
-            # de la card (calc_card_height debe seguir en 113/108/108/174/113).
-            if self._app_name and not has_avatar:
-                yy += _HR_GAP  # respiración: 14 gap al HR + 4 antes del título/body
 
             if not self._hide_title:
                 cr.set_source_rgb(*tcol)
@@ -1035,7 +1076,7 @@ class NotificationWidget(Gtk.DrawingArea):
             # fijarse en app_name (desbordaba 30px) y no aplicaba _BTN_GAP
             # (la barra flotaba 8px sobre el padding inferior).
             body_top = ty + _rows_above_body(self._app_name,
-                                             self._hide_title, has_avatar)
+                                             self._hide_title)
             btn_y = body_top + body_h + _BTN_GAP
             btn_h = self._BTN_H
             label = "Ver menos" if expanded else "Ver más"
@@ -1205,6 +1246,10 @@ class WaylandPopup:
         self._start = 0
         self._on_close = on_close
         self._on_click = on_click
+        # Hook POST-resize: lo inyecta el manager para re-flowear la pila
+        # cuando este card cambia de alto (spec `toast-stack`). None = nadie
+        # escucha (uso one-shot).
+        self.on_resized = None
         self._stack_margin = 0
 
         # Urgency (spec freedesktop 1.2): 0=low, 1=normal, 2=critical
@@ -1297,8 +1342,29 @@ class WaylandPopup:
             self.window.connect("destroy", lambda *a: Gtk.main_quit())
         self.window.connect("key-press-event", lambda *a: self._close())
 
+    def stack_height(self):
+        """Alto con el que esta card ocupa su hueco en la pila.
+
+        Es la altura REAL que el card pide (post-resize), no la que tenía cuando
+        se apiló: la pila la suma para calcular los offsets de los de abajo
+        (spec `toast-stack`, "La pila nunca solapa"). Sin card no hay estado de
+        hover (nunca se ha dibujado): se estima con la columna COMPLETA — el
+        mismo valor que daría `_eff_text_width` sin hover (ver `_strip_w`).
+        """
+        if self._card:
+            return self._card.desired_height()
+        return WaylandPopup.calc_card_height(
+            self.app_name, self.cuerpo, self.image_path,
+            text_width=_CARD_WIDTH - _PAD * 2)
+
     def _resize_card(self, new_h):
-        """Redimensiona la window (layer-shell) al alto pedido por toggle expandir/contraer."""
+        """Redimensiona la window (layer-shell) al alto pedido por toggle expandir/contraer.
+
+        Al final avisa a `on_resized`: el manager re-flowea la pila entera con el
+        alto nuevo (spec `toast-stack`). El orden importa —primero se redimensiona
+        esta card, después se repositionan las demás— para que `stack_height()` de
+        esta popup ya devuelva el alto nuevo cuando se sumen los offsets.
+        """
         if not self.window or not self._card:
             return
         self._card.set_size_request(_CARD_WIDTH, new_h)
@@ -1306,6 +1372,8 @@ class WaylandPopup:
         self.window.queue_resize()
         self.window.show_all()          # reactiva layout
         GtkLayerShell.try_force_commit(self.window)
+        if self.on_resized:
+            self.on_resized()
 
     def _update_progress(self):
         if self._closed:
@@ -1324,12 +1392,11 @@ class WaylandPopup:
 
     @staticmethod
     def calc_card_height(app_name, cuerpo, image_path, text_width=_TEXT_COL_W,
-                         expanded=False, hide_title=False, font_scale=1.0,
-                         has_avatar=False):
+                         expanded=False, hide_title=False, font_scale=1.0):
         """Altura de la card según el wrap REAL del cuerpo.
 
         `text_width` es el ancho EFECTIVO de la columna de texto (card 360 − pad
-        14 − icon 80 − gap 12 − pad 14 = 240). Antes se contaban líneas físicas
+        14 − slot 80 − gap 12 − pad 14 = 240). Antes se contaban líneas físicas
         (split "\\n") y el texto desbordaba el borde; ahora se cuentan las
         líneas visuales envolviéndolo. Si `expanded`, se muestran todas las
         líneas; si no, se limitan a _MAX_VISIBLE_LINES y se reserva la franja
@@ -1338,12 +1405,13 @@ class WaylandPopup:
         (`NotificationWidget._eff_text_width`, que descuenta los 44px solo con
         hover) — restarla aquí además sería la divergencia altura/wrap que este
         docstring prohíbe.
-        `font_scale` aplica la misma escala de resolución que usa _draw.
-        `has_avatar` suma el gap del HR full-width (18px) que se dibuja en
-        _draw cuando NO hay avatar — si no se suma, el stack colisiona."""
-        _body_fs = max(9, round(13 * font_scale))
+        `font_scale` aplica la misma escala de resolución que usa _draw, y el
+        tamaño de fuente sale de `_BODY_FS` — la MISMA constante que dibuja el
+        body. Con el slot de imagen izquierda siempre presente no hay dos
+        variantes de stack que medir: una sola columna, una sola fuente."""
+        _body_fs = max(9, round(_BODY_FS * font_scale))
         total = _count_body_lines(cuerpo, text_width, _body_fs)
-        text_h = _rows_above_body(app_name, hide_title, has_avatar)
+        text_h = _rows_above_body(app_name, hide_title)
         if expanded:
             _, body_h = _body_metrics(cuerpo, text_width, _body_fs, max_lines=None)
         else:
@@ -1358,8 +1426,15 @@ class WaylandPopup:
             h += 8 + 140
         return h
 
-    def set_stack_margin(self, index):
-        self._stack_margin = index
+    def set_stack_margin(self, offset):
+        """Fija el OFFSET vertical (px) de esta card dentro de la pila.
+
+        El offset lo calcula el manager sumando las alturas REALES de las cards de
+        arriba más el gap (spec `toast-stack`): por eso es un desplazamiento ya
+        acumulado y no un índice — con alturas distintas, `índice × alto_propio`
+        solapaba las cards.
+        """
+        self._stack_margin = offset
         if self.window:
             self._apply_margins()
 
@@ -1367,17 +1442,7 @@ class WaylandPopup:
         if not self.window:
             return
         base_top, base_right, base_bottom, base_left = self._MARGIN_MAP.get(self.corner, (16, 16, 0, 0))
-        gap = 12
-        if self._card:
-            card_h = self._card.desired_height()
-        else:
-            # Sin card no hay estado de hover (nunca se ha dibujado): se estima
-            # la altura con la columna COMPLETA — el mismo valor que daría
-            # _eff_text_width sin hover (ver _strip_w).
-            card_h = WaylandPopup.calc_card_height(
-                self.app_name, self.cuerpo, self.image_path,
-                text_width=_CARD_WIDTH - _PAD * 2, has_avatar=False)
-        offset = self._stack_margin * (card_h + gap)
+        offset = self._stack_margin
         if "top" in self.corner:
             t, b = base_top + offset, base_bottom
         else:

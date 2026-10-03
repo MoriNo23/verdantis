@@ -67,20 +67,21 @@ def api_history():
 def api_replay(nid):
     if not _daemon:
         return jsonify({"error": "daemon not wired"}), 500
-    # buscar en disco primero (tiene avatar_file/banner_file guardados); si el
+    # buscar en disco primero (tiene avatar_file/banner_file guardados — claves
+    # de persistencia, ver la excepción de terminología en history_store); si el
     # archivo de historial no existe, caer al historial en memoria.
     entries = _history_records()
     entry = next((e for e in entries if e["id"] == nid), None)
     if entry is None:
         return jsonify({"error": "id not found"}), 404
     hints = _deserialise_hints(entry.get("hints") or {})
-    # Reproducir "tal cual": el avatar del sender se guardó como PNG en el
-    # directorio propio (los favicons de /tmp son efímeros). Inyectarlo como
+    # Reproducir "tal cual": la imagen izquierda del sender se guardó como PNG en
+    # el directorio propio (los favicons de /tmp son efímeros). Inyectarlo como
     # image-path; si no había imagen del sender, la reproducción vuelve a
     # resolver el fallback (desktop/tema) igual que la original.
-    avatar_file = entry.get("avatar_file")
-    if avatar_file:
-        p = history_store.icon_path(avatar_file)
+    image_left_file = entry.get("avatar_file")
+    if image_left_file:
+        p = history_store.icon_path(image_left_file)
         if os.path.exists(p):
             hints["image-path"] = p
     _daemon._manager.notify(

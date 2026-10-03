@@ -24,7 +24,7 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   - `verdantis_daemon.py` — dueño del bus DBus (`Notify`, `CloseNotification`,
     `GetCapabilities`, `GetServerInformation`, signals), cola de toasts, click→action.
   - `wayland_popup.py` — render del toast: `NotificationWidget` (Gtk.DrawingArea con
-    cairo), layout (avatar 80px opcional / texto a ancho completo), wrap Pango,
+    cairo), layout (imagen izquierda de 80px siempre / columna de texto única), wrap Pango,
     franja vertical de descarte + barra expandir full-width, wipe de tiempo.
   - `app_info.py` — fuente única de `APP_NAME`/`APP_ID`/`VENDOR` (nada de literales
     "Verdantis" inline; el vendor de GetServerInformation es MoriNo23, no el nombre).
@@ -76,7 +76,15 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 - Navegador (detección por `desktop-entry`/app_name con `_is_browser`): la línea de app
   muestra "Brave - <título>" con ellipsis Pango y el título no se duplica (hide_title).
 - Iconos del tab: Brave manda `app_icon` como `file:///tmp/...` (usar `_local_path`) e
-  `image-path` plano (va al avatar). `image-data` = icono del tab → avatar; NO al banner.
+  `image-path` plano (va a la imagen izquierda). `image-data` = icono del tab → imagen
+  izquierda; NO al banner.
+- Imagen izquierda: el slot de 80 px (`_IMAGE_LEFT_W`) está en TODOS los toasts. Cadena:
+  imagen de la notificación (image-path / image-data del tab) → icono de la app (`.desktop`
+  exacto → tema) → placeholder con la inicial (`_make_placeholder_icon` + clip circular).
+  Nunca queda `None`: no existe la variante sin imagen (columna ancha, fuentes 12/13, gap
+  del HR). La columna de texto es una sola, 240 px (196 con la franja de descarte en hover
+  de un persistente), y el texto arranca al top del slot (`ty = pad`, sin centrado del
+  bloque). `_eff_text_width` y `_rows_above_body` no tienen ramas por variante.
 
 ## Pitfalls
 

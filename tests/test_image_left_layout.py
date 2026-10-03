@@ -120,6 +120,60 @@ def _render(icon_path=None, cuerpo=SHORT, titulo="Titulo", app_name="App"):
     return w, h, surface_pixels(alloc_and_draw(w, W, h))
 
 
+def _inyectar_logo(w, rgb=SENDER_RED, size=64):
+    """Pinta el logo de 16 px de la fila de app con un color sólido.
+
+    Se inyecta el PIXBUF (no el .desktop) para que el centro del icono sea
+    medible por píxel sin depender de qué iconos tenga instalados el tema. El
+    slot de 80 px queda con lo que haya resuelto — da igual: vive en otra
+    columna."""
+    pb = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, size, size)
+    pb.fill((rgb[0] << 24) | (rgb[1] << 16) | (rgb[2] << 8) | 0xFF)
+    w._app_icon_pb = pb
+    return w
+
+
+def _banda(px, x0, x1, es_tinta, min_px=1, hueco=3):
+    """Filas [y0..y1] de la PRIMERA banda de tinta dentro de [x0, x1).
+
+    "Banda" y no "bloque contiguo": una letra tiene filas sin tinta entre sus
+    trazos, así que se toleran hasta `hueco` filas vacías seguidas antes de
+    cortar (la fila de app es lo primero que se dibuja en la columna; el título
+    viene después, separado de verdad)."""
+    filas, secas = [], 0
+    for y in range(len(px)):
+        n = sum(1 for x in range(x0, x1) if es_tinta(px[y][x][:3]))
+        if n >= min_px:
+            filas.append(y)
+            secas = 0
+        elif filas:
+            secas += 1
+            if secas >= hueco:
+                break
+    return (filas[0], filas[-1]) if filas else None
+
+
+def _banda_logo(px, x0, x1, rgb=SENDER_RED, tol=10):
+    """Banda del logo inyectado (color sólido, sin antialias)."""
+    return _banda(px, x0, x1, lambda p: _cerca(p, rgb, tol), min_px=2)
+
+
+def _banda_texto(px, x0, x1, umbral=200):
+    """Banda de tinta CLARA: cualquier pixel bastante más luminoso que el fondo
+    de la card (29,29,46).
+
+    Por luminancia y no por color exacto: el texto de la fila de app se dibuja
+    a 9-10 px, así que su antialiasing reparte la tinta en pixeles que están
+    lejos del color nominal — buscarla por color sólo encuentra el|nominal| de
+    las letras anchas y pierde las chicas.
+    """
+    return _banda(px, x0, x1, lambda p: sum(p) > umbral)
+
+
+def _centro(bloque):
+    return (bloque[0] + bloque[1]) / 2
+
+
 def _filas_above_body(icon_path=None, cuerpo=SHORT):
     """(widget, alto, píxeles, top_de_la_fila_de_app, top_del_título).
 
@@ -327,6 +381,79 @@ def test_sin_respiro_de_la_variante_sin_imagen(tmp_path, _cache_limpio):
         "toasts; medido %s — el respiro de 18 px que sólo tenía la variante "
         "sin imagen tiene que morir" % (dists,)
     )
+
+
+# ── "El nombre de la app se centra en su icono" ──────────────────────────
+
+def test_el_nombre_de_la_app_se_centra_en_el_icono():
+    """Scenario "El texto se centra en el icono": el centro de la tinta del
+    nombre de la app coincide con el centro del logo de 16 px (±2 px).
+
+    Se mide por RENDER, no por coordenadas internas: se inyecta el logo en un
+    color sólido y se lee su caja de tinta, y el texto se lee como "tinta clara
+    que no sea el logo" en el resto de la columna. La primera línea imaginaria
+    que cruzara el icono debería cortar el texto por su medio.
+
+    Rojo hoy: `cr.move_to(tx, yy + 3)` es un desplazamiento a ojo y
+    `PangoCairo.show_layout` ancla la CAJA del layout (no la baseline), así que
+    la tinta cae ~5 px baja del centro del icono y su base se sale por debajo.
+    """
+    w = _inyectar_logo(NotificationWidget(
+        "App", "", "Titulo", SHORT, None, None, "#80cbc4"))
+    h = w.desired_height()
+    px = surface_pixels(alloc_and_draw(w, W, h))
+
+    logo = _banda_logo(px, LOGO_X0, LOGO_X1)
+    texto = _banda_texto(px, LOGO_X1 + 4, W - PAD)
+    assert logo is not None, (
+        "el logo de 16 px inyectado debe dibujar su caja en x=%d..%d: no hay "
+        "tinta" % (LOGO_X0, LOGO_X1)
+    )
+    assert texto is not None, (
+        "el nombre de la app debe dibujar texto en la columna (x>%d): no hay "
+        "tinta" % (LOGO_X1,)
+    )
+    assert logo[1] - logo[0] + 1 == 16, (
+        "el logo debería medir 16 px de alto, midió %s" % (logo[1] - logo[0] + 1,)
+    )
+    delta = _centro(texto) - _centro(logo)
+    assert abs(delta) <= 2, (
+        "spec toast-imagen-izquierda / 'El nombre de la app se centra en su "
+        "icono': el centro de la tinta del texto está %+.1f px respecto del "
+        "centro del icono (icono y=%s..%s centro=%.1f, texto y=%s..%s "
+        "centro=%.1f) — el texto tiene que quedar centrado en el icono, no "
+        "cayendo hacia su base"
+        % (delta, logo[0], logo[1], _centro(logo),
+           texto[0], texto[1], _centro(texto))
+    )
+
+
+def test_el_centrado_no_depende_de_la_fuente():
+    """Scenario "El centrado no depende de la fuente": con descendente ("Q") y
+    con otra escala de resolución, el texto sigue centrado en el icono.
+
+    El centrado tiene que salir de la CAJA DE TINTA real del layout: centrado
+    por advance o por un offset fijo se rompe apenas cambia la fuente.
+    """
+    for app_name, escala in (("Q", 1.0), ("W", 0.75), ("Q", 0.75)):
+        w = _inyectar_logo(NotificationWidget(
+            app_name, "", "Titulo", SHORT, None, None, "#80cbc4"))
+        w._font_scale = escala
+        px = surface_pixels(alloc_and_draw(w, W, w.desired_height()))
+        logo = _banda_logo(px, LOGO_X0, LOGO_X1)
+        texto = _banda_texto(px, LOGO_X1 + 4, W - PAD)
+        assert logo is not None and texto is not None, (
+            "no pude medir icono/texto con app_name=%r escala=%s "
+            "(logo=%s texto=%s)" % (app_name, escala, logo, texto)
+        )
+        delta = _centro(texto) - _centro(logo)
+        assert abs(delta) <= 2, (
+            "spec toast-imagen-izquierda / 'El centrado no depende de la "
+            "fuente': con app_name=%r y escala=%s el texto queda %+.1f px del "
+            "centro del icono (±2) — el centrado se calcula sobre la baseline "
+            "o con un offset fijo, y debería usar la caja de tinta"
+            % (app_name, escala, delta)
+        )
 
 
 # ── "Columna de texto única" ─────────────────────────────────────────────

@@ -18,7 +18,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.7.1"
+VERSION = "0.8.0"
 
 
 def _is_browser(app_name, desktop_entry):
@@ -185,7 +185,12 @@ def _is_local_url(url):
 
 class NotificationManager:
     MAX_VISIBLE = 5
-    STACK_GAP = 8
+    # Gap entre cards de la pila, en px. Autoridad única: lo suman `_stack_offsets`
+    # al calcular el offset de cada card (spec `toast-stack`, "El reflow es
+    # estable": el de abajo arranca a `alto_de_arriba + 12`). Antes este valor
+    # estaba hardcodeado en `WaylandPopup._apply_margins` (12) y la constante de
+    # acá (8) no la usaba nadie: dos fuentes de verdad, la equivocada muerta.
+    STACK_GAP = 12
     # Delay entre notificaciones de un mismo burst: evita que lleguen todas a la
     # vez cuando el sender dispara un flood (ej: 10 notis en <100ms). La cola se
     # drena una por vez, cada STAGGER_MS, en orden de LLEGADA (spec
@@ -364,22 +369,22 @@ class NotificationManager:
             "sound_name": sound_name,
         }
 
-        avatar_path = _local_path(hints.get("image-path", ""))
-        if not avatar_path or not os.path.exists(avatar_path):
-            avatar_path = _local_path(app_icon) if app_icon and os.path.exists(_local_path(app_icon)) else ""
+        image_left_path = _local_path(hints.get("image-path", ""))
+        if not image_left_path or not os.path.exists(image_left_path):
+            image_left_path = _local_path(app_icon) if app_icon and os.path.exists(_local_path(app_icon)) else ""
 
         app_icon_file = _local_path(app_icon) if app_icon and os.path.exists(_local_path(app_icon)) else ""
 
         image_data = hints.get("image-data", None)
         image_path = _local_path(hints.get("image-path", ""))
         banner_path = ""
-        if image_path and os.path.exists(image_path) and image_path != avatar_path:
+        if image_path and os.path.exists(image_path) and image_path != image_left_path:
             banner_path = image_path
 
         kwargs = {
             "titulo": summary,
             "cuerpo": body,
-            "icon_path": avatar_path if avatar_path else None,
+            "icon_path": image_left_path if image_left_path else None,
             "image_path": banner_path if banner_path else None,
             "image_data_raw": image_data,
             # expire_timeout (spec freedesktop 1.2):
@@ -449,7 +454,7 @@ class NotificationManager:
             self._persist_to_disk(
                 nid, app_name, app_icon, summary, body, actions, hints,
                 expire_timeout, sender, url,
-                avatar_path, app_icon_file, banner_path, image_data,
+                image_left_path, app_icon_file, banner_path, image_data,
                 kwargs["duration"],
             )
 
@@ -457,23 +462,30 @@ class NotificationManager:
 
     def _persist_to_disk(self, nid, app_name, app_icon, summary, body, actions,
                          hints, expire_timeout, sender, url,
-                         avatar_path, app_icon_file, banner_path, image_data,
+                         image_left_path, app_icon_file, banner_path, image_data,
                          duration):
         """Archiva la notificación en history_store (JSONL en el XDG data
-        home) con los bytes del icono/avatar del sender.
+        home) con los bytes de la imagen izquierda del sender.
 
         Los favicons de los navegadores viven en /tmp y mueren con la sesión
         que los creó: se COPIAN al directorio propio para que el replay del
         dashboard pueda reproducir "cómo se veía X app tal cual".
-        avatar_source documenta de dónde salió el slot izquierdo."""
+        image_left_source documenta de dónde salió el slot izquierdo.
+
+        EXCEPCIÓN DE TERMINOLOGÍA: las claves del registro y los nombres de los
+        PNG en disco (`avatar_source`, `avatar_file`, `n<id>_avatar.png`) NO se
+        renombran — son un esquema de PERSISTENCIA ya escrito en el historial de
+        disco; renombrarlas lo dejaría huérfano (y es lo que fija
+        tests/test_history_store.py). El vocabulario del layout, en cambio, es
+        "imagen izquierda" en todo src/."""
         try:
-            avatar_file = None
+            image_left_file = None
             if image_data is not None:
-                avatar_file = history_store.save_image_data(nid, image_data)
-            elif avatar_path:
-                avatar_file = history_store.copy_icon(nid, avatar_path, "avatar")
+                image_left_file = history_store.save_image_data(nid, image_data)
+            elif image_left_path:
+                image_left_file = history_store.copy_icon(nid, image_left_path, "avatar")
             elif app_icon_file:
-                avatar_file = history_store.copy_icon(nid, app_icon_file, "avatar")
+                image_left_file = history_store.copy_icon(nid, app_icon_file, "avatar")
             banner_file = None
             if banner_path:
                 banner_file = history_store.copy_icon(nid, banner_path, "banner")
@@ -491,29 +503,57 @@ class NotificationManager:
                 "sender": sender,
                 "url": url or "",
                 "duration": duration,
-                "avatar_source": self._avatar_source_for(
-                    app_name, avatar_path, app_icon, image_data, hints),
-                "avatar_file": avatar_file,
+                "avatar_source": self._image_left_source_for(
+                    app_name, image_left_path, app_icon, image_data, hints),
+                "avatar_file": image_left_file,
                 "banner_file": banner_file,
             })
         except Exception:
             pass  # best-effort: un fallo de disco nunca puede romper Notify
 
     @staticmethod
-    def _avatar_source_for(app_name, avatar_path, app_icon, image_data, hints):
-        """Diagnóstico de proveniencia del slot izquierdo (para el historial):
-        image-path / app_icon (sender), image-data (tab), app-icon-fallback
-        (desktop exacto o tema), none (sin avatar)."""
+    def _image_left_source_for(app_name, image_left_path, app_icon, image_data,
+                               hints):
+        """Diagnóstico de proveniencia del slot de imagen izquierda (para el
+        historial): image-path / app_icon (sender), image-data (tab),
+        app-icon-fallback (desktop exacto o tema), none (nada resolvió — el slot
+        cae al placeholder con la inicial)."""
         if image_data is not None:
             return "image-data"
-        if avatar_path:
+        if image_left_path:
             img_hint = _local_path(hints.get("image-path", ""))
-            return "image-path" if avatar_path == img_hint else "app_icon"
+            return "image-path" if image_left_path == img_hint else "app_icon"
         if (_get_app_icon_from_desktop(app_name, 16)
                 or _icon_from_theme(app_icon, 16)
                 or _icon_from_theme(app_name, 16)):
             return "app-icon-fallback"
         return "none"
+
+    def _stack_offsets(self):
+        """Offset vertical (px) de cada popup activo, en orden de pila.
+
+        Es la suma de las alturas REALES de las cards de arriba + el gap entre
+        ellas: la altura de cada uno se pide en el momento, así el offset ya
+        incluye cualquier cambio de alto reciente (expandir/contraer, re-wrap por
+        hover). Con un índice y la altura propia (`índice × (alto + gap)`) las
+        cards solapaban en cuanto sus alturas diferían — spec `toast-stack`.
+        """
+        offsets, offset = [], 0
+        for _, p in self._active:
+            offsets.append(offset)
+            offset += p.stack_height() + self.STACK_GAP
+        return offsets
+
+    def _reflow_stack(self):
+        """Re-flowea TODA la pila con los offsets de `_stack_offsets`.
+
+        Se llama al mostrar, al cerrar y al cambiar de alto cualquier card (el
+        popup avisa por `on_resized`): en los tres casos las cards de abajo
+        pueden haber cambiado de alto y necesitan su hueco recalculado para no
+        solaparse.
+        """
+        for offset, (_, p) in zip(self._stack_offsets(), self._active):
+            p.set_stack_margin(offset)
 
     def _show_popup(self, nid, kwargs):
         popup = WaylandPopup(**kwargs)
@@ -525,9 +565,12 @@ class NotificationManager:
         # aislado. Los popups persistentes (duration=0) no aplican holdback.
         if popup.duration > 0 and idx > 0:
             popup.duration += idx * self.CLOSE_STAGGER_MS
+        # La pila se re-flowea con cada resize de este card (spec `toast-stack`):
+        # sin esto, expandir "Ver más" deja a los de abajo con el margen viejo.
+        popup.on_resized = self._reflow_stack
         popup.prepare()
-        popup.set_stack_margin(idx)
         self._active.append((nid, popup))
+        self._reflow_stack()
 
     def _close_id(self, nid):
         for i, (aid, popup) in enumerate(self._active):
@@ -544,8 +587,7 @@ class NotificationManager:
         # Sincroniza la tabla de dedup: si el toast que se cierra era el último
         # portador de una clave, esa entrada queda libre para el próximo contenido.
         self._dedup = {k: v for k, v in self._dedup.items() if v[0] != nid}
-        for i, (_, p) in enumerate(self._active):
-            p.set_stack_margin(i)
+        self._reflow_stack()
         # Drena la cola pendiente (una por tick vía _pump); si hay hueco ya,
         # mostramos la siguiente de inmediato y re-agendamos el resto.
         if self._pending and len(self._active) < self.MAX_VISIBLE:

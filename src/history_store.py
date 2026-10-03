@@ -2,9 +2,15 @@
 
 Cada Notify se archiva como una línea JSON en
 `$XDG_DATA_HOME/verdantis/history.jsonl` (default `~/.local/share/verdantis/`),
-MÁS los bytes del icono/avatar/imagen cuando el sender los manda — para
+MÁS los bytes del icono/imagen cuando el sender los manda — para
 reproducir "cómo se veía X app tal cual" desde el dashboard y diagnosticar
-de dónde salió el slot izquierdo (`avatar_source`).
+de dónde salió el slot de imagen izquierda (`avatar_source`).
+
+EXCEPCIÓN DE TERMINOLOGÍA: las claves del registro (`avatar_source`,
+`avatar_file`) y el nombre de los PNG (`n<id>_avatar.png`) conservan el término
+"avatar" a propósito: son un esquema de PERSISTENCIA ya escrito en el historial
+de disco, no vocabulario del layout (que es "imagen izquierda"), y
+tests/test_history_store.py los fija.
 
 Reglas duras:
 - NUNCA debe tumbar una notificación: todo es best-effort en try/except.

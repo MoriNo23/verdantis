@@ -38,6 +38,18 @@ La fila de app y el título SHALL arrancar a la altura del borde superior del sl
 - **WHEN** se mide la distancia entre la fila de app y el título/body
 - **THEN** es la misma en todos los toasts (no existe el gap extra de 18 px de la variante sin imagen)
 
+### Requirement: El nombre de la app se centra en su icono
+
+El texto de la fila de app SHALL tener su caja de tinta centrada verticalmente en el slot de 16 px del logo: una línea imaginaria por el centro del icono SHALL cortar el texto por su medio. El centrado SHALL calcularse sobre la caja de tinta real —no sobre la baseline ni con un desplazamiento fijo—, para que no dependa del tamaño de fuente ni de la escala de resolución.
+
+#### Scenario: El texto se centra en el icono
+- **WHEN** se renderiza un toast con logo de 16 px resuelto o sintetizado
+- **THEN** el centro de la tinta del nombre de la app coincide con el centro del icono (±2 px)
+
+#### Scenario: El centrado no depende de la fuente
+- **WHEN** el nombre de la app tiene descendente ("Q", "J") o la escala de resolución cambia el tamaño de fuente
+- **THEN** el centro de la tinta sigue coincidiendo con el centro del icono (±2 px)
+
 ### Requirement: Columna de texto única
 
 Todos los toasts SHALL usar la misma columna de texto de 240 px (360 − 14 − 80 − 12 − 14). La variante de columna ancha sin imagen desaparece, y las fuentes de título y cuerpo son las mismas para todos los toasts.
