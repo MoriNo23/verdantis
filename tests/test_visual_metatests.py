@@ -11,12 +11,7 @@ que la suite visual "ve" con ojos numéricos:
 3. Si los colores de accent se rompieran -> test de color fallaría.
 4. Si las dimensiones de la card se rompieran -> test de layout fallaría.
 """
-import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "wayland")
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 import wayland_popup as wp
 

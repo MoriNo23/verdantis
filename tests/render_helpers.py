@@ -8,11 +8,6 @@ lo hace dentro de las funciones, después de que el test ya importó
 wayland_popup (que fija la 3.0).
 """
 import math
-import os
-import sys
-
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import cairo
 

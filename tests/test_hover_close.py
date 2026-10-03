@@ -10,11 +10,6 @@ Especificacion:
     esquina fallaba el click y el fall-through abria el video/URL.
   - Click en la franja -> cierra el toast (no dispara on_click/ActionInvoked).
 """
-import os
-import sys
-
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import wayland_popup as wp
 from wayland_popup import NotificationWidget, WaylandPopup

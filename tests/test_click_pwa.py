@@ -6,10 +6,7 @@ xdg-open queda reservado para apps NATIVAS sin actions que traen URL.
 Contrato estilo dunst: accion O url, mutuamente excluyentes.
 """
 import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 from unittest import mock
 

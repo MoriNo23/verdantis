@@ -9,15 +9,11 @@ Estos tests validan el fix en wayland_popup.py:
 - _icon_from_theme usa Gtk.IconTheme.get_for_screen() (no get_default())
 """
 import os
-import sys
 import base64
 
-os.environ.setdefault("GDK_BACKEND", "wayland")
 
 if not os.environ.get("WAYLAND_DISPLAY") and not os.environ.get("DISPLAY"):
     os.environ["GDK_BACKEND"] = "offscreen"
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import gi
 gi.require_version("Gtk", "3.0")

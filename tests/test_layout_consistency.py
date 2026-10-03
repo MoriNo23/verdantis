@@ -16,11 +16,6 @@ puntos REALES (verificados con render antes de este fix):
 Invariants de este test: el contenido ancla al padding inferior con
 cualquier combinación de flags, y el stack vive en _rows_above_body.
 """
-import os
-import sys
-
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import pytest
 

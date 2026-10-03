@@ -11,10 +11,7 @@ apps estén instaladas): el match exacto por Name también cubre PWAs — un
 brave-<appid>.desktop tiene Name=YouTube, así que "YouTube" resuelve igual.
 """
 import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 # wayland_popup PRIMERO: fija Gdk 3.0 antes de que el import suelto de Gdk
 # cargue 4.0 y crashee (pitfall documentado en AGENTS.md).

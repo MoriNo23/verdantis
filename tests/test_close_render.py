@@ -13,11 +13,7 @@ pixel-centering), X stroke pixels are 100% opaque. Without it, they'd be
 semi-transparent (A < 255) from round-cap anti-aliasing.
 """
 import os
-import sys
 import math
-
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import cairo
 import inspect

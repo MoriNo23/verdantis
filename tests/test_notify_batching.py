@@ -5,11 +5,6 @@ aparecer todas de golpe: el manager las encola y las muestra una por vez cada
 STAGGER_MS, respetando prioridad (urgency). Estos tests inyectan un scheduler
 falso (sin GLib ni display Wayland) y manejan el drenado de la cola a mano.
 """
-import os
-import sys
-
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import verdantis_daemon as vd
 

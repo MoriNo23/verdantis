@@ -9,10 +9,6 @@ diagnosticar (avatar_source dice de dónde salió el slot izquierdo).
 El directorio se inyecta con set_data_dir (tests nunca tocan ~/.local).
 """
 import os
-import sys
-
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import gi
 gi.require_version("GdkPixbuf", "2.0")

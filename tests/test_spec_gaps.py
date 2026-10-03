@@ -11,11 +11,7 @@ Confirmado contra mako/dunst/KDE (notification.cpp:407-438):
   KDE lee urgency como .toInt() aceptando byte; resident y transient como bool;
   category como string. mako lee urgency con sd_bus_read "y" (byte).
 """
-import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from verdantis_daemon import NotificationManager
 

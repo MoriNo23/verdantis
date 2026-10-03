@@ -3,11 +3,6 @@ Tests de helpers de presentación de wayland_popup:
 - _get_app_display_name: display name con match EXACTO, sin caer en PWA difusos.
 - _strip_urls: el texto visible del body no muestra URLs (es un botón).
 """
-import sys
-import os
-
-os.environ.setdefault("GDK_BACKEND", "wayland")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import wayland_popup as wp
 

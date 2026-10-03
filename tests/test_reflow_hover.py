@@ -14,11 +14,7 @@ El contrato (ambas direcciones, según el spec):
   - el puntero sigue DENTRO → la franja se mantiene (no debe quedar oculta
     teniéndola).
 """
-import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 # wayland_popup PRIMERO: fija Gdk 3.0 (pitfall de AGENTS.md).
 import wayland_popup as wp

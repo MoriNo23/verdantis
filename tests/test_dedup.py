@@ -19,11 +19,7 @@ Reglas:
 - Normalización: mayúsculas y espacios/tabs colapsados no rompen la igualdad.
 - Contenido distinto -> 2 entradas.
 """
-import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from verdantis_daemon import NotificationManager, _dedup_key
 
@@ -157,3 +153,43 @@ def test_replace_burst_keeps_single_toast():
     assert len(m._active) == 1
     # la dedup apunta a la última del flood
     assert len(m._dedup) == 1
+
+
+def test_duplicate_active_is_replaced_not_stacked():
+    """Duplicado que llega cuando la 1ra YA está activa (visible): la dedup
+    cierra la activa y encola la nueva — nunca quedan dos iguales apiladas.
+
+    (Portado de test_notify_dedup.py en la fusión de suites: era el único
+    caso que ejercitaba el reemplazo sobre una toast VISIBLE, no pendiente.)"""
+    m = NotificationManager()
+    m.set_dbus(FakeBus())
+    nid1 = _notify(m)
+    while m._pending:
+        m._pump()          # nid1 ya visible (activa)
+    assert len(m._active) == 1
+    nid2 = _notify(m)      # mismo contenido, mientras nid1 sigue activa
+    while m._pending:
+        m._pump()
+    shown = [nid for nid, _ in m._active]
+    assert shown == [nid2], (
+        "la toast activa debe ser reemplazada por la nueva, no apilada"
+    )
+    assert len(m._active) == 1
+
+
+def test_duplicate_suppressed_within_window_then_allowed_after():
+    """Secuencia completa en el mismo manager: dentro de la ventana el dup
+    reemplaza (queda 1 pendiente); con la ventana vencida un 3er aviso igual
+    vuelve a ser legítimo (2 pendientes, id nuevo).
+
+    (Portado de test_notify_dedup.py en la fusión de suites: cubría la
+    transición suprimida->permitida con estado compartido.)"""
+    m = NotificationManager()
+    m.set_dbus(FakeBus())
+    nid1 = _notify(m)
+    nid2 = _notify(m)               # dentro de la ventana: reemplaza a nid1
+    assert len(m._pending) == 1
+    m.DEDUP_WINDOW = -1.0           # ventana vencida: avisos separados son legítimos
+    nid3 = _notify(m)
+    assert len(m._pending) == 2
+    assert nid3 not in (nid1, nid2)

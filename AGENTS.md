@@ -42,9 +42,13 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   (`DISEÑO-DEMOS/herramientas/validar_geometria_tablero.py --self-test`) corre
   desde ese worktree, porque deriva la geometría de `src/`. Tras cambiar el
   layout en `src/`: `git merge main` ahí y re-validar.
-- Los tests son headless: importan módulos con `os.environ.setdefault("GDK_BACKEND","offscreen")`
-  ANTES de importar. `wayland_popup` forza `GDK_BACKEND=wayland` al importarse, así que
-  el test debe pisarlo antes o no arranca display.
+- Los tests son headless: `tests/conftest.py` es el dueño del `GDK_BACKEND` (wayland
+  si hay `WAYLAND_DISPLAY`, offscreen si no) y del path hacia `src/` — corre antes que
+  cualquier módulo de test, así que los archivos no repiten ese preámbulo.
+  `wayland_popup` forza `GDK_BACKEND=wayland` al importarse, por eso el env debe
+  fijarse antes de importarlo. Excepción: `test_version_constant.py` conserva su
+  propio path porque declara que debe correr aislado. El orden "wayland_popup
+  primero entre los imports gi" se mantiene DENTRO de cada módulo (fija Gdk 3.0).
 - Convención de tests: unit + metatests de sensibilidad (test_tests_*.py que inyectan
   la versión bugueada y verifican que la suite la detecta).
 - Sin linter/type-check configurado. No correr `mypy`/`ruff` de memoria.

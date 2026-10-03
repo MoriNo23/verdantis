@@ -14,11 +14,6 @@ cierre queda escalonado como la aparicion.
 Estos tests inyectan un scheduler falso (sin GLib ni display) y drenan la
 cola a mano, leyendo el duration real de cada WaylandPopup construido.
 """
-import os
-import sys
-
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import verdantis_daemon as vd
 

@@ -6,11 +6,7 @@ body). Confirmado contra mako/dunst: el titulo es 1 linea con ellipsis.
 
 Test del widget NotificationWidget (headless, offscreen).
 """
-import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from wayland_popup import NotificationWidget
 

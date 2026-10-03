@@ -16,12 +16,8 @@ The manager's popup is replaced with an off-screen fake that records activity
 without opening real Wayland windows, but the scheduling/timing is 100% real.
 """
 import os
-import sys
 import time
 import types
-
-os.environ.setdefault("GDK_BACKEND", "wayland")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import cairo
 import gi
@@ -394,3 +390,68 @@ def test_e2e_persistent_close_button_renders_on_hover():
             if _is_x_pink(*pixels[y][x]):
                 x_pink += 1
     assert x_pink > 0, "persistent (expire_timeout=0) toast shows no close X on hover"
+
+
+# ── 4. Payload realista de navegador en un solo flujo ───────────────────────
+# (Plegado de test_real_notification.py: era un test "de EJEMPLO"; lo único que
+# no cubrían test_dbus_contract/test_spec_gaps/test_expire_timeout por separado
+# era el payload COMPLETO — hints reales + body largo con markup + actions —
+# atravesando notify() y produciendo los kwargs reales del daemon.)
+
+REAL_BODY = (
+    "Your download of <b>verdantis-0.1.0.tar.gz</b> has finished. "
+    "Click <a href=\"https://github.com/MoriNo23/verdantis\">here</a> to open "
+    "the release page. Este texto es lo bastante largo como para envolver "
+    "dentro del ancho de la tarjeta y desbordar las tres líneas visibles, "
+    "por lo que debe aparecer el botón Ver más para expandir el toast."
+)
+
+REAL_HINTS = {
+    "urgency": 1,                              # BYTE 1 = normal
+    "x-kde-urls": ["https://github.com/MoriNo23/verdantis"],  # click abre URL
+    "desktop-entry": "firefox",
+    "accent": "#89b4fa",
+}
+
+
+def test_e2e_realistic_browser_payload_flow():
+    """Un payload realista de navegador — hints completos (urgency byte,
+    x-kde-urls, desktop-entry, accent), body largo con markup y actions —
+    atraviesa el manager real: notify() parsea los hints como en producción
+    y _show_popup recibe los kwargs reales del daemon."""
+    mgr = vd.NotificationManager(corner="top-right")
+    built = []
+    inner_show = _fake_show(mgr)
+
+    def recording_show(nid, kwargs):
+        built.append(kwargs)
+        inner_show(nid, kwargs)
+
+    mgr._show_popup = recording_show
+    nid = mgr.notify(
+        app_name="Firefox",
+        app_icon="",
+        summary="Descarga completada",
+        body=REAL_BODY,
+        actions=["default", "Abrir"],
+        hints=dict(REAL_HINTS),
+        expire_timeout=10000,
+    )
+    _pump(0.5)  # drena -> _active poblado con el card real
+
+    # El manager registró la notificación con los datos parseados (camino real)
+    info = mgr._notifications[nid]
+    assert info["app_name"] == "Firefox"
+    assert info["desktop_entry"] == "firefox"
+    assert info["urgency"] == 1
+    # La URL del hint x-kde-urls se extrajo (click -> abre la página)
+    assert "github.com/MoriNo23/verdantis" in info["url"]
+
+    # Y el popup se construyó con los kwargs REALES del daemon
+    assert len(mgr._active) == 1
+    kw = built[0]
+    assert kw["titulo"] == "Descarga completada"
+    assert kw["cuerpo"] == REAL_BODY
+    assert kw["accent"] == "#89b4fa"
+    assert kw["urgency"] == 1
+    assert kw["duration"] == 10000

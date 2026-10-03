@@ -13,13 +13,9 @@ válida, no un placebo. Verifica dos cosas:
      deben devolver None (el bug), probando que el test lo detectaría.
 """
 import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "wayland")
 if not os.environ.get("WAYLAND_DISPLAY") and not os.environ.get("DISPLAY"):
     os.environ["GDK_BACKEND"] = "offscreen"
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 import gi
 gi.require_version("Gtk", "3.0")

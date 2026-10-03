@@ -11,11 +11,6 @@ tema ("Brave" → "brave", ver test_icon_from_theme_reintenta_en_minusculas):
 el test principal lo detecta igual por PROCEDENCIA (el avatar debe ser rojo
 del .desktop inyectado, no el logo real del tema).
 """
-import os
-import sys
-
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import gi
 gi.require_version("GdkPixbuf", "2.0")

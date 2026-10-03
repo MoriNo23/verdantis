@@ -3,12 +3,7 @@ Metatests de sensibilidad para test_action_zones.py: verifican que la suite
 DETECTARÍA la regresión al diseño viejo (pill 28x28 esquinado + botón
 expandir compacto a la derecha), los bugs que motivaron el rediseño.
 """
-import os
-import sys
 import inspect
-
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import wayland_popup as wp
 

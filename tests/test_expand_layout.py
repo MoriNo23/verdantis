@@ -15,12 +15,7 @@ texto largo desbordaba el borde. Ahora:
 
 Estos tests "ven" el layout computacionalmente, igual que test_visual.py.
 """
-import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 import wayland_popup as wp
 

@@ -14,11 +14,6 @@ reclama la franja" (la consumen `_eff_text_width`, el posicionamiento de
 permanente, franja siempre visible— y se verifica que los predicados de 1.1
 y 1.2 quedan en rojo; sin esto, esos tests serían placebos.
 """
-import os
-import sys
-
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import wayland_popup as wp
 from wayland_popup import NotificationWidget

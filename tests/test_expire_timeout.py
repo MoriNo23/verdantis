@@ -19,11 +19,7 @@ El bug actual (verdantis_daemon.py:262):
 -> convierte 0 en 6000, rompiendo requireInteraction (Pinterest/Slack/WhatsApp
    Web desaparecen a los 6s pidiendo quedarse).
 """
-import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from verdantis_daemon import NotificationManager
 from wayland_popup import WaylandPopup

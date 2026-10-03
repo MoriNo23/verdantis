@@ -15,11 +15,7 @@ Los tests son DIFERENCIALES (persistente vs. no persistente con el mismo
 cuerpo): así detectan cualquier píxel de franja aunque el tinte se solape
 con el fondo del card, en vez de depender de un color exacto.
 """
-import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 # wayland_popup PRIMERO: fija Gdk 3.0 (pitfall de AGENTS.md).
 import wayland_popup as wp

@@ -6,12 +6,9 @@ Contrato vigente (tras el fix "no abrir navegadores a lo loco"):
 - El click NUNCA lanza una ventana de la app (se eliminó el spawn → no más Firefox
   duplicados). El foco lo resuelve el sender vía ActionInvoked, o xdg-open si hay URL.
 """
-import sys
 import os
 from unittest.mock import Mock
 
-os.environ.setdefault("GDK_BACKEND", "wayland")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from verdantis_daemon import NotificationManager, _pick_action_key
 from wayland_popup import WaylandPopup

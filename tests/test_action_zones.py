@@ -13,11 +13,7 @@ Especificación (Variante 1 aprobada, adaptada al stack cairo):
   - EXPANDIR: barra full-width inferior — TODO el ancho de la franja es
     clickeable (antes solo el pill), alto _BTN_H sube 20 → 28.
 """
-import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "offscreen")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 # wayland_popup PRIMERO: fija Gdk 3.0 antes de que el import suelto de Gdk
 # cargue 4.0 y crashee (pitfall documentado en AGENTS.md).

@@ -16,11 +16,7 @@ describe cómo se pintará. Se evita depender de un display Gtk (los
 tests corren correctamente incluso sin servidor X/Wayland).
 """
 import os
-import sys
 
-os.environ.setdefault("GDK_BACKEND", "wayland")
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 import wayland_popup as wp
 
