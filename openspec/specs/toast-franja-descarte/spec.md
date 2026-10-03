@@ -40,19 +40,19 @@ El estado de visibilidad de la franja SHALL reflejar siempre la posición real d
 
 ### Requirement: Sin hover el texto del persistente usa el ancho completo
 
-Cuando el puntero no está sobre un toast persistente, su columna de texto SHALL usar el ancho completo del card: 332 px (240 px si hay avatar). El espacio de la franja no SHALL reservarse de forma permanente.
+Cuando el puntero no está sobre un toast persistente, su columna de texto SHALL ser la columna única del card: 240 px (el ancho con la imagen izquierda siempre presente). El espacio de la franja no SHALL reservarse de forma permanente.
 
 #### Scenario: Columna sin hover
 - **WHEN** un toast persistente renderiza su contenido sin puntero encima
-- **THEN** la columna de texto mide 332 px (240 px con avatar) y el texto wrappea a ese ancho
+- **THEN** la columna de texto mide 240 px y el texto wrappea a ese ancho
 
 ### Requirement: Con hover la franja reclama su ancho con re-wrap
 
-Cuando el puntero está sobre un toast persistente, la columna de texto SHALL reducirse en los 44 px de la franja (288 px; 196 px con avatar) y el contenido — cuerpo, título y barra "Ver más" — SHALL re-wrappearse dentro de la columna reducida. Ningún texto SHALL quedar dibujado debajo del tinte de la franja. Si el re-wrap cambia la altura requerida del card, el toast SHALL redimensionarse por la vía de redimensionado existente, sin que ningún bloque del card (fila de app, título, cuerpo, barra "Ver más") se solape ni desborde.
+Cuando el puntero está sobre un toast persistente, la columna de texto SHALL reducirse en los 44 px de la franja (196 px) y el contenido — cuerpo, título y barra "Ver más" — SHALL re-wrappearse dentro de la columna reducida. Ningún texto SHALL quedar dibujado debajo del tinte de la franja. Si el re-wrap cambia la altura requerida del card, el toast SHALL redimensionarse por la vía de redimensionado existente, sin que ningún bloque del card (fila de app, título, cuerpo, barra "Ver más") se solape ni desborde.
 
 #### Scenario: Re-wrap al entrar el hover
-- **WHEN** el puntero entra a un toast persistente cuyo cuerpo wrappeaba a 332 px
-- **THEN** el cuerpo re-wrappea a 288 px y la franja cubre exactamente los 44 px liberados, sin texto bajo el tinte
+- **WHEN** el puntero entra a un toast persistente cuyo cuerpo wrappeaba a 240 px
+- **THEN** el cuerpo re-wrappea a 196 px y la franja cubre exactamente los 44 px liberados, sin texto bajo el tinte
 
 #### Scenario: La barra "Ver más" respeta la columna con hover
 - **WHEN** un persistente con body largo y colapsado entra en hover
