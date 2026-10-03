@@ -37,11 +37,13 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 ## Build & test
 
 - Tests: `.venv/bin/python -m pytest tests/ -q` (~13s, 240 passed).
-- Tablero de diseño (Lunacy): vive en el worktree `../verdantis-diseno` (rama
-  `diseno-demos`, con `DISEÑO-DEMOS/` trackeado ahí). El validador geométrico
+- Tablero de diseño (Lunacy): vive en la rama `diseno-demos` (con `DISEÑO-DEMOS/`
+  trackeado ahí; NO está en main). Para tocarlo, recrear su worktree:
+  `git worktree add ../verdantis-diseno diseno-demos`. El validador geométrico
   (`DISEÑO-DEMOS/herramientas/validar_geometria_tablero.py --self-test`) corre
   desde ese worktree, porque deriva la geometría de `src/`. Tras cambiar el
-  layout en `src/`: `git merge main` ahí y re-validar.
+  layout en `src/`: `git merge main` ahí y re-validar; al terminar,
+  `git worktree remove ../verdantis-diseno` (la rama queda, solo se va el checkout).
 - Los tests son headless: `tests/conftest.py` es el dueño del `GDK_BACKEND` (wayland
   si hay `WAYLAND_DISPLAY`, offscreen si no) y del path hacia `src/` — corre antes que
   cualquier módulo de test, así que los archivos no repiten ese preámbulo.
