@@ -3,7 +3,7 @@ Tests unitarios para la resolución de iconos de proveniencia.
 
 Bug reportado: cuando una notificación NO trae imagen (image_path vacío),
 debe mostrar el icono de la app de origen (terminal, navegador, etc.) usando
-el .desktop de la app. Si esto falla, el avatar queda vacío.
+el .desktop de la app. Si esto falla, el slot de imagen izquierda queda vacío.
 
 Estos tests validan el fix en wayland_popup.py:
 - _icon_from_theme usa Gtk.IconTheme.get_for_screen() (no get_default())
@@ -103,10 +103,10 @@ def test_widget_resuelve_logo_por_nombre_de_tema():
 
 
 def test_resample_scala_con_hyper(monkeypatch):
-    """Reporte: los iconos (avatar 80px y logo de app 16px) se veían blandos
-    en pequeño porque los rescale usaban BILINEAR. Contrato: todo rescale de
-    iconos pasa por _resample con HYPER (nítido al reducir, más limpio al
-    agrandar favicons chicos al slot del avatar)."""
+    """Reporte: los iconos (imagen izquierda 80px y logo de app 16px) se veían
+    blandos en pequeño porque los rescale usaban BILINEAR. Contrato: todo
+    rescale de iconos pasa por _resample con HYPER (nítido al reducir, más
+    limpio al agrandar favicons chicos al slot de imagen izquierda)."""
     calls = []
     orig = GdkPixbuf.Pixbuf.scale_simple
 
@@ -121,7 +121,8 @@ def test_resample_scala_con_hyper(monkeypatch):
     assert out.get_width() == 80
     assert calls and all(c is GdkPixbuf.InterpType.HYPER for c in calls), (
         "el rescale de iconos debe usar HYPER; si vuelve BILINEAR los "
-        "avatares/logos se ven mal en pequeño (reporte usuario)"
+        "los slots de imagen izquierda / logos se ven mal en pequeño "
+        "(reporte usuario)"
     )
 
 
@@ -130,7 +131,8 @@ def test_resample_scala_con_hyper(monkeypatch):
 # `_resample` hacía center-crop del cuadrado central: un logo panorámico
 # (32×16) perdía los extremos laterales al entrar en el slot 16×16. El logo de
 # la fila de app se escala con `mode="contain"` (letterbox, preserva el aspect
-# ratio); el avatar 80px sigue en cover porque su clip circular es por diseño.
+# ratio); el slot de imagen izquierda de 80px sigue en cover porque su clip
+# circular es por diseño.
 
 
 def _pixbuf(w, h, extremos=False):
@@ -167,6 +169,15 @@ def _opaco_en(pb, x, y):
     n = pb.get_n_channels()
     off = y * pb.get_rowstride() + x * n
     return raw[off + 3] > 128 if n == 4 else True
+
+
+def _center_pixel(pb):
+    """(R,G,B,A) del píxel central de un pixbuf (procedencia del slot)."""
+    raw = pb.get_pixels()
+    n = pb.get_n_channels()
+    off = (pb.get_height() // 2) * pb.get_rowstride() \
+        + (pb.get_width() // 2) * n
+    return (raw[off], raw[off + 1], raw[off + 2], raw[off + 3] if n == 4 else 255)
 
 
 def test_resample_contain_no_recorta_extremos():
@@ -216,10 +227,10 @@ def test_resample_contain_cuadrado_llena_el_slot():
         )
 
 
-def test_resample_cover_sigue_centrando_para_el_avatar():
-    """cover (default)=center-crop: es lo del avatar 80px, cuyo clip circular
-    es por diseño. Sobre un 32×16 se come los dos extremos — el comportamiento
-    que el logo de 16px ya NO quiere."""
+def test_resample_cover_sigue_centrando_para_el_slot_de_imagen_izquierda():
+    """cover (default)=center-crop: es lo del slot de imagen izquierda de 80px,
+    cuyo clip circular es por diseño. Sobre un 32×16 se come los dos extremos
+    — el comportamiento que el logo de 16px ya NO quiere."""
     src = _pixbuf(32, 16, extremos=True)
     cover = wp._resample(src, 16)
     contain = wp._resample(src, 16, mode="contain")
@@ -232,11 +243,12 @@ def test_resample_cover_sigue_centrando_para_el_avatar():
         "contain es el que preserva los extremos: si no, los dos modos son "
         "indistinguibles y el test de contain no probaría nada"
     )
-    # Y el avatar circular no pide contain:
+    # Y el slot circular de 80px no pide contain:
     import inspect
     src_make = inspect.getsource(wp._make_circular)
     assert "contain" not in src_make, (
-        "el avatar 80px debe seguir en cover (clip circular por diseño)"
+        "el slot de imagen izquierda de 80px debe seguir en cover "
+        "(clip circular por diseño)"
     )
 
 
@@ -254,7 +266,8 @@ def test_no_rescale_bilinear_en_iconos():
     """Contrato de fuente: en wayland_popup NO queda ningún `InterpType.BILINEAR`
     y TODO `scale_simple` vive DENTRO de `_resample` (los dos modos, cover y
     contain, escalan por el mismo helper). Cualquier nuevo rescale de iconos
-    (avatar/logo) debe pasar por ahí; el banner (foto) mantiene su propio path
+    (imagen izquierda/logo) debe pasar por ahí; el banner (foto) mantiene
+    # su propio path
     y no aplica."""
     import inspect
     src = open(wp.__file__, encoding="utf-8").read()
@@ -313,11 +326,11 @@ def test_icon_from_theme_fallback_to_new_when_no_screen(monkeypatch):
     assert pb is None or isinstance(pb, GdkPixbuf.Pixbuf)
 
 
-def test_notificationwidget_avatar_falls_back_without_sender_image(tmpdir):
+def test_notificationwidget_image_left_falls_back_without_sender_image(tmpdir):
     """
     Contrato nuevo (fallback): sin imagen del sender (image-path/image-data),
-    el avatar cae al icono de la app — match EXACTO del .desktop (logo de
-    Brave / icono de la PWA de YouTube). Con .desktop resolvible → slot 80px.
+    el slot cae al icono de la app — match EXACTO del .desktop (logo de Brave
+    / icono de la PWA de YouTube). Con .desktop resolvible → slot 80px.
     """
     png_path = os.path.join(tmpdir, "navegador.png")
     pix = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 32, 32)
@@ -334,18 +347,34 @@ def test_notificationwidget_avatar_falls_back_without_sender_image(tmpdir):
         image_path="",
         accent="#80cbc4",
     )
-    assert widget._avatar_pb is not None, (
-        "sin imagen del sender el avatar debe caer al icono de la app (.desktop exacto)"
+    assert widget._image_left_pb is not None, (
+        "sin imagen del sender el slot debe caer al icono de la app "
+        "(.desktop exacto)"
+    )
+    # PROCEDENCIA, no solo presencia: el slot debe traer el icono INYECTADO
+    # (píxel #1e1e2e del PNG de prueba). Con el placeholder como último eslabón
+    # (contrato nuevo) la sola presencia ya no probaría el fallback: el
+    # placeholder también llena el slot.
+    assert _center_pixel(widget._image_left_pb) == (0x1E, 0x1E, 0x2E, 0xFF), (
+        "el slot debe mostrar el logo del .desktop inyectado (no el tema, no "
+        "el placeholder con la inicial): %r"
+        % (_center_pixel(widget._image_left_pb),)
     )
     # El slot izquierdo se reserva: texto con columna reducida
     assert widget._eff_text_width() <= 240
 
 
-def test_notificationwidget_no_slot_when_nothing_resolves(tmpdir):
+def test_notificationwidget_placeholder_slot_when_nothing_resolves(tmpdir):
     """
     Sin imagen del sender Y sin icono de la app resolvible (desktop con icono
-    inexistente + app_name sin icono de tema) → _avatar_pb None → el layout no
-    reserva el slot (texto a ancho completo).
+    inexistente + app_name sin icono de tema) → el slot de imagen izquierda NO
+    desaparece: cae al placeholder de 80 px y la columna de texto sigue siendo
+    la del contrato (240 px).
+
+    CONTRATO NUEVO (spec `toast-imagen-izquierda`, requirement "La imagen
+    izquierda siempre está presente"). Antes el slot quedaba vacío y el layout
+    saltaba a la variante ancha (332 px) — este test está ROJO a propósito
+    contra el código actual.
     """
     _make_desktop(tmpdir, "NavegadorZ", "navegadorz", "no_existe_icono_xyz_1234")
     _setup_cache(tmpdir)
@@ -358,15 +387,26 @@ def test_notificationwidget_no_slot_when_nothing_resolves(tmpdir):
         image_path="",
         accent="#80cbc4",
     )
-    assert widget._avatar_pb is None, (
-        "sin imagen y sin icono de app no debe haber slot de avatar fantasma"
+    assert widget._image_left_pb is not None, (
+        "nada resuelve -> el slot debe caer al placeholder con la inicial, "
+        "nunca quedar vacío (spec: La imagen izquierda siempre está presente)"
     )
-    assert widget._eff_text_width() > 240
+    assert (widget._image_left_pb.get_width(),
+            widget._image_left_pb.get_height()) == (80, 80), (
+        "el placeholder del slot mide 80x80, no %sx%s"
+        % (widget._image_left_pb.get_width(),
+           widget._image_left_pb.get_height())
+    )
+    assert widget._eff_text_width() == 240, (
+        "con el slot siempre presente no hay columna ancha: la columna es "
+        "240 px, no %s" % (widget._eff_text_width(),)
+    )
 
 
-def test_imagedata_becomes_avatar_tab_icon():
-    """image-data (lo que manda el navegador: icono del tab) → avatar 80px,
-    NO al banner grande (antes el favicon se estiraba a 260x140)."""
+def test_imagedata_becomes_image_left_tab_icon():
+    """image-data (lo que manda el navegador: icono del tab) → slot de imagen
+    izquierda de 80px, NO al banner grande (antes el favicon se estiraba a
+    260x140)."""
     pb = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 8, 8)
     pb.fill(0xFFFFFFFF)
     raw = (
@@ -379,6 +419,7 @@ def test_imagedata_becomes_avatar_tab_icon():
         icon_path="", image_path="", accent="#80cbc4",
         image_data_raw=raw,
     )
-    assert widget._avatar_pb is not None, "image-data debe poblar el avatar (icono del tab)"
+    assert widget._image_left_pb is not None, (
+        "image-data debe poblar la imagen izquierda (icono del tab)")
     assert widget._image_pb is None, "image-data NO debe ir al banner grande"
-    assert widget._eff_text_width() == 240  # con avatar: columna de texto normal
+    assert widget._eff_text_width() == 240  # con slot: columna de texto normal
