@@ -528,6 +528,10 @@ class NotificationWidget(Gtk.DrawingArea):
 
         self._expanded = False
         self._expand_rect = None
+        # Caja del slot de imagen izquierda, la publica _draw (como
+        # _expand_rect): permite comprobar que la barra "Ver más" full-width no
+        # le pisa encima.
+        self._image_left_rect = None
         self._on_resize = on_resize
         self._fraction = 1.0
         self._on_click = on_click
@@ -987,11 +991,20 @@ class NotificationWidget(Gtk.DrawingArea):
         # de imagen izquierda sigue respirando con contenido corto.
         row_h = max(text_h, icon_size, _ROW_MIN_H)
 
-        # Imagen izquierda (slot de 80 px, clip circular), centrada verticalmente
-        # en su fila. El pixbuf YA viene circular (lo recorta _make_circular);
-        # el blit rect es transparente en las esquinas. Sin anillo (rediseño:
-        # cero líneas).
-        cy = pad + (row_h - icon_size) / 2
+        # Imagen izquierda (slot de 80 px, clip circular). El pixbuf YA viene
+        # circular (lo recorta _make_circular); el blit rect es transparente en
+        # las esquinas. Sin anillo (rediseño: cero líneas).
+        #
+        # Se centra contra el BLOQUE DE TEXTO, no contra la fila entera: la barra
+        # "Ver más" es full-width por diseño (anti-misclick) y ocupa la banda de
+        # abajo de la MISMA fila, así que centrar contra todo el alto hundía el
+        # slot hasta que la barra le pintaba encima con 3+ líneas de body.
+        # `content_h` excluye la barra; el clamp mantiene el slot dentro de la
+        # fila cuando el texto es más corto que el slot.
+        content_h = text_h - (self._BTN_H + _BTN_GAP if has_more else 0)
+        offset_slot = min(max((content_h - icon_size) / 2, 0), row_h - icon_size)
+        cy = pad + offset_slot
+        self._image_left_rect = (pad, cy, pad + icon_size, cy + icon_size)
         Gdk.cairo_set_source_pixbuf(cr, self._image_left_pb, pad, cy)
         cr.rectangle(pad, cy, icon_size, icon_size)
         cr.fill()

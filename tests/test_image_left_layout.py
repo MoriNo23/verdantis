@@ -456,6 +456,53 @@ def test_el_centrado_no_depende_de_la_fuente():
         )
 
 
+# ── La barra "Ver más" no pisa la imagen izquierda ───────────────────────
+
+def test_la_barra_ver_mas_no_pisa_la_imagen_izquierda():
+    """La barra "Ver más" es FULL-WIDTH por diseño (anti-misclick: toda la
+    banda inferior es clickeable), así que ocupa también la columna del slot.
+
+    Con 3 líneas de body + barra, la fila crece, el slot se hundía al centrarse
+    contra la fila ENTERA y la barra le pintaba encima la punta de abajo del
+    círculo: el slot se centraba contra el bloque de texto, no contra la fila.
+
+    Se verifica con las cajas que publica _draw (`_image_left_rect` y
+    `_expand_rect`, el mismo patrón que ya usa _expand_rect para las zonas de
+    click) y además por píxeles: la tinta del placeholder tiene que seguir
+    llegando hasta el borde inferior de su caja (si la barra lo tapó, se
+    truncó).
+    """
+    w = _inyectar_logo(NotificationWidget(
+        "App", "", "Titulo", LONG, None, None, "#80cbc4"))
+    px = surface_pixels(alloc_and_draw(w, W, w.desired_height()))
+
+    slot = w._image_left_rect
+    barra = w._expand_rect
+    assert slot is not None and barra is not None, (
+        "con un body que desborda el cap deben existir la caja del slot "
+        "(%s) y la barra 'Ver más' (%s)" % (slot, barra)
+    )
+    assert barra[1] >= slot[3], (
+        "spec toast-imagen-izquierda / la imagen izquierda no se pisa con la "
+        "barra: la barra arranca en y=%s y el slot termina en y=%s — la banda "
+        "inferior le paint encima del círculo (slot=%s, barra=%s)"
+        % (barra[1], slot[3], slot, barra)
+    )
+
+    # La punta de abajo del círculo tiene que seguir pintada: con la barra
+    # encima, el placeholder se truncaría. El borde va en float (el centrado
+    # del slot es fraccionario), así que se redondea al px que se mira.
+    borde = int(round(slot[3]))
+    abajo_slot = [y for y in (borde - 2, borde - 1)
+                  if sum(1 for x in range(SLOT_X0, SLOT_X1)
+                         if _cerca(px[y][x][:3], PLACEHOLDER_BG, tol=8)) >= 4]
+    assert abajo_slot, (
+        "el slot no dibuja en sus últimos 2 px (y=%s..%s): algo lo tapó — "
+        "la barra 'Ver más' no debe paint encima de la imagen izquierda"
+        % (borde - 2, borde - 1)
+    )
+
+
 # ── "Columna de texto única" ─────────────────────────────────────────────
 
 def test_columna_unica_240_y_196_con_hover(nada_resuelve):
