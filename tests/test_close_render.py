@@ -83,6 +83,7 @@ def _render_and_load(hover_close=False, name="test"):
     path = os.path.join(os.path.dirname(__file__), "..", "render_out",
                         f"{name}.png")
     path = os.path.abspath(path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     _render_close_to_png(path, hover_close=hover_close)
     return _load_pixels(path)
 
