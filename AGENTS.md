@@ -37,13 +37,13 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 ## Build & test
 
 - Tests: `.venv/bin/python -m pytest tests/ -q` (~13s, 240 passed).
-- Tablero de diseño (Lunacy): vive en la rama `diseno-demos` (con `DISEÑO-DEMOS/`
-  trackeado ahí; NO está en main). Para tocarlo, recrear su worktree:
-  `git worktree add ../verdantis-diseno diseno-demos`. El validador geométrico
-  (`DISEÑO-DEMOS/herramientas/validar_geometria_tablero.py --self-test`) corre
-  desde ese worktree, porque deriva la geometría de `src/`. Tras cambiar el
-  layout en `src/`: `git merge main` ahí y re-validar; al terminar,
-  `git worktree remove ../verdantis-diseno` (la rama queda, solo se va el checkout).
+- Mockups del toast: viven en `mockups/` (app Next.js + wireframe-ui, parte
+  de main). Correr con `pnpm dev` dentro de la carpeta y editar el JSX
+  directamente — tokens en `mockups/src/lib/toast-tokens.ts` con la constante
+  original de `wayland_popup.py` comentada en cada valor. Sin validador: los
+  mockups son documentación visual y PUEDEN divergir; la verdad del
+  comportamiento son los specs de `openspec/specs/` y el código. (El tablero
+  anterior se retiró con este cambio; recuperable por `ba091a4` en git.)
 - Los tests son headless: `tests/conftest.py` es el dueño del `GDK_BACKEND` (wayland
   si hay `WAYLAND_DISPLAY`, offscreen si no) y del path hacia `src/` — corre antes que
   cualquier módulo de test, así que los archivos no repiten ese preámbulo.

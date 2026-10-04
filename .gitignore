@@ -18,6 +18,8 @@ htmlcov/
 # QA / artifacts generados
 render_out/
 mutants/
+node_modules/
+.next/
 E2E_VERIFICATION.md
 QA_*_REPORT_*.md
 tests/qa_size_test.py
