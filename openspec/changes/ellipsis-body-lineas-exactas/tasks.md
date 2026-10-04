@@ -36,7 +36,7 @@
 
 ## 3. Tablero de diseño (design D4, knock-on de alturas)
 
-- [ ] 3.1 Recrear el worktree de diseño on-demand (`git worktree add ../verdantis-diseno diseno-demos`), `git merge main`, y re-derivar: `python3 DISEÑO-DEMOS/herramientas/validar_geometria_tablero.py --self-test` regenera `manifiesto_esperado.json` con la altura nueva del caso "body largo" (3 líneas reales + barra) — verificación: self-test en verde con las alturas re-derivadas impresas.
+- [x] 3.1 Recrear el worktree de diseño on-demand (`git worktree add ../verdantis-diseno diseno-demos`), `git merge main`, y re-derivar: `python3 DISEÑO-DEMOS/herramientas/validar_geometria_tablero.py --self-test` regenera `manifiesto_esperado.json` con la altura nueva del caso "body largo" (3 líneas reales + barra) — verificación: self-test en verde con las alturas re-derivadas impresas.
 - [ ] 3.2 Actualizar el mock "04 · Body largo + Ver más" del documento Lunacy a la altura re-derivada, re-exportar `manifiesto_real.json` y `--comparar` verde capa por capa — verificación: `--comparar` exit 0; commit `chore:` en `diseno-demos` y `git worktree remove ../verdantis-diseno` (la rama queda).
 
 ## 4. Release y verificación en vivo
