@@ -35,4 +35,6 @@
 
 ## 5. Verificación con el usuario
 
-- [ ] 5.1 `pnpm dev` en vivo: el usuario abre el navegador, mira las variantes y edita algo trivial (un texto de un mockup) recargando — verificación: el usuario confirma que se ve como el toast real y que editar es directo; ajustes cosméticos que salgan se aplican en el mismo paso.
+- [x] 5.1 `pnpm dev` en vivo: el usuario abre el navegador, mira las variantes y edita algo trivial (un texto de un mockup) recargando — verificación: el usuario confirma que se ve como el toast real y que editar es directo; ajustes cosméticos que salgan se aplican en el mismo paso.
+
+  **Cerrado**: el usuario revisó el mockup (las 3 rutas en 200) y sus observaciones resultaron ser del TOAST REAL, no del mockup ("los bugs son del toast"): (1) botones "pegados" en persistente con 2 botones y (2) deformación del toast de abajo — ambos reportados como intermitentes y ya no reproducen según el usuario ("ya se ve arreglado"); el path del restack quedó auditado (`_resize_card` → `on_resized` → `_reflow_stack` cableado). Sin ajustes cosméticos pedidos al mockup.
