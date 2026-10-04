@@ -381,6 +381,13 @@ def _body_metrics(cuerpo, width, font_size=13, max_lines=None):
         layout.set_text(cuerpo, -1)
     layout.set_width(int(max(1.0, width) * Pango.SCALE))
     layout.set_wrap(Pango.WrapMode.WORD_CHAR)
+    # Justificado: los renglones parciales estiran sus espacios inter-palabra
+    # hasta el margen de la columna, así no queda el hueco del corte al final
+    # (spec del wrap del body; la MISMA línea va en _draw_text para que la
+    # medición y el dibujado envuelvan igual). Solo estira espacios: los cortes
+    # de línea no se mueven y ninguna palabra se parte — para eso el wrap sigue
+    # siendo WORD_CHAR y no CHAR.
+    layout.set_justify(True)
     if max_lines:
         # Presupuesto del cap = N × la altura REAL de la línea (spec
         # `toast-body-colapso`, D1). Se mide del layout YA configurado —font,
@@ -905,6 +912,8 @@ class NotificationWidget(Gtk.DrawingArea):
             layout.set_text(text, -1)
         layout.set_width(int(w * Pango.SCALE))
         layout.set_wrap(Pango.WrapMode.WORD_CHAR)
+        # Justificado, igual que `_body_metrics` (spec del wrap del body).
+        layout.set_justify(True)
 
         if max_lines > 0:
             # Misma fórmula del presupuesto que `_body_metrics` (spec

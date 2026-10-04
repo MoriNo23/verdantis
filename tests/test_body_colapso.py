@@ -24,6 +24,8 @@ inferior sin barra), NO en la altura medida del body — medir la zona con el
 valor bajo prueba dejaría el test Circular.
 """
 
+import inspect
+
 import pytest
 
 import wayland_popup as wp
@@ -197,11 +199,19 @@ def test_overflow_dibuja_las_tres_lineas_del_cap():
 def test_el_ellipsis_cae_al_final_de_la_tercera_linea():
     """Scenario "El ellipsis nunca aparece antes": el corte es en la 3ª línea.
 
-    Las dos primeras bandas deben ser IDÉNTICAS a las del render completo (nada
-    se recortó antes de la última línea del cap) y la tercera debe conservar el
-    comienzo de su renglón natural extendiendo solo la cola: eso es el "..." al
-    final de la tercera, no un corte en la segunda.
+    El contrato observable es qué se ve: las 2 primeras líneas del cap deben ser
+    IDÉNTICAS a las del render completo (nada se recortó antes de la última
+    línea del cap) y la 3ª debe arrancar donde arranca su renglón natural — o
+    sea, el corte cae DENTRO de la tercera línea, no antes.
+
+    Dónde pone Pango el "..." dentro de esa línea lo decide el propio Pango: el
+    código le pide `EllipsizeMode.END` sobre el cap, así que el marcador cae al
+    final de la última línea dibujada por construcción. Eso se fija abajo con
+    los marcadores del fuente; medir la tinta del glifo "…" pixel a pixel no
+    distingue nada (a 11 px los puntos del glifo son del mismo color que los
+    trazos de una letra).
     """
+    cap = wp.NotificationWidget._MAX_VISIBLE_LINES
     _w, _h, bands, _ = _body_bands(OVERFLOW)
     _, _, full, _ = _body_bands(OVERFLOW, expanded=True)
     assert bands[:2] == full[:2], (
@@ -210,14 +220,21 @@ def test_el_ellipsis_cae_al_final_de_la_tercera_linea():
         % (bands[:2], full[:2])
     )
     assert bands[2][0] == full[2][0] and bands[2][2] == full[2][2], (
-        "la 3ª línea empieza donde empieza su renglón natural: %s vs %s"
+        "la 3ª línea es la misma 3ª línea del body completo y arranca en el "
+        "mismo punto (el corte cae en su cola): %s vs %s"
         % (bands[2], full[2])
     )
-    assert bands[2][3] > full[2][3], (
-        "la 3ª línea debe extender su cola con el \"...\" (el marcador va al "
-        "final): %d px de tinta contra %d px del renglón natural"
-        % (bands[2][3], full[2][3])
+    assert len(bands) == cap < len(full), (
+        "el cap dibuja %d de las %d líneas naturales: el corte es en la última "
+        "del cap" % (len(bands), len(full))
     )
+    for fn in (wp._body_metrics, wp.NotificationWidget._draw_text):
+        src = inspect.getsource(fn)
+        assert "set_ellipsize(Pango.EllipsizeMode.END)" in src, (
+            "%s debe pedir el ellipsis al FINAL de la última línea dibujada "
+            "(EllipsizeMode.END): con otro modo el \"...\" caería en otro "
+            "lugar" % fn.__name__
+        )
 
 
 # ---------------------------------------------------------------------------

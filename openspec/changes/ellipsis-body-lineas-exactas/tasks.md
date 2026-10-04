@@ -12,6 +12,28 @@
 - [x] 2.2 Metatest de sensibilidad (convención `test_tests_*.py`): inyectar la versión bugueada (la heurística `fs × 1.6` restaurada) y verificar que los tests de 1.x/2.1 la detectan — verificación: el metatest pasa porque el contrato se rompe con el bug inyectado.
 - [x] 2.3 Suite completa verde con el comando documentado — verificación: `.venv/bin/python -m pytest tests/ -q` con 0 failed; conteo antes/después documentado (los tests de layout que fijan alturas de card con overflow se actualizan al valor exacto nuevo en el mismo commit).
 
+## 2b. Ajuste al margen (spec `toast-body-ajuste`, design D4bis)
+
+- [x] 2b.1 Test "el renglón se justifica hasta el margen": el hueco del corte
+  (23-43 px medidos en vivo) no debe quedar — criterio calibrado por la propia
+  línea (el hueco final no puede ser más ancho que el espacio más ancho del
+  mismo renglón, porque el espacio del corte no se estira igual y medir contra
+  el margen exacto fallaría por antialiasing). Verificación: falla con el
+  código actual (hueco de 23 px a font 11 y 13 px a font 9) y en las dos
+  escalas (`font_scale` 0.85 y 1.0).
+- [x] 2b.2 Test de que el hueco existía de verdad (premisa): la referencia sin
+  `set_justify` tiene un renglón con ≥20 px de hueco, para que el assert del
+  margen no sea un placebo.
+- [x] 2b.3 Implementación: `layout.set_justify(True)` en las dos gemelas
+  (`_body_metrics` y `_draw_text`), wrap sigue siendo `WORD_CHAR`. La misma
+  línea en las dos, como el presupuesto.
+- [x] 2b.4 Metatest de sensibilidad (`test_tests_body_wrap.py`): inyecta la
+  versión sin `set_justify` (misma técnica de recompilar el fuente sustituyendo
+  una línea) y verifica que el contrato queda en rojo; más el smoke de que la
+  versión real sí justifica.
+- [x] 2b.5 Verificación en vivo: el body de xat se ve con los 3 renglones
+  llenando el margen, sin palabras partidas y con el "..." al final del tercero.
+
 ## 3. Tablero de diseño (design D4, knock-on de alturas)
 
 - [ ] 3.1 Recrear el worktree de diseño on-demand (`git worktree add ../verdantis-diseno diseno-demos`), `git merge main`, y re-derivar: `python3 DISEÑO-DEMOS/herramientas/validar_geometria_tablero.py --self-test` regenera `manifiesto_esperado.json` con la altura nueva del caso "body largo" (3 líneas reales + barra) — verificación: self-test en verde con las alturas re-derivadas impresas.

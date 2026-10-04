@@ -1,5 +1,11 @@
 # Design
 
+> **Alcance ampliado durante la aplicación (2026-10-04).** El change nació para
+> el cap del "..." (spec `toast-body-colapso`). Al verificar en vivo, el usuario
+> señaló que el renglón dejaba hueco al final; se añadió la spec
+> `toast-body-ajuste` (justificar) y se acuerdo aplicar el wrap ANTES de
+> re-derivar el tablero (D4), para que las alturas se deriven una sola vez.
+
 ## Context
 
 Ver `proposal.md` (Why) y el delta `toast-body-colapso`. Estado verificado empíricamente durante la exploración (repro headless con el font map y Manrope de producción):
@@ -16,13 +22,16 @@ Ver `proposal.md` (Why) y el delta `toast-body-colapso`. Estado verificado empí
 **Goals:**
 
 - El "..." cae al final de la línea exacta del cap (3 con overflow; nada en bodies de ≤2 líneas).
+- Los renglones del body llegan al margen de la columna, justificados y sin
+  cortar palabras (alcance ampliado, D4bis).
 - Medición y dibujado comparten literalmente la misma fórmula de presupuesto — cero posibilidad de divergencia altura/wrap.
 - Fix mínimo: solo la línea del presupuesto en dos funciones gemelas.
 
 **Non-Goals:**
 
 - No se cambia `_MAX_VISIBLE_LINES` (sigue en 3) ni la lógica de `has_more`/botón "Ver más".
-- No se rediseña el wrap (WORD_CHAR se conserva) ni el sanitizado de markup.
+- No se cambia el modo de wrap (WORD_CHAR se conserva) ni el sanitizado de markup;
+  el ajuste al margen es con `set_justify`, no reenvolviendo (D4bis).
 - No se toca el título ni el label de app (ellos ya son 1 línea + ellipsis por diseño propio).
 
 ## Decisions
@@ -38,6 +47,18 @@ Ver `proposal.md` (Why) y el delta `toast-body-colapso`. Estado verificado empí
 ### D3 — Sin slack en el presupuesto
 
 El borde exacto (presupuesto = N × line_h) mantiene la línea N — validado empíricamente. Un slack (+1 px) no cambia el resultado y añade un número mágico nuevo; se prefiere el presupuesto exacto. Si una fuente futura exigiera slack, el test del contrato lo dirá con el nombre del caso.
+
+### D4bis — Justificar en vez de `CHAR` para llenar el margen
+
+Al verificar en vivo, el renglón 1 del body dejaba 23-43 px de hueco: con
+`WORD_CHAR` Pango corta en palabra y deja el espacio del corte al final. Se
+eligió `Pango.Layout.set_justify(True)` (Pango ≥1.50: booleano, no el enum;
+estira los espacios inter-palabra de los renglones parciales). *Alternativas
+descartadas*: `WrapMode.CHAR` llena el margen pero parte palabras ("amistos/o") —
+inaceptable en prosa corta; `CHAR` + guionado no existe en Pango (no hyphenate);
+`set_justify_last_line` no se toca: la última línea del párrafo queda a la
+izquierda, que es lo correcto. El wrap sigue siendo `WORD_CHAR` (justificar
+mueve los espacios, no los cortes) y la misma línea va en las dos gemelas.
 
 ### D4 — Knock-on del tablero como tarea del propio change
 
