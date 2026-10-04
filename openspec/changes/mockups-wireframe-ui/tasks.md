@@ -29,7 +29,9 @@
 - [x] 4.2 AGENTS.md: reemplazar la nota del tablero Lunacy (rama + worktree on-demand) por `mockups/` (documentación visual, `pnpm dev` dentro, edición directa del JSX, sin validador — la verdad son los specs de main) — verificación: grep de AGENTS.md sin "Lunacy"/"diseno-demos" y con la nota nueva de mockups.
 
   **Hecho**: la nota apunta a `mockups/` con la advertencia de divergencia y el SHA de recuperación (`ba091a4`) documentado.
-- [ ] 4.3 Commit `chore:` en español con todo (mockups/ + .gitignore + AGENTS.md + los artifacts del change) — verificación: `git status --short` limpio y `git log -1 --stat` muestra mockups/ sin node_modules.
+- [x] 4.3 Commit `chore:` en español con todo (mockups/ + .gitignore + AGENTS.md + los artifacts del change) — verificación: `git status --short` limpio y `git log -1 --stat` muestra mockups/ sin node_modules.
+
+  **Hecho**: commit `6dcde30 chore: mockups del toast con wireframe-ui — el tablero Lunacy se retira` (45 archivos, +8842; el grep de "node_modules" en el --stat solo matchea el mensaje del commit, ningún archivo). Status limpio.
 
 ## 5. Verificación con el usuario
 
