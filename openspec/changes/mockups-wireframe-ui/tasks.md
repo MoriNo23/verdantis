@@ -25,7 +25,7 @@
 
 ## 4. Limpieza Lunacy y docs
 
-- [ ] 4.1 Borrar la rama `diseno-demos` (`git branch -D diseno-demos`; todo commiteado → recuperable por SHA en el historial) — verificación: `git branch -a` no la lista y `git log diseno-demos` antes del borrado documenta el último SHA en la task.
+- [x] 4.1 Borrar la rama `diseno-demos` (`git branch -D diseno-demos`; todo commiteado → recuperable por SHA en el historial) — verificación: `git branch -a` no la lista y `git log diseno-demos` antes del borrado documenta el último SHA en la task.
 - [x] 4.2 AGENTS.md: reemplazar la nota del tablero Lunacy (rama + worktree on-demand) por `mockups/` (documentación visual, `pnpm dev` dentro, edición directa del JSX, sin validador — la verdad son los specs de main) — verificación: grep de AGENTS.md sin "Lunacy"/"diseno-demos" y con la nota nueva de mockups.
 
   **Hecho**: la nota apunta a `mockups/` con la advertencia de divergencia y el SHA de recuperación (`ba091a4`) documentado.
