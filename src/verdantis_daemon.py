@@ -18,7 +18,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.8.0"
+VERSION = "0.8.1"
 
 
 def _is_browser(app_name, desktop_entry):

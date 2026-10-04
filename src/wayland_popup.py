@@ -382,7 +382,16 @@ def _body_metrics(cuerpo, width, font_size=13, max_lines=None):
     layout.set_width(int(max(1.0, width) * Pango.SCALE))
     layout.set_wrap(Pango.WrapMode.WORD_CHAR)
     if max_lines:
-        layout.set_height(max_lines * int(font_size * 1.6 * Pango.SCALE))
+        # Presupuesto del cap = N × la altura REAL de la línea (spec
+        # `toast-body-colapso`, D1). Se mide del layout YA configurado —font,
+        # markup, ancho y wrap de ESTE body— y no del tamaño de fuente: la
+        # aproximación `font_size × 1.6` daba 17.6 px contra los 21 px reales
+        # de Manrope 11, así que el cap cortaba una línea antes y un body de
+        # exactamente 2 líneas quedaba en 1 línea + "..." sin "Ver más".
+        # `_draw_text` aplica la MISMA fórmula: medición y dibujado no pueden
+        # divergir (fuente única de la métrica, ver AGENTS).
+        line_h = layout.get_line_readonly(0).get_pixel_extents()[1].height
+        layout.set_height(int(max_lines * line_h) * Pango.SCALE)
         layout.set_ellipsize(Pango.EllipsizeMode.END)
     lines = layout.get_line_count()
     _, logical = layout.get_pixel_extents()
@@ -898,7 +907,12 @@ class NotificationWidget(Gtk.DrawingArea):
         layout.set_wrap(Pango.WrapMode.WORD_CHAR)
 
         if max_lines > 0:
-            layout.set_height(max_lines * int(font_size * 1.6 * Pango.SCALE))
+            # Misma fórmula del presupuesto que `_body_metrics` (spec
+            # `toast-body-colapso`, D2): N × la altura real de la línea de este
+            # layout. La consulta de extents fuerza el shaping, así que es la
+            # línea real que se va a dibujar (con su escala y su markup).
+            line_h = layout.get_line_readonly(0).get_pixel_extents()[1].height
+            layout.set_height(int(max_lines * line_h) * Pango.SCALE)
             layout.set_ellipsize(Pango.EllipsizeMode.END)
 
         cr.move_to(x, y)
