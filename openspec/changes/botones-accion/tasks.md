@@ -32,8 +32,12 @@
 
 ## 4. Tablero de diseño (knock-on de alturas)
 
-- [ ] 4.1 Recrear el worktree de diseño on-demand (`git worktree add ../verdantis-diseno diseno-demos`), `git merge main`, `--self-test` re-deriva las alturas con fila de botones; actualizar el mock que corresponda (toast con botones) + re-exportar manifiesto real y `--comparar` verde — verificación: `--comparar` exit 0; commit `chore:` en `diseno-demos` y `git worktree remove ../verdantis-diseno`.
+- [x] 4.1 Recrear el worktree de diseño on-demand (`git worktree add ../verdantis-diseno diseno-demos`), `git merge main`, `--self-test` re-deriva las alturas con fila de botones; actualizar el mock que corresponda (toast con botones) + re-exportar manifiesto real y `--comparar` verde — verificación: `--comparar` exit 0; commit `chore:` en `diseno-demos` y `git worktree remove ../verdantis-diseno`.
+
+  **Hecho**: merge de main (28c6fd8) en `diseno-demos` + `--self-test` **VERDE** (23 posiciones coinciden, columnas (240,196)). **NINGÚN mock del tablero lleva actions** → este change aporta cero deltas de geometría (el piso del slot solo afecta toasts CON botones) → no hay mock que actualizar. El `--comparar` da 26 fallos que son del **trabajo paralelo pendiente** (`toast-body-ajuste` del usuario: alturas 112/169 sin re-exportar `manifiesto_real.json` — el propio commit de esa rama dice "la 3.2 quedó suelta"); cero fallos mencionan acciones/botones. NO se absorbe ese arreglo acá: queda como pendiente documentado de ese change. Worktree removido (la rama conserva el merge).
 
 ## 5. Release
 
-- [ ] 5.1 Bump `VERSION` → 0.9.0 dentro del commit `feat:` en español (primer feat del ciclo) y verificar tras reiniciar con `busctl --user call ... GetServerInformation` → "0.9.0" — verificación: output del busctl con la versión nueva, caps con `action-icons`, spec "1.3", y el bump reportado al usuario.
+- [x] 5.1 Bump `VERSION` → 0.9.0 dentro del commit `feat:` en español (primer feat del ciclo) y verificar tras reiniciar con `busctl --user call ... GetServerInformation` → "0.9.0" — verificación: output del busctl con la versión nueva, caps con `action-icons`, spec "1.3", y el bump reportado al usuario.
+
+  **Hecho**: commit `28c6fd8 feat: botones de accion renderizados con action-icons y spec 1.3 (VERSION 0.9.0)`; tras reiniciar: `busctl GetServerInformation` → `ssss "Verdantis" "MoriNo23" "0.9.0" "1.3"` y `GetCapabilities` → `as 7 "actions" "action-icons" "body" "body-markup" "body-hyperlinks" "icon-static" "persistence"`. **Bump MINOR 0.8.2 → 0.9.0 reportado al usuario.**
