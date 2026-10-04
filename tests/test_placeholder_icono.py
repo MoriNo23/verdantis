@@ -55,7 +55,7 @@ def _construir(monkeypatch, app_name="App", app_icon="", theme_icon=None):
             lambda name, size=16: theme_icon if size == 16 else None)
     return NotificationWidget(
         app_name, app_icon, "Titulo", "cuerpo", None, None, "#80cbc4",
-        on_click=lambda: None,
+        on_click=lambda key=None: None,
     )
 
 

@@ -284,6 +284,8 @@ _APP_ROW_H = 20      # fila del app-name
 _APP_ICON_BOX = 16   # slot cuadrado del logo de app en la fila de app
 _TITLE_ROW_H = 22    # fila del título
 _BTN_GAP = 8         # gap body → barra expandir
+_ACTIONS_ROW_H = 28  # alto de la fila de botones de acción (misma banda que "Ver más")
+_ACTIONS_GAP = 8     # gap body → fila de botones
 _CARD_RADIUS = 12    # radio del card
 
 # Tamaños de fuente NOMINALES del card — fuente única: los consumen `_draw`
@@ -301,6 +303,49 @@ _APP_FS = 10
 # logo resolvió o no.
 _PLACEHOLDER_BG = "#313244"
 _PLACEHOLDER_FG = "#a6adc8"
+
+
+def rrect(cr, x, y, w, h, r):
+    """Rounded rect path (clockwise). Vive a nivel de módulo porque la usan
+    `_draw` (card, barra "Ver más", franja) y `_draw_actions_row` (segmentos
+    de botones) — antes era una función anidada y el helper de la fila no la
+    veía. Misma forma que tests/render_helpers.rrect."""
+    r = min(r, w / 2, h / 2)
+    cr.arc(x + w - r, y + r, r, 3 * math.pi / 2, 2 * math.pi)
+    cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+    cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+    cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+    cr.close_path()
+
+
+def _parse_actions(raw):
+    """Parsea la lista plana de actions de D-Bus a pares (key, label).
+
+    Reglas (spec `toast-acciones`):
+    - pares (índices pares = key, impares = label); `default` NUNCA se
+      renderiza como botón — es el click del cuerpo, su label viaja en el
+      par pero no se dibuja;
+    - dedup por key (la primera gana — un sender que repite key es bug suyo);
+    - cap en 3 botones visibles (HIG de KDE);
+    - tolerante a listas corruptas: lista impar ignora el suelto, keys o
+      labels vacíos no generan botones, None/[] → [].
+    """
+    if not raw:
+        return []
+    out = []
+    seen = set()
+    for i in range(0, len(raw) - 1, 2):
+        key = (raw[i] or "").strip()
+        label = (raw[i + 1] or "").strip()
+        if not key or not label or key in seen:
+            continue
+        if key == "default":
+            continue
+        seen.add(key)
+        out.append((key, label))
+        if len(out) == 3:
+            break
+    return out
 
 
 def _rows_above_body(app_name, hide_title):
@@ -516,13 +561,32 @@ class NotificationWidget(Gtk.DrawingArea):
 
     def __init__(self, app_name, app_icon, titulo, cuerpo, icon_path, image_path, accent,
                  image_data_raw=None, on_click=None, on_resize=None, on_close=None,
-                 app_label=None, hide_title=False, persistent=False):
+                 app_label=None, hide_title=False, persistent=False,
+                 actions=None, action_icons=False):
         super().__init__()
         self.set_app_paintable(True)
         screen = self.get_screen()
         visual = screen.get_rgba_visual()
         if visual:
             self.set_visual(visual)
+
+        # ── Botones de acción (spec toast-acciones) ────────────────────
+        # La lista plana de D-Bus (pares key/label) se parsea UNA vez acá:
+        # default fuera (es el click del cuerpo), dedup, cap en 3, tolerante
+        # a listas corruptas. Los rects los publica `_draw` (patrón
+        # `_expand_rect`), el hover de segmento vive en `_hover_action_idx`.
+        self._actions = _parse_actions(actions)
+        self._action_rects = []          # [(x0, y0, x1, y1, key), ...]
+        self._hover_action_idx = None
+        # action-icons (hint del sender): el key de cada botón se interpreta
+        # como nombre de icono del tema ("attempt" de la spec): icono 16px +
+        # label visible; si no resuelve, label solo sin hueco.
+        self._action_icon_pbs = {}
+        if action_icons:
+            for key, _label in self._actions:
+                icono = _icon_from_theme(key, 16)
+                if icono is not None:
+                    self._action_icon_pbs[key] = _resample(icono, 16, mode="contain")
 
         # ── Screen-resolution-aware font scaling ──────────────────────
         # On small screens (low-res / HiDPI unscaled) the same px font sizes
@@ -700,6 +764,7 @@ class NotificationWidget(Gtk.DrawingArea):
     def _on_leave(self, widget, event):
         self._hover = False
         self._hover_close = False
+        self._hover_action_idx = None
         self._set_cursor(False)
         self.queue_draw()
         self._resize_por_hover()
@@ -795,6 +860,17 @@ class NotificationWidget(Gtk.DrawingArea):
         self._resize_por_hover()
 
     def _on_motion(self, widget, event):
+        # Hover de la fila de botones (spec toast-acciones): el segmento bajo
+        # el puntero intensifica su fill (22% → 38%). Aplica a CUALQUIER toast
+        # con actions — la franja de descarte sigue siendo solo persistentes.
+        over_action = None
+        for i, rect in enumerate(self._action_rects):
+            if rect[0] <= event.x <= rect[2] and rect[1] <= event.y <= rect[3]:
+                over_action = i
+                break
+        if over_action != self._hover_action_idx:
+            self._hover_action_idx = over_action
+            self.queue_draw()
         if not self._persistent:
             return
         over_close = self._in_close_rect(event.x, event.y)
@@ -834,8 +910,18 @@ class NotificationWidget(Gtk.DrawingArea):
             if x0 <= event.x <= x1 and y0 <= event.y <= y1:
                 self.toggle_expanded()
                 return True
+        # Click en un botón de acción (spec toast-acciones) → SU key: consume
+        # el evento — nada de default/URL fantasma por fall-through.
+        for rect in self._action_rects:
+            x0, y0, x1, y1, key = rect
+            if x0 <= event.x <= x1 and y0 <= event.y <= y1:
+                if self._on_click:
+                    self._on_click(key)
+                return True
+        # Click del cuerpo: action_key=None → el daemon resuelve la default
+        # (o xdg-open si no hay actions), exactamente como hoy.
         if self._on_click:
-            self._on_click()
+            self._on_click(None)
         return True
 
     def toggle_expanded(self):
@@ -883,6 +969,7 @@ class NotificationWidget(Gtk.DrawingArea):
             self._app_name, self._cuerpo, "",
             text_width=self._eff_text_width(), expanded=self._expanded,
             hide_title=self._hide_title, font_scale=self._font_scale,
+            actions_count=len(self._actions),
         )
         if self._image_pb is not None:
             h += 8 + 140
@@ -928,6 +1015,81 @@ class NotificationWidget(Gtk.DrawingArea):
         PangoCairo.show_layout(cr, layout)
         ink, logical = layout.get_pixel_extents()
 
+    def _draw_actions_row(self, cr, W, wx, actions_y, x0, x1, fs):
+        """Fila de botones de acción (spec `toast-acciones`).
+
+        Banda estilo "Ver más" (mismo lenguaje visual: fill accent 22%,
+        radio 8, hover del segmento 38%): hasta 3 segmentos con su label
+        (ellipsis Pango si no cabe) entre el body y la barra expandir.
+        Con el hint action-icons, cada key se resolvió como icono del tema
+        en `__init__` y se dibuja 16px + label (icon-only rechazado: el
+        label sigue visible, "attempt" de la spec con fallback legible).
+
+        Publica `self._action_rects` = [(x0, y0, x1, y1, key), ...] — el
+        click routing de `_on_button_press` los consulta y cada botón emite
+        SU key, consumiendo el evento. Dos pasadas (wipe claro/oscuro) igual
+        que la barra "Ver más".
+        """
+        self._action_rects = []
+        n = len(self._actions)
+        gap_seg = 8
+        seg_w = ((x1 - x0) - gap_seg * (n - 1)) / n
+        for i, (key, _label) in enumerate(self._actions):
+            sx0 = x0 + i * (seg_w + gap_seg)
+            self._action_rects.append(
+                (sx0, actions_y, sx0 + seg_w, actions_y + _ACTIONS_ROW_H, key))
+
+        accent_r, accent_g, accent_b = self._accent_rgb
+        btn_fs = max(9, round(11 * fs))
+        for clip_x, is_dark in ((wx, False), (W - wx, True)):
+            if clip_x <= 0:
+                continue
+            cr.save()
+            if clip_x < W:
+                if is_dark:
+                    cr.rectangle(wx, 0, W - wx, 10 ** 6)
+                else:
+                    cr.rectangle(0, 0, clip_x, 10 ** 6)
+                cr.clip()
+            for i, (key, label) in enumerate(self._actions):
+                sx0, sy0, sx1, sy1, _ = self._action_rects[i]
+                hover = (self._hover_action_idx == i)
+                cr.set_source_rgba(accent_r, accent_g, accent_b,
+                                   0.38 if hover else 0.22)
+                rrect(cr, sx0, sy0, sx1 - sx0, _ACTIONS_ROW_H, 8)
+                cr.fill()
+
+                icono = self._action_icon_pbs.get(key)
+                lay = PangoCairo.create_layout(cr)
+                lay.set_font_description(
+                    Pango.FontDescription("Manrope " + str(btn_fs)))
+                lay.set_text(label, -1)
+                lay.set_width(int(max(1.0, (sx1 - sx0) - 16
+                                      - (22 if icono else 0)) * Pango.SCALE))
+                lay.set_ellipsize(Pango.EllipsizeMode.END)
+                ink, _logical = lay.get_pixel_extents()
+                icon_w = _APP_ICON_BOX + 6 if icono else 0
+                content_w = icon_w + ink.width
+                tx = sx0 + ((sx1 - sx0) - content_w) / 2
+                if is_dark:
+                    cr.set_source_rgb(0.85, 0.95, 0.85)
+                else:
+                    cr.set_source_rgb(*self._left_title)
+                if icono:
+                    Gdk.cairo_set_source_pixbuf(
+                        cr, icono, tx,
+                        sy0 + (_ACTIONS_ROW_H - _APP_ICON_BOX) / 2)
+                    cr.rectangle(tx, sy0 + (_ACTIONS_ROW_H - _APP_ICON_BOX) / 2,
+                                 _APP_ICON_BOX, _APP_ICON_BOX)
+                    cr.fill()
+                # Texto centrado por su CAJA DE TINTA en la banda (mismo
+                # criterio del centrado del nombre de app en su icono).
+                centro_y = sy0 + _ACTIONS_ROW_H / 2
+                cr.move_to(tx + icon_w, centro_y - (ink.y + ink.height / 2))
+                PangoCairo.show_layout(cr, lay)
+            cr.restore()
+
+
     def _draw(self, widget, cr):
         alloc = self.get_allocation()
         W, H = alloc.width, alloc.height
@@ -960,15 +1122,6 @@ class NotificationWidget(Gtk.DrawingArea):
         _title_fs = max(9, round(_TITLE_FS * fs))
         _body_fs = max(9, round(_BODY_FS * fs))
         _app_fs = max(8, round(_APP_FS * fs))
-
-        # Helper: rounded rect path (clockwise, outer corners)
-        def rrect(cr, x, y, w, h, r):
-            r = min(r, w / 2, h / 2)
-            cr.arc(x + w - r, y + r, r, 3 * math.pi / 2, 2 * math.pi)
-            cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
-            cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
-            cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
-            cr.close_path()
 
         r = 12   # radio card: 8→12 (más moderno/redondeado, Linear usa 8-12)
 
@@ -1006,26 +1159,31 @@ class NotificationWidget(Gtk.DrawingArea):
             _, body_h = _body_metrics(self._cuerpo, text_col_w, _body_fs, max_lines=cap)
         has_more = total_lines > self._MAX_VISIBLE_LINES   # overflow => mostrar botón (debe persistir al expandir para poder contraer)
 
-        text_h = _rows_above_body(self._app_name, self._hide_title)
-        text_h += body_h
-        if has_more:
-            text_h += self._BTN_H + _BTN_GAP   # franja del botón expandir/contraer
-        # Piso de la fila: coincide con calc_card_height (max con 80) — el slot
-        # de imagen izquierda sigue respirando con contenido corto.
-        row_h = max(text_h, icon_size, _ROW_MIN_H)
+        # Bloque de texto (SIN bandas) y PISO del slot: la imagen izquierda
+        # (80px) SIEMPRE tiene que caber antes de la primera banda. Si el
+        # texto es más corto que el slot, las bandas arrancan debajo del slot
+        # y la card crece lo que haga falta (spec toast-acciones: ningún
+        # bloque se solapa; bug del live: con body corto la fila le pintaba
+        # 9px encima al círculo). Con texto largo el piso ES el bloque y las
+        # posiciones quedan exactamente como antes de este change.
+        content_h = _rows_above_body(self._app_name, self._hide_title) + body_h
+        bands_h = (self._BTN_H + _BTN_GAP if has_more else 0)
+        if self._actions:
+            bands_h += _ACTIONS_ROW_H + _ACTIONS_GAP
+        piso = max(content_h, icon_size)
+        text_h = piso + bands_h
+        # Piso de la fila: coincide con calc_card_height (fuente única).
+        row_h = max(text_h, _ROW_MIN_H)
 
         # Imagen izquierda (slot de 80 px, clip circular). El pixbuf YA viene
         # circular (lo recorta _make_circular); el blit rect es transparente en
         # las esquinas. Sin anillo (rediseño: cero líneas).
         #
-        # Se centra contra el BLOQUE DE TEXTO, no contra la fila entera: la barra
-        # "Ver más" es full-width por diseño (anti-misclick) y ocupa la banda de
-        # abajo de la MISMA fila, así que centrar contra todo el alto hundía el
-        # slot hasta que la barra le pintaba encima con 3+ líneas de body.
-        # `content_h` excluye la barra; el clamp mantiene el slot dentro de la
-        # fila cuando el texto es más corto que el slot.
-        content_h = text_h - (self._BTN_H + _BTN_GAP if has_more else 0)
-        offset_slot = min(max((content_h - icon_size) / 2, 0), row_h - icon_size)
+        # Se centra contra el PISO (bloque de texto con mínimo del slot): con
+        # texto largo es el bloque de texto (igual que antes de este change);
+        # con texto corto es el slot mismo, top-alineado con la primera línea
+        # (spec toast-imagen-izquierda: el texto arranca al top del slot).
+        offset_slot = min(max((piso - icon_size) / 2, 0), row_h - icon_size)
         cy = pad + offset_slot
         self._image_left_rect = (pad, cy, pad + icon_size, cy + icon_size)
         Gdk.cairo_set_source_pixbuf(cr, self._image_left_pb, pad, cy)
@@ -1104,16 +1262,26 @@ class NotificationWidget(Gtk.DrawingArea):
                             bcol, bcol, bold=False,
                             max_lines=(0 if expanded else cap))
 
+        # --- Fila de botones de acción (spec toast-acciones) ---
+        # Entre el body y la barra "Ver más": la fila publica sus rects
+        # (una key por segmento) y el click routing la consulta antes del
+        # click del cuerpo. Sin actions no hay fila (rects vacíos).
+        if self._actions:
+            actions_y = ty + piso + _ACTIONS_GAP
+            self._draw_actions_row(cr, W, wx, actions_y, pad,
+                                   W - pad - strip_w, fs)
+        else:
+            self._action_rects = []
+
         # Botón expandir/contraer (si hay overflow), una sola pasada
         self._expand_rect = None
         if has_more:
-            # body_top = MISMA fuente que el flujo de texto (yy). Antes este
-            # bloque recomputaba las filas a mano: sumaba el gap del HR sin
-            # fijarse en app_name (desbordaba 30px) y no aplicaba _BTN_GAP
-            # (la barra flotaba 8px sobre el padding inferior).
-            body_top = ty + _rows_above_body(self._app_name,
-                                             self._hide_title)
-            btn_y = body_top + body_h + _BTN_GAP
+            # La barra ancla contra el PISO (debajo del slot si el texto es
+            # corto) y, con botones, DEBAJO de la fila: body → botones →
+            # barra, sin solapes (spec toast-acciones).
+            btn_y = ty + piso + _BTN_GAP
+            if self._actions:
+                btn_y += _ACTIONS_ROW_H + _ACTIONS_GAP
             btn_h = self._BTN_H
             label = "Ver menos" if expanded else "Ver más"
             accent_r, accent_g, accent_b = self._accent_rgb
@@ -1264,12 +1432,15 @@ class WaylandPopup:
     def __init__(self, titulo="", cuerpo="", icon_path=None, image_path=None,
                  duration=8000, margin=16, corner="top-right", accent="#89b4fa",
                  app_name="", app_icon="", on_close=None, image_data_raw=None,
-                 on_click=None, urgency=1, app_label=None, hide_title=False):
+                 on_click=None, urgency=1, app_label=None, hide_title=False,
+                 actions=None, action_icons=False):
         self.app_name = app_name
         self.app_icon = app_icon
         self.titulo = titulo
         self.cuerpo = cuerpo.replace("\\n", "\n").replace("\\t", "\t")
         self.icon_path = icon_path
+        self.actions = actions
+        self.action_icons = action_icons
         self.image_path = image_path
         self.image_data_raw = image_data_raw
         self.duration = duration
@@ -1369,6 +1540,7 @@ class WaylandPopup:
             on_close=self._close,
             app_label=self.app_label, hide_title=self.hide_title,
             persistent=(self.duration == 0),
+            actions=self.actions, action_icons=self.action_icons,
         )
         h = self._card.desired_height() if self._card else WaylandPopup.calc_card_height(
             self.app_name, self.cuerpo, self.image_path)
@@ -1428,7 +1600,8 @@ class WaylandPopup:
 
     @staticmethod
     def calc_card_height(app_name, cuerpo, image_path, text_width=_TEXT_COL_W,
-                         expanded=False, hide_title=False, font_scale=1.0):
+                         expanded=False, hide_title=False, font_scale=1.0,
+                         actions_count=0):
         """Altura de la card según el wrap REAL del cuerpo.
 
         `text_width` es el ancho EFECTIVO de la columna de texto (card 360 − pad
@@ -1454,9 +1627,17 @@ class WaylandPopup:
             cap = min(total, NotificationWidget._MAX_VISIBLE_LINES)
             _, body_h = _body_metrics(cuerpo, text_width, _body_fs, max_lines=cap)
         text_h += body_h
-        if total > NotificationWidget._MAX_VISIBLE_LINES:
-            text_h += NotificationWidget._BTN_H + _BTN_GAP
-        row_h = max(text_h, _ROW_MIN_H)
+        # PISO del slot (spec toast-acciones, mismo bug del live): la imagen
+        # izquierda (80px) siempre cabe antes de las bandas — si el texto es
+        # más corto, la card crece y las bandas arrancan debajo del slot.
+        # Misma fórmula que `_draw` (fuente única: divergir aquí desalinea
+        # altura y wrap).
+        piso = max(text_h, _IMAGE_LEFT_W)
+        bands_h = (NotificationWidget._BTN_H + _BTN_GAP
+                   if total > NotificationWidget._MAX_VISIBLE_LINES else 0)
+        if actions_count:
+            bands_h += _ACTIONS_ROW_H + _ACTIONS_GAP
+        row_h = max(piso + bands_h, _ROW_MIN_H)
         h = _PAD + row_h + _PAD
         if image_path and os.path.exists(image_path):
             h += 8 + 140

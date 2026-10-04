@@ -62,7 +62,7 @@ def _draw_widget(persistent=False, hover=False, cuerpo=LONG, expanded=False):
     from render_helpers import alloc_and_draw
     w = NotificationWidget(
         "App", "", "T", cuerpo, None, None, "#80cbc4",
-        on_click=lambda: None, on_close=lambda: None, persistent=persistent,
+        on_click=lambda key=None: None, on_close=lambda: None, persistent=persistent,
     )
     w._hover = hover
     w._expanded = expanded
@@ -106,7 +106,7 @@ def test_click_on_strip_closes_without_opening():
     from render_helpers import alloc_and_draw
     w = NotificationWidget(
         "App", "", "T", LONG, None, None, "#80cbc4",
-        on_click=lambda: clicked.append(1),
+        on_click=lambda key=None: clicked.append(1),
         on_close=lambda: closed.append(1),
         persistent=True,
     )

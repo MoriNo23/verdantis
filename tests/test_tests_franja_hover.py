@@ -160,7 +160,7 @@ def test_metatest_la_franja_bugueada_invade_44px(monkeypatch):
     def _render_real(persistent):
         w = NotificationWidget(
             "App", "", "Titulo", SHORT, None, None, "#80cbc4",
-            persistent=persistent, on_click=lambda: None,
+            persistent=persistent, on_click=lambda key=None: None,
         )
         w._hover = True
         h = w.desired_height()

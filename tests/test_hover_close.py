@@ -19,7 +19,7 @@ def _widget(duration=0):
     """Crea un WaylandPopup headless. duration=0 -> persistente."""
     popup = WaylandPopup(
         titulo="Test", cuerpo="Body corto", icon_path=None, image_path=None,
-        duration=duration, on_close=lambda: None, on_click=lambda: None,
+        duration=duration, on_close=lambda: None, on_click=lambda key=None: None,
         app_name="Brave", accent="#80cbc4",
     )
     return popup
@@ -30,7 +30,7 @@ def test_persistent_popup_has_close_rect():
     despues de prepare() (o al menos la logica para computarlo)."""
     w = NotificationWidget(
         "Brave", "", "Pinterest", "body", None, None, "#80cbc4",
-        on_click=lambda: None, persistent=True,
+        on_click=lambda key=None: None, persistent=True,
     )
     # El widget debe conocer si es persistente
     assert w._persistent is True
@@ -40,7 +40,7 @@ def test_non_persistent_popup_has_no_close():
     """Un popup normal (duration>0) NO debe mostrar la X."""
     w = NotificationWidget(
         "Brave", "", "Pinterest", "body", None, None, "#80cbc4",
-        on_click=lambda: None, persistent=False,
+        on_click=lambda key=None: None, persistent=False,
     )
     assert w._persistent is False
 
@@ -51,7 +51,7 @@ def test_close_click_calls_on_close_not_on_click():
     clicked = []
     w = NotificationWidget(
         "Brave", "", "Test", "body", None, None, "#80cbc4",
-        on_click=lambda: clicked.append(1),
+        on_click=lambda key=None: clicked.append(1),
         on_close=lambda: closed.append(1),
         persistent=True,
     )
@@ -67,7 +67,7 @@ def test_hover_changes_cursor_to_pointer():
     """El widget debe tener eventos de enter/leave y cambiar el cursor."""
     w = NotificationWidget(
         "Brave", "", "Test", "body", None, None, "#80cbc4",
-        on_click=lambda: None,
+        on_click=lambda key=None: None,
     )
     # Debe tener los event masks de enter/leave/motion
     events = w.get_events()
@@ -82,7 +82,7 @@ def test_font_is_manrope():
     """La fuente del body debe ser Manrope (bundled, no 'sans-serif' generico)."""
     w = NotificationWidget(
         "Brave", "", "Test", "body", None, None, "#80cbc4",
-        on_click=lambda: None,
+        on_click=lambda key=None: None,
     )
     assert hasattr(w, "_BODY_FONT")
     assert "Manrope" in w._BODY_FONT

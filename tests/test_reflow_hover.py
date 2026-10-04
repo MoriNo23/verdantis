@@ -28,7 +28,7 @@ LONG = ("Cuerpo largo para que el re-wrap a 196 px cambie el número de líneas 
 def _widget(persistent=True):
     w = NotificationWidget(
         "App", "", "Titulo", LONG, None, None, "#80cbc4",
-        on_click=lambda: None, on_close=lambda: None, persistent=persistent,
+        on_click=lambda key=None: None, on_close=lambda: None, persistent=persistent,
     )
     w._expanded = True
     w.set_size_request(W, w.desired_height())

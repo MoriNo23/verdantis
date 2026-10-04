@@ -53,14 +53,14 @@ def test_get_server_information_uses_version():
         "(spec freedesktop: name=server, vendor=quien lo hace)"
     )
     assert version == VERSION, "GetServerInformation version must equal the VERSION constant"
-    assert spec_version == "1.2"
+    assert spec_version == "1.3"
     assert SEMVER.match(version)
 
 
 def test_version_is_single_source():
     # The DBus method must reference the module-level VERSION, not an inline literal.
     src = open("src/verdantis_daemon.py", encoding="utf-8").read()
-    assert 'VERSION, "1.2"' in src, "GetServerInformation must interpolate VERSION"
+    assert 'VERSION, "1.3"' in src, "GetServerInformation must interpolate VERSION"
     # No stray inline version literal left in the GetServerInformation tuple.
     assert '"0.1.0"' not in src, "stale inline version literal must be gone"
 

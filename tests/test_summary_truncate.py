@@ -15,7 +15,7 @@ def _widget(summary, body=""):
     s = summary or ""
     w = NotificationWidget(
         "Brave", "", s, body, None, None, "#80cbc4",
-        on_click=lambda: None, app_label="Brave - " + s,
+        on_click=lambda key=None: None, app_label="Brave - " + s,
         hide_title=False,
     )
     return w

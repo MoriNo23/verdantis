@@ -18,7 +18,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.8.2"
+VERSION = "0.9.0"
 
 
 def _is_browser(app_name, desktop_entry):
@@ -408,7 +408,16 @@ class NotificationManager:
             # como "" y el popup no podía resolver el logo por tema.
             "app_icon": app_icon_file or app_icon,
             "on_close": lambda nid=nid: self._on_closed(nid),
-            "on_click": lambda nid=nid: self._on_action_invoked(nid),
+            # La key viaja como PRIMER posicional (el widget llama
+            # `on_click(key)`): si el lambda la declarara después de nid, se
+            # la comería como nid (bug del live: el toast no se cerraba y
+            # notify-send nunca recibía la action). nid queda por closure.
+            "on_click": lambda action_key=None, nid=nid: self._on_action_invoked(nid, action_key),
+            # Botones de acción (spec toast-acciones): la lista plana cruda
+            # la parsea el widget (default fuera, dedup, cap 3). El hint
+            # action-icons pide interpretar cada key como icono del tema.
+            "actions": actions,
+            "action_icons": bool(hints.get("action-icons", False)),
         }
 
         # Navegadores: la línea de app = "Brave - <tab>" (el tab = summary, que es
@@ -603,7 +612,7 @@ class NotificationManager:
                 GLib.Variant("(uu)", (nid, 2)),
             )
 
-    def _on_action_invoked(self, nid):
+    def _on_action_invoked(self, nid, action_key=None):
         info = self._notifications.get(nid, {})
         actions = info.get("actions", [])
         url = info.get("url", "")
@@ -612,7 +621,9 @@ class NotificationManager:
         # DIRIGIDO al sender (no broadcast None): la spec freedesktop manda que
         # ActionInvoked vaya a la conexion que emitio Notify. Chromium/Brave solo
         # re-enfoca la PWA/tab si recibe la señal en su propia conexion.
-        action_key = _pick_action_key(actions)
+        # Con action_key (click en un BOTON, spec toast-acciones) se emite ESA
+        # key directa; None = click del cuerpo → la default como siempre.
+        action_key = action_key or _pick_action_key(actions)
         sender = info.get("sender", "") or None
 
         if action_key and self._dbus_bus:
@@ -705,12 +716,16 @@ class NotificationDaemon:
             self._manager._close_id(nid)
             invocation.return_value(None)
         elif method_name == "GetCapabilities":
-            caps = ["actions", "body", "body-markup", "body-hyperlinks",
-                    "icon-static", "persistence"]
+            # caps honestas (spec toast-acciones): "actions" ahora SE RINDE
+            # (fila de botones renderizada) y "action-icons" es real (hint →
+            # icono del tema por key, con fallback a label). "sound" NO se
+            # anuncia: los hints sound-* se siguen ignorando.
+            caps = ["actions", "action-icons", "body", "body-markup",
+                    "body-hyperlinks", "icon-static", "persistence"]
             invocation.return_value(GLib.Variant("(as)", (caps,)))
         elif method_name == "GetServerInformation":
             invocation.return_value(GLib.Variant("(ssss)", (
-                APP_NAME, VENDOR, VERSION, "1.2",
+                APP_NAME, VENDOR, VERSION, "1.3",
             )))
 
     def _handle_get_property(self, conn, sender, obj_path, iface_name, prop_name):

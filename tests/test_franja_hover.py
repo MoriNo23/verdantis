@@ -45,7 +45,7 @@ def _render(cuerpo, persistent, hover, monkeypatch, expanded=False):
     _sin_iconos_resolvibles(monkeypatch)
     w = NotificationWidget(
         "App", "", "Titulo", cuerpo, None, None, "#80cbc4",
-        on_click=lambda: None, on_close=lambda: None,
+        on_click=lambda key=None: None, on_close=lambda: None,
         persistent=persistent, hide_title=False,
     )
     w._expanded = expanded
@@ -190,7 +190,7 @@ def _con_resize(cuerpo, expanded=True):
     pedidas = []
     w = NotificationWidget(
         "App", "", "Titulo", cuerpo, None, None, "#80cbc4",
-        on_click=lambda: None, on_resize=None, persistent=True,
+        on_click=lambda key=None: None, on_resize=None, persistent=True,
     )
 
     def _resize(h):
@@ -251,7 +251,7 @@ def test_hover_no_persistente_no_redimensiona(monkeypatch):
     pedidas = []
     w = NotificationWidget(
         "App", "", "Titulo", LONG, None, None, "#80cbc4",
-        on_click=lambda: None, on_resize=pedidas.append, persistent=False,
+        on_click=lambda key=None: None, on_resize=pedidas.append, persistent=False,
     )
     w.set_size_request(W, w.desired_height())
     w._on_enter(w, None)
