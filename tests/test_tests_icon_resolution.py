@@ -110,6 +110,36 @@ def test_buggy_version_breaks_resolution(monkeypatch):
     )
 
 
+def test_no_hay_match_difuso_de_desktop():
+    """La resolución de `.desktop` es SOLO match exacto: no debe existir un
+    matcher difuso en el módulo.
+
+    AGENTS.md lo dice desde hace rato: "Resolución de `.desktop`: SOLO match
+    exacto (`_exact_desktop_file`). El match difuso rompe con PWAs de Brave
+    (`brave-<appid>.desktop`) — un 'brave' genérico cae en el PWA y muestra su
+    icono/nombre".
+
+    `_find_desktop_file` (CC 15, CRAP 121 — el peor del repo) era ese matcher
+    difuso, y no lo llamaba NADA: su único caller era un test que existía solo
+    para testearlo, y que ni siquiera entraba al camino difuso (resolvía por
+    match exacto). Este assert es el RED del change que lo borra: hoy falla,
+    mañana pasa, y si alguien lo vuelve a agregar para "usarlo algún día" el
+    test lo dice con el nombre del bug que ya mordeó una vez.
+    """
+    assert not hasattr(wp, "_find_desktop_file"), (
+        "El módulo expone un match DIFUSO de .desktop (`_find_desktop_file`). "
+        "La spec (AGENTS.md y el spec `toast-iconos-app`) exige match exacto: "
+        "el difuso rompe con los PWA de navegador (`brave-<appid>.desktop`), "
+        "donde un 'brave' genérico cae en el PWA y muestra su icono y nombre. "
+        "La vía exacta es `_exact_desktop_file`."
+    )
+    # Y la vía exacta sí existe: el assert de arriba no pasa por borrarla todo.
+    assert hasattr(wp, "_exact_desktop_file"), (
+        "Debe quedar la vía EXACTA (`_exact_desktop_file`); este metatest no "
+        "pide borrar el resolver, pide borrar el matcher difuso."
+    )
+
+
 def test_buggy_version_falls_back_to_absolute_path(monkeypatch):
     """
     El bug solo afecta iconos de TEMA. Las rutas absolutas deben seguir

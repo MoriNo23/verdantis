@@ -82,52 +82,14 @@ def _rebuild_desktop_cache():
             pass
 
 
-def _find_desktop_file(app_name):
-    if not app_name:
-        return None
-
-    if _desktop_cache is None:
-        _rebuild_desktop_cache()
-
-    key = app_name.lower().strip()
-
-    # 1) exact match (filename, wm class, or name)
-    if key in _desktop_cache:
-        return _desktop_cache[key][0]["path"]
-
-    # 2) substring match on keys
-    for k, entries in _desktop_cache.items():
-        if key in k or k in key:
-            return entries[0]["path"]
-
-    # 3) substring match on Name or WMClass
-    for k, entries in _desktop_cache.items():
-        for e in entries:
-            nm = e["Name"].lower()
-            wm = e["StartupWMClass"].lower()
-            if key in nm or key in wm:
-                return e["path"]
-
-    # 4) word-level: all words in key appear in Name or WMClass
-    words = {w.strip("()-_. ").lower() for w in key.replace("-", " ").replace("_", " ").split()}
-    words -= {""}
-    if len(words) > 1:
-        for entries in _desktop_cache.values():
-            for e in entries:
-                text = (e["Name"] + " " + e["StartupWMClass"]).lower()
-                text_words = {w.strip("()-_. ").lower() for w in text.replace("-", " ").replace("_", " ").split()}
-                if words.issubset(text_words):
-                    return e["path"]
-
-    return None
-
-
 def _get_app_icon_from_desktop(app_name, size=80, mode="cover"):
     """Icono de la app desde .desktop, SOLO con match EXACTO.
 
-    (Igual regla que _get_app_display_name: el match difuso de _find_desktop_file
-    resuelve "brave" al primer PWA instalado —brave-<appid>.desktop— y el toast
-    mostraba el icono de la web app xat. Exacto o nada → cae al tema.)
+    (Igual regla que _get_app_display_name: el match DIFUSO de .desktop resolvía
+    "brave" al primer PWA instalado —brave-<appid>.desktop— y el toast mostraba
+    el icono de la web app xat. Ese matcher se borró por código muerto (no lo
+    llamaba nadie); la regla vive acá y en el metatest
+    `test_no_hay_match_difuso_de_desktop`. Exacto o nada → cae al tema.)
 
     `mode` se pasa al `_resample` del path absoluto: el logo de 16px pide
     "contain" (sin recortes) y la imagen izquierda de 80px el default
@@ -168,10 +130,12 @@ def _get_app_display_name(app_name):
     """Nombre visible de la app.
 
     Usa SOLO match EXACTO (stem/WMClass/Name) contra los .desktop. El match
-    difuso por substring de _find_desktop_file es un arma de doble filo: "brave"
-    cae en el primer PWA instalado (brave-<appid>.desktop, ej "xat de masha") y
-    todas las notificaciones de Brave muestran ese nombre. Si no hay match
-    exacto, mostrar el app_name crudo que manda el sender (ej: "Brave").
+    difuso por substring era un arma de doble filo: "brave" caía en el primer
+    PWA instalado (brave-<appid>.desktop, ej "xat de masha") y todas las
+    notificaciones de Brave mostraban ese nombre. Ese matcher (`_find_desktop_file`)
+    se borró por código muerto; la regla queda vigilada por el metatest
+    `test_no_hay_match_difuso_de_desktop`. Si no hay match exacto, mostrar el
+    app_name crudo que manda el sender (ej: "Brave").
     """
     if not app_name:
         return ""

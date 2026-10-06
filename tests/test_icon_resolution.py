@@ -39,10 +39,17 @@ def _setup_cache(tmpdir):
     wp._rebuild_desktop_cache()
 
 
-def test_find_desktop_file_by_app_name(tmpdir):
+def test_exact_desktop_file_by_app_name(tmpdir):
+    """La vía EXACTA resuelve por nombre de app (`_exact_desktop_file`).
+
+    Este test antes cubría `_find_desktop_file` (el matcher difuso), que se
+    borró por código muerto: no lo llamaba nadie y ni siquiera entraba al camino
+    difuso, porque este caso es un match exacto. La cobertura del caso se
+    conserva, sobre la función que sí vive.
+    """
     _make_desktop(tmpdir, "ZuluBrowser", "zulubrowser", "firefox-nightly")
     _setup_cache(tmpdir)
-    found = wp._find_desktop_file("ZuluBrowser")
+    found = wp._exact_desktop_file("ZuluBrowser")
     assert found is not None
     assert found.endswith("zulubrowser.desktop")
 
