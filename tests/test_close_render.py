@@ -140,8 +140,13 @@ def test_close_x_center_is_pixel_aligned():
 
 
 def test_close_source_has_fix():
-    """The _draw method source must contain the anti-aliasing and pixel-centering fix."""
-    src = inspect.getsource(wp.NotificationWidget._draw)
+    """El pipeline de dibujado debe contener el fix de antialiasing y
+    pixel-centering de la X.
+
+    Desde `bajar-complejidad-draw` la X se dibuja en `_draw_close_strip`, no en
+    `_draw` (que quedó como orquestador); el marcador se busca en el source de
+    toda la clase para que el test siga válido si el paso vuelve a moverse."""
+    src = inspect.getsource(wp.NotificationWidget)
     assert "translate(0.5, 0.5)" in src, (
         "Missing cr.translate(0.5, 0.5) — pixel-centering required for crisp X"
     )

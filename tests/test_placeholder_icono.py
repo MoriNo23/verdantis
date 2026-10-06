@@ -132,10 +132,14 @@ def test_offset_del_texto_constante(monkeypatch):
 
 
 def test_draw_usa_offset_constante(monkeypatch):
-    """El `_draw` no debe condicionar el offset a la existencia del logo: con
-    el placeholder siempre presente el offset es el mismo en todos los casos."""
+    """El dibujado no debe condicionar el offset a la existencia del logo: con
+    el placeholder siempre presente el offset es el mismo en todos los casos.
+
+    Desde `bajar-complejidad-draw` el texto de app se dibuja en
+    `_draw_text_passes`, no en `_draw` (que quedó como orquestador); los
+    marcadores se buscan en el source de toda la clase."""
     import inspect
-    src = inspect.getsource(NotificationWidget._draw)
+    src = inspect.getsource(NotificationWidget)
     assert "20 if self._app_icon_pb else 0" not in src, (
         "el offset del texto de app sigue siendo condicional: con el "
         "placeholder debe ser una constante (layout estable)"

@@ -4,6 +4,7 @@ import re
 import ctypes
 import configparser
 import cairo
+from typing import NamedTuple
 os.environ.setdefault('GDK_BACKEND', 'wayland')
 
 import time
@@ -327,6 +328,88 @@ def _rows_above_body(app_name, hide_title):
     if not hide_title:
         rows += _TITLE_ROW_H
     return rows
+
+
+class _Layout(NamedTuple):
+    """Métrica de layout del card — el resultado de `_layout_metrics`.
+
+    Todo lo que el dibujado necesita saber de la geometría del texto, en un
+    solo valor con nombre (antes eran 9 variables sueltas en el medio de
+    `_draw`, que era 338 líneas).
+    """
+    total_lines: int      # renglones naturales del body
+    expanded: bool        # el toast está expandido (muestra todo)
+    cap: int              # renglones visibles (min(total, MAX_VISIBLE_LINES))
+    body_h: float         # alto del body ya cappeado (o natural si expandido)
+    has_more: bool        # el body desborda el cap => barra "Ver más"
+    content_h: float      # filas de arriba + body, SIN bandas
+    bands_h: float        # barra "Ver más" + fila de botones
+    piso: float           # alto mínimo de la columna de texto
+    text_h: float         # piso + bandas
+    row_h: float          # texto vs piso de fila (coincide con calc_card_height)
+
+
+class _Frame(NamedTuple):
+    """Geometría del frame que comparten los pasos del dibujado.
+
+    Sale de `_frame()` (change `bajar-complejidad-draw`): antes eran 12
+    variables sueltas en el medio de un `_draw` de 338 líneas.
+    """
+    W: int
+    H: int
+    wx: float          # frente del wipe (progreso del timer)
+    pad: int
+    strip_w: int       # ancho reservado de la franja de descarte (0 sin hover)
+    text_col_x: int
+    text_col_w: int
+    fs: float          # escala de fuente por resolución
+    title_fs: int
+    body_fs: int
+    app_fs: int
+    r: int             # radio del card
+
+
+def _layout_metrics(cuerpo, text_col_w, body_fs, app_name, hide_title,
+                    expanded, has_actions, icon_size, max_lines, btn_h):
+    """Métrica de layout del card — PURA (no toca cairo ni el widget).
+
+    Saqué de `_draw` (que sonaba a 338 líneas) para que la aritmética del stack
+    sea testeable sin display y para que el orquestador quede legible como una
+    lista de pasos. Los comentarios de cada bloque viven acá, con la fórmula.
+
+    NO es la fuente única de la altura: `calc_card_height` recalcula lo mismo
+    (ver `tests/test_layout_consistency.py`, que exige que coincidan). Unificarlas
+    es un change aparte — el radio de impacto de esa unificación es
+    `desired_height` + el stack manager + el dashboard, y queda como non-goal
+    explícito de `bajar-complejidad-draw`.
+    """
+    total_lines = _count_body_lines(cuerpo, text_col_w, body_fs)
+    cap = min(total_lines, max_lines)
+    if expanded:
+        _, body_h = _body_metrics(cuerpo, text_col_w, body_fs, max_lines=None)
+    else:
+        _, body_h = _body_metrics(cuerpo, text_col_w, body_fs, max_lines=cap)
+    # overflow => mostrar botón (debe persistir al expandir para poder contraer)
+    has_more = total_lines > max_lines
+
+    # Bloque de texto (SIN bandas) y PISO del slot: la imagen izquierda
+    # (80px) SIEMPRE tiene que caber antes de la primera banda. Si el
+    # texto es más corto que el slot, las bandas arrancan debajo del slot
+    # y la card crece lo que haga falta (spec toast-acciones: ningún
+    # bloque se solapa; bug del live: con body corto la fila le pintaba
+    # 9px encima al círculo). Con texto largo el piso ES el bloque y las
+    # posiciones quedan exactamente como antes de este change.
+    content_h = _rows_above_body(app_name, hide_title) + body_h
+    bands_h = (btn_h + _BTN_GAP if has_more else 0)
+    if has_actions:
+        bands_h += _ACTIONS_ROW_H + _ACTIONS_GAP
+    piso = max(content_h, icon_size)
+    text_h = piso + bands_h
+    # Piso de la fila: coincide con calc_card_height (fuente única).
+    row_h = max(text_h, _ROW_MIN_H)
+    return _Layout(total_lines, expanded, cap, body_h, has_more, content_h,
+                   bands_h, piso, text_h, row_h)
+
 
 # Tags de markup que Pango SOPORTA de verdad. Pango NO conoce <a> ni <img>:
 # mandarle un body con <a href> a set_markup rompe el parseo (warning
@@ -1054,49 +1137,54 @@ class NotificationWidget(Gtk.DrawingArea):
             cr.restore()
 
 
-    def _draw(self, widget, cr):
-        alloc = self.get_allocation()
-        W, H = alloc.width, alloc.height
-        if W < 10 or H < 10:
-            return
-        # Clear inicial con OPERATOR_CLEAR: deja la superficie transparente
-        # (RGBA) y evita artifacts de buffering (cajas negras) cuando el card
-        # redondeado no cubre la ventana POPUP entera (esquinas).
-        cr.save()
-        cr.set_operator(cairo.OPERATOR_CLEAR)
-        cr.paint()
-        cr.restore()
-        wx = self._wipe_x(W)
+    def _frame(self, W, H):
+        """Geometría compartida del frame (change `bajar-complejidad-draw`).
+
+        Todo lo que los pasos del dibujado necesitan del card en un solo valor
+        con nombre: antes eran 12 variables sueltas en el medio de un método de
+        338 líneas. `H` viene de la allocation del draw.
+        """
         pad = _PAD
         # El slot de imagen izquierda está SIEMPRE (spec
-        # `toast-imagen-izquierda`): la cadena termina en el placeholder con la
-        # inicial, así que la columna de texto no depende de qué resolviera.
+        # `toast-imagen-izquierda`): la cadena termina en el placeholder con
+        # la inicial, así que la columna de texto no depende de qué resolviera.
         icon_size = _IMAGE_LEFT_W
         text_col_x = pad + icon_size + _IMAGE_LEFT_GAP
         # Persistentes CON hover: la franja vertical de descarte (44px) se
         # RESERVA en la columna de texto — el texto nunca queda debajo del
         # tint. Sin hover la franja no se dibuja y no se le cede ancho.
         strip_w = self._strip_w()
-        text_col_w = W - text_col_x - pad - strip_w
-
         # Fuentes nominales por fila, escaladas por resolución
         # (self._font_scale). Las MISMAS constantes mide calc_card_height: si
         # divergieran, la barra "Ver más" dejaría de anclar al padding inferior.
         fs = self._font_scale
-        _title_fs = max(9, round(_TITLE_FS * fs))
-        _body_fs = max(9, round(_BODY_FS * fs))
-        _app_fs = max(8, round(_APP_FS * fs))
+        return _Frame(W=W, H=H, wx=self._wipe_x(W), pad=pad, strip_w=strip_w,
+                      text_col_x=text_col_x,
+                      text_col_w=W - text_col_x - pad - strip_w, fs=fs,
+                      title_fs=max(9, round(_TITLE_FS * fs)),
+                      body_fs=max(9, round(_BODY_FS * fs)),
+                      app_fs=max(8, round(_APP_FS * fs)),
+                      r=12)  # radio card: 8→12 (más moderno/redondeado, Linear usa 8-12)
 
-        r = 12   # radio card: 8→12 (más moderno/redondeado, Linear usa 8-12)
+    def _clear_surface(self, cr):
+        """Clear inicial con OPERATOR_CLEAR: deja la superficie transparente
+        (RGBA) y evita artifacts de buffering (cajas negras) cuando el card
+        redondeado no cubre la ventana POPUP entera (esquinas)."""
+        cr.save()
+        cr.set_operator(cairo.OPERATOR_CLEAR)
+        cr.paint()
+        cr.restore()
 
+    def _draw_background(self, cr, fr):
+        """Fondo del card + tinte del wipe (la parte derecha, ya recorrida)."""
         # Background — hover aclara levemente el alpha (feedback "estás sobre esto")
         bg_alpha = 0.92 if self._hover else 0.85
         cr.set_source_rgba(self._card_bg[0], self._card_bg[1], self._card_bg[2], bg_alpha)
-        rrect(cr, 0, 0, W, H, r)
+        rrect(cr, 0, 0, fr.W, fr.H, fr.r)
         cr.fill()
 
         # Wipe: clip to card shape, fill right portion
-        if wx < W:
+        if fr.wx < fr.W:
             # Tinte SUTIL: mezcla del acento hacia el fondo de la card (no un
             # bloque oscuro plano). blend=0.15 => variación leve del fondo.
             bg = self._card_bg
@@ -1106,61 +1194,123 @@ class NotificationWidget(Gtk.DrawingArea):
             dg = bg[1] + (acc[1] - bg[1]) * blend
             db = bg[2] + (acc[2] - bg[2]) * blend
             cr.save()
-            rrect(cr, 0, 0, W, H, r)
+            rrect(cr, 0, 0, fr.W, fr.H, fr.r)
             cr.clip()
-            cr.rectangle(wx, 0, W - wx, H)
+            cr.rectangle(fr.wx, 0, fr.W - fr.wx, fr.H)
             cr.set_source_rgb(dr, dg, db)
             cr.fill()
             cr.restore()
 
-        # --- Layout: real wrapped line count (coincide con _draw) ---
-        total_lines = _count_body_lines(self._cuerpo, text_col_w, _body_fs)
-        expanded = self._expanded
-        cap = min(total_lines, self._MAX_VISIBLE_LINES)
-        if expanded:
-            _, body_h = _body_metrics(self._cuerpo, text_col_w, _body_fs, max_lines=None)
-        else:
-            _, body_h = _body_metrics(self._cuerpo, text_col_w, _body_fs, max_lines=cap)
-        has_more = total_lines > self._MAX_VISIBLE_LINES   # overflow => mostrar botón (debe persistir al expandir para poder contraer)
+    def _draw_image_left(self, cr, fr, lay):
+        """Imagen izquierda (slot de 80 px, clip circular). El pixbuf YA viene
+        circular (lo recorta _make_circular); el blit rect es transparente en
+        las esquinas. Sin anillo (rediseño: cero líneas).
 
-        # Bloque de texto (SIN bandas) y PISO del slot: la imagen izquierda
-        # (80px) SIEMPRE tiene que caber antes de la primera banda. Si el
-        # texto es más corto que el slot, las bandas arrancan debajo del slot
-        # y la card crece lo que haga falta (spec toast-acciones: ningún
-        # bloque se solapa; bug del live: con body corto la fila le pintaba
-        # 9px encima al círculo). Con texto largo el piso ES el bloque y las
-        # posiciones quedan exactamente como antes de este change.
-        content_h = _rows_above_body(self._app_name, self._hide_title) + body_h
-        bands_h = (self._BTN_H + _BTN_GAP if has_more else 0)
-        if self._actions:
-            bands_h += _ACTIONS_ROW_H + _ACTIONS_GAP
-        piso = max(content_h, icon_size)
-        text_h = piso + bands_h
-        # Piso de la fila: coincide con calc_card_height (fuente única).
-        row_h = max(text_h, _ROW_MIN_H)
-
-        # Imagen izquierda (slot de 80 px, clip circular). El pixbuf YA viene
-        # circular (lo recorta _make_circular); el blit rect es transparente en
-        # las esquinas. Sin anillo (rediseño: cero líneas).
-        #
-        # Se centra contra el PISO (bloque de texto con mínimo del slot): con
-        # texto largo es el bloque de texto (igual que antes de este change);
-        # con texto corto es el slot mismo, top-alineado con la primera línea
-        # (spec toast-imagen-izquierda: el texto arranca al top del slot).
-        offset_slot = min(max((piso - icon_size) / 2, 0), row_h - icon_size)
-        cy = pad + offset_slot
-        self._image_left_rect = (pad, cy, pad + icon_size, cy + icon_size)
-        Gdk.cairo_set_source_pixbuf(cr, self._image_left_pb, pad, cy)
-        cr.rectangle(pad, cy, icon_size, icon_size)
+        Se centra contra el PISO (bloque de texto con mínimo del slot): con
+        texto largo es el bloque de texto (igual que antes de este change);
+        con texto corto es el slot mismo, top-alineado con la primera línea
+        (spec toast-imagen-izquierda: el texto arranca al top del slot)."""
+        icon_size = _IMAGE_LEFT_W
+        offset_slot = min(max((lay.piso - icon_size) / 2, 0), lay.row_h - icon_size)
+        cy = fr.pad + offset_slot
+        self._image_left_rect = (fr.pad, cy, fr.pad + icon_size, cy + icon_size)
+        Gdk.cairo_set_source_pixbuf(cr, self._image_left_pb, fr.pad, cy)
+        cr.rectangle(fr.pad, cy, icon_size, icon_size)
         cr.fill()
 
-        # --- Text in two passes ---
-        # El bloque de texto arranca AL TOP de la fila, alineado con el borde
-        # superior del slot (spec `toast-imagen-izquierda`). Antes se centraba
-        # con `(row_h - text_h) / 2` y, con el piso de 80 px del slot, la fila
-        # de app y el título quedaban hundidos ~10 px. El slot conserva su
-        # centrado `cy`; el sobrante queda bajo el body.
-        ty = pad
+    def _draw_actions(self, cr, fr, lay):
+        """Fila de botones de acción (spec toast-acciones), entre el body y la
+        barra "Ver más": la fila publica sus rects (una key por segmento) y el
+        click routing la consulta antes del click del cuerpo. Sin actions no
+        hay fila (rects vacíos)."""
+        if self._actions:
+            actions_y = fr.pad + lay.piso + _ACTIONS_GAP
+            self._draw_actions_row(cr, fr.W, fr.wx, actions_y, fr.pad,
+                                   fr.W - fr.pad - fr.strip_w, fr.fs)
+        else:
+            self._action_rects = []
+
+    def _draw_expand_bar(self, cr, fr, lay):
+        """Botón expandir/contraer (si hay overflow), una sola pasada.
+
+        La barra ancla contra el PISO (debajo del slot si el texto es corto) y,
+        con botones, DEBAJO de la fila: body → botones → barra, sin solapes
+        (spec toast-acciones)."""
+        self._expand_rect = None
+        if not lay.has_more:
+            return
+        btn_y = fr.pad + lay.piso + _BTN_GAP
+        if self._actions:
+            btn_y += _ACTIONS_ROW_H + _ACTIONS_GAP
+        btn_h = self._BTN_H
+        label = "Ver menos" if lay.expanded else "Ver más"
+        accent_r, accent_g, accent_b = self._accent_rgb
+
+        # Barra FULL-WIDTH: TODO el ancho interior de la card es clickeable
+        # (anti-misclick: antes solo el pill compacto de la derecha). En
+        # persistentes termina antes de la franja de descarte (sin overlap).
+        bar_x0 = fr.pad
+        bar_x1 = fr.W - fr.pad - fr.strip_w
+        bar_w = bar_x1 - bar_x0
+        self._expand_rect = (bar_x0, btn_y, bar_x1, btn_y + btn_h)
+
+        # Contenido (label + chevrón) CENTRADO en la barra
+        cr.select_font_face("Manrope", 0, 0)
+        cr.set_font_size(max(9, round(11 * fr.fs)))
+        ext = cr.text_extents(label)
+        fe = cr.font_extents()
+        chev_size, chev_gap = 10, 3
+        content_w = ext[4] + chev_gap + chev_size
+        tx0 = bar_x0 + (bar_w - content_w) / 2
+
+        for clip_x, is_dark in ((fr.wx, False), (fr.W - fr.wx, True)):
+            if clip_x <= 0:
+                continue
+            cr.save()
+            if clip_x < fr.W:
+                cr.rectangle((0 if not is_dark else fr.wx), 0,
+                             (clip_x if not is_dark else fr.W - fr.wx), fr.H)
+                cr.clip()
+            # Sin stroke de contorno; el affordance lo da el fill 22%
+            # (subido de 18% al quitar el borde).
+            cr.set_source_rgba(accent_r, accent_g, accent_b, 0.22)
+            rrect(cr, bar_x0, btn_y, bar_w, btn_h, 8)
+            cr.fill()
+            if is_dark:  # dark pass: texto en la parte cubierta
+                cr.set_source_rgb(0.85, 0.95, 0.85)
+            else:
+                cr.set_source_rgb(*self._left_title)
+            base_y = btn_y + btn_h / 2 + (fe[0] - fe[1]) / 2
+            cr.move_to(tx0, base_y)
+            cr.show_text(label)
+            # Chevrón relleno (triángulo) a la derecha del texto, centrado en la barra.
+            # Convención: colapsado "Ver más" ▼ (más abajo), expandido "Ver menos" ▲
+            cx0 = tx0 + ext[4] + chev_gap
+            cy = btn_y + btn_h / 2
+            if lay.expanded:
+                cr.move_to(cx0, cy + 3)       # ▲ apunta arriba (colapsar)
+                cr.line_to(cx0 + chev_size / 2, cy - 3)
+                cr.line_to(cx0 + chev_size, cy + 3)
+            else:
+                cr.move_to(cx0, cy - 3)       # ▼ apunta abajo (expandir)
+                cr.line_to(cx0 + chev_size / 2, cy + 3)
+                cr.line_to(cx0 + chev_size, cy - 3)
+            cr.close_path()
+            cr.set_source_rgb(*self._accent_rgb)   # chevrón en color acento (visible)
+            cr.fill()
+            cr.restore()
+
+    def _draw_text_passes(self, cr, fr, lay):
+        """El bloque de texto en DOS pasadas: light en la parte no cubierta
+        por el wipe y dark en la cubierta (el texto "cambia de paleta" al pasar
+        el frente del wipe).
+
+        El bloque arranca AL TOP de la fila, alineado con el borde superior del
+        slot (spec `toast-imagen-izquierda`). Antes se centraba con
+        `(row_h - text_h) / 2` y, con el piso de 80 px del slot, la fila de app
+        y el título quedaban hundidos ~10 px. El slot conserva su centrado
+        `cy`; el sobrante queda bajo el body."""
+        ty = fr.pad
 
         def draw_text_pass(cr, clip_x, is_dark):
             if clip_x < 0:
@@ -1179,25 +1329,25 @@ class NotificationWidget(Gtk.DrawingArea):
                 # App icon (logo resuelto o placeholder): el slot siempre está
                 # lleno, así que el offset del texto es una constante.
                 if self._app_icon_pb:
-                    Gdk.cairo_set_source_pixbuf(cr, self._app_icon_pb, text_col_x, yy)
-                    cr.rectangle(text_col_x, yy, _APP_ICON_BOX, _APP_ICON_BOX)
+                    Gdk.cairo_set_source_pixbuf(cr, self._app_icon_pb, fr.text_col_x, yy)
+                    cr.rectangle(fr.text_col_x, yy, _APP_ICON_BOX, _APP_ICON_BOX)
                     cr.fill()
                 cr.set_source_rgb(*acol)
                 # Label de app (puede ser "Brave - <tab>") con elipsis real de Pango
                 label = self._app_label or self._app_name
                 # tx = text_col_x + 20 (logo 16 + 4): constante, nunca condicional
                 # al logo (fija tests/test_placeholder_icono.py).
-                tx = text_col_x + 20
+                tx = fr.text_col_x + 20
                 ll = PangoCairo.create_layout(cr)
-                ll.set_font_description(Pango.FontDescription("Manrope " + str(_app_fs)))
+                ll.set_font_description(Pango.FontDescription("Manrope " + str(fr.app_fs)))
                 ll.set_text(label, -1)
-                ll.set_width(int(max(1, text_col_w - tx + text_col_x) * Pango.SCALE))
+                ll.set_width(int(max(1, fr.text_col_w - tx + fr.text_col_x) * Pango.SCALE))
                 ll.set_ellipsize(Pango.EllipsizeMode.END)
                 # El texto se CENTRA en el logo: se mide su CAJA DE TINTA real y
                 # se la alinea con la línea media del slot de 16 px. Con un
                 # desplazamiento fijo el texto caía ~5 px bajo el centro (y la
-                # base se salía del icono), y el error crecía con cada cambio
-                # de fuente. `PangoCairo.show_layout` ancla la esquina superior
+                # base se salía del icono), y el error crecía con cada cambio de
+                # fuente. `PangoCairo.show_layout` ancla la esquina superior
                 # izquierda de la caja, no la baseline: por eso el centro se
                 # corrige con los extents de tinta y no con `y + ascent`.
                 # Mismo criterio que el centrado de la inicial en
@@ -1212,184 +1362,143 @@ class NotificationWidget(Gtk.DrawingArea):
                 cr.set_source_rgb(*tcol)
                 # Título con elipsis Pango (antes cr.show_text: se salía del card)
                 ll = PangoCairo.create_layout(cr)
-                ll.set_font_description(Pango.FontDescription("Manrope Bold " + str(_title_fs)))
+                ll.set_font_description(Pango.FontDescription("Manrope Bold " + str(fr.title_fs)))
                 ll.set_text(self._titulo or "", -1)
-                ll.set_width(int(text_col_w * Pango.SCALE))
+                ll.set_width(int(fr.text_col_w * Pango.SCALE))
                 ll.set_ellipsize(Pango.EllipsizeMode.END)
-                cr.move_to(text_col_x, yy + 2)
+                cr.move_to(fr.text_col_x, yy + 2)
                 PangoCairo.show_layout(cr, ll)
                 yy += _TITLE_ROW_H
 
             # Body con wrap real + ellipsis cuando colapsa
             cr.set_source_rgb(*bcol)
-            self._draw_text(cr, self._cuerpo, text_col_x, yy, text_col_w, _body_fs,
-                            bcol, bcol, bold=False,
-                            max_lines=(0 if expanded else cap))
+            self._draw_text(cr, self._cuerpo, fr.text_col_x, yy, fr.text_col_w,
+                            fr.body_fs, bcol, bcol, bold=False,
+                            max_lines=(0 if lay.expanded else lay.cap))
 
-        # --- Fila de botones de acción (spec toast-acciones) ---
-        # Entre el body y la barra "Ver más": la fila publica sus rects
-        # (una key por segmento) y el click routing la consulta antes del
-        # click del cuerpo. Sin actions no hay fila (rects vacíos).
-        if self._actions:
-            actions_y = ty + piso + _ACTIONS_GAP
-            self._draw_actions_row(cr, W, wx, actions_y, pad,
-                                   W - pad - strip_w, fs)
-        else:
-            self._action_rects = []
-
-        # Botón expandir/contraer (si hay overflow), una sola pasada
-        self._expand_rect = None
-        if has_more:
-            # La barra ancla contra el PISO (debajo del slot si el texto es
-            # corto) y, con botones, DEBAJO de la fila: body → botones →
-            # barra, sin solapes (spec toast-acciones).
-            btn_y = ty + piso + _BTN_GAP
-            if self._actions:
-                btn_y += _ACTIONS_ROW_H + _ACTIONS_GAP
-            btn_h = self._BTN_H
-            label = "Ver menos" if expanded else "Ver más"
-            accent_r, accent_g, accent_b = self._accent_rgb
-
-            # Barra FULL-WIDTH: TODO el ancho interior de la card es clickeable
-            # (anti-misclick: antes solo el pill compacto de la derecha). En
-            # persistentes termina antes de la franja de descarte (sin overlap).
-            bar_x0 = pad
-            bar_x1 = W - pad - strip_w
-            bar_w = bar_x1 - bar_x0
-            self._expand_rect = (bar_x0, btn_y, bar_x1, btn_y + btn_h)
-
-            # Contenido (label + chevrón) CENTRADO en la barra
-            cr.select_font_face("Manrope", 0, 0)
-            cr.set_font_size(max(9, round(11 * fs)))
-            ext = cr.text_extents(label)
-            fe = cr.font_extents()
-            chev_size, chev_gap = 10, 3
-            content_w = ext[4] + chev_gap + chev_size
-            tx0 = bar_x0 + (bar_w - content_w) / 2
-
-            for clip_x, is_dark in ((wx, False), (W - wx, True)):
-                if clip_x <= 0:
-                    continue
-                cr.save()
-                if clip_x < W:
-                    cr.rectangle((0 if not is_dark else wx), 0,
-                                 (clip_x if not is_dark else W - wx), H)
-                    cr.clip()
-                # Sin stroke de contorno; el affordance lo da el fill 22%
-                # (subido de 18% al quitar el borde).
-                cr.set_source_rgba(accent_r, accent_g, accent_b, 0.22)
-                rrect(cr, bar_x0, btn_y, bar_w, btn_h, 8)
-                cr.fill()
-                if is_dark:  # dark pass: texto en la parte cubierta
-                    cr.set_source_rgb(0.85, 0.95, 0.85)
-                else:
-                    cr.set_source_rgb(*self._left_title)
-                base_y = btn_y + btn_h / 2 + (fe[0] - fe[1]) / 2
-                cr.move_to(tx0, base_y)
-                cr.show_text(label)
-                # Chevrón relleno (triángulo) a la derecha del texto, centrado en la barra.
-                # Convención: colapsado "Ver más" ▼ (más abajo), expandido "Ver menos" ▲
-                cx0 = tx0 + ext[4] + chev_gap
-                cy = btn_y + btn_h / 2
-                if expanded:
-                    cr.move_to(cx0, cy + 3)       # ▲ apunta arriba (colapsar)
-                    cr.line_to(cx0 + chev_size / 2, cy - 3)
-                    cr.line_to(cx0 + chev_size, cy + 3)
-                else:
-                    cr.move_to(cx0, cy - 3)       # ▼ apunta abajo (expandir)
-                    cr.line_to(cx0 + chev_size / 2, cy + 3)
-                    cr.line_to(cx0 + chev_size, cy - 3)
-                cr.close_path()
-                cr.set_source_rgb(*self._accent_rgb)   # chevrón en color acento (visible)
-                cr.fill()
-                cr.restore()
-
-        # Draw light text in left portion (uncovered)
+        # Light en la porción izquierda (no cubierta)
         cr.save()
-        cr.rectangle(0, 0, wx, H)
+        cr.rectangle(0, 0, fr.wx, fr.H)
         cr.clip()
-        draw_text_pass(cr, wx, False)
+        draw_text_pass(cr, fr.wx, False)
         cr.restore()
 
-        # Draw dark text in right portion (covered)
+        # Dark en la porción derecha (cubierta por el wipe)
         cr.save()
-        cr.rectangle(wx, 0, W - wx, H)
+        cr.rectangle(fr.wx, 0, fr.W - fr.wx, fr.H)
         cr.clip()
-        draw_text_pass(cr, wx, True)
+        draw_text_pass(cr, fr.wx, True)
         cr.restore()
 
-        # Image at bottom
-        if self._image_pb:
-            iy = pad + row_h + 8
-            ih = 140
-            iw = min(260, W - pad * 2)
-            img_radius = 8
-            cr.save()
-            rrect(cr, pad, iy, iw, ih, img_radius)
-            cr.clip()
-            Gdk.cairo_set_source_pixbuf(cr, self._image_pb, pad, iy)
-            cr.paint()
-            # fade sutil hacia el fondo en el borde inferior
-            grad = cairo.LinearGradient(0, iy + ih - 30, 0, iy + ih)
-            grad.add_color_stop_rgba(0, 0, 0, 0, 0)
-            grad.add_color_stop_rgba(1, 0, 0, 0, 0.4)
-            cr.set_source(grad)
-            cr.paint()
-            cr.restore()
+    def _draw_banner(self, cr, fr, lay):
+        """Imagen inferior del toast (banner), con fade hacia el fondo."""
+        if not self._image_pb:
+            return
+        iy = fr.pad + lay.row_h + 8
+        ih = 140
+        iw = min(260, fr.W - fr.pad * 2)
+        img_radius = 8
+        cr.save()
+        rrect(cr, fr.pad, iy, iw, ih, img_radius)
+        cr.clip()
+        Gdk.cairo_set_source_pixbuf(cr, self._image_pb, fr.pad, iy)
+        cr.paint()
+        # fade sutil hacia el fondo en el borde inferior
+        grad = cairo.LinearGradient(0, iy + ih - 30, 0, iy + ih)
+        grad.add_color_stop_rgba(0, 0, 0, 0, 0)
+        grad.add_color_stop_rgba(1, 0, 0, 0, 0.4)
+        cr.set_source(grad)
+        cr.paint()
+        cr.restore()
 
-        # --- Franja de descarte vertical — solo persistentes + hover ---
-        # 44px de ancho × altura del card (antes: pill 28x28 en la esquina,
-        # imposible no misclickear: el fall-through abría el video/URL).
-        # El gate vive en _strip_w (mismo que la reserva de arriba): sin hover
-        # no se dibuja NADA de la franja. El ancho YA está reservado en
-        # text_col_w — el texto nunca queda debajo del tint. El click routing
-        # (_on_button_press) prioriza la franja sobre expandir y sobre
-        # on_click, sin fall-through.
-        # Hover directo: tint más sólido (0.18 -> 0.32), igual feedback que
-        # tenía el pill.
+    def _draw_close_strip(self, cr, fr):
+        """Franja de descarte vertical — solo persistentes + hover.
+
+        44px de ancho × altura del card (antes: pill 28x28 en la esquina,
+        imposible no misclickear: el fall-through abría el video/URL). El gate
+        vive en _strip_w (mismo que la reserva de _frame): sin hover no se
+        dibuja NADA de la franja. El ancho YA está reservado en text_col_w —
+        el texto nunca queda debajo del tint. El click routing
+        (_on_button_press) prioriza la franja sobre expandir y sobre on_click,
+        sin fall-through. Hover directo: tint más sólido (0.18 -> 0.32), igual
+        feedback que tenía el pill."""
         self._close_rect = None
-        if strip_w:
-            sw = self._CLOSE_STRIP_W
-            sx0 = W - sw
-            self._close_rect = (sx0, 0, W, H)
-            cr.save()
-            # Cairo: save/restore NO guarda el path actual (no es parte del
-            # graphics state), así que un sub-path residual de bloques previos
-            # (texto Pango, wipe clip...) sobreviviría al restore y el
-            # próximo stroke/fill lo dibujaría como "línea fantasma".
-            # new_path() descarta cualquier sub-path huérfano de este frame.
-            cr.new_path()
-            # Clip al card redondeado: el tint respeta las esquinas curvas.
-            rrect(cr, 0, 0, W, H, r)
-            cr.clip()
-            if self._hover_close:
-                cr.set_source_rgba(0.86, 0.15, 0.15, 0.32)   # hover directo: más sólido
-            else:
-                cr.set_source_rgba(0.86, 0.15, 0.15, 0.18)   # normal hover del card
-            cr.rectangle(sx0, 0, sw, H)
-            cr.fill()
-            # Pixel-center: translate 0.5px so the X strokes land on
-            # pixel boundaries (elimina el blur sub-pixel de strokes centrados
-            # en coords enteras; sin esto los bordes se pixelan con fringed
-            # AA que se lee como ghosting).
-            cr.translate(0.5, 0.5)
-            # X con dos trazos stroke (no fill): más limpio que path cerrado.
-            # ANTIALIAS_NONE en la X: los round caps a 2.5px crean fringed
-            # semi-transparent pixels (blur). Sin AA la X es nítida y el
-            # pixel-center (translate 0.5) mantiene las esquinas alineadas.
-            mx = sx0 + sw / 2
-            my = H / 2
-            inset = 7
-            cr.set_antialias(cairo.ANTIALIAS_NONE)
-            cr.set_source_rgba(0.953, 0.482, 0.659, 0.95)   # #f38ba8
-            cr.set_line_width(2.5)
-            cr.set_line_cap(cairo.LINE_CAP_ROUND)
-            cr.move_to(mx - inset, my - inset)
-            cr.line_to(mx + inset, my + inset)
-            cr.move_to(mx + inset, my - inset)
-            cr.line_to(mx - inset, my + inset)
-            cr.stroke()
-            cr.restore()
+        if not fr.strip_w:
+            return
+        sw = self._CLOSE_STRIP_W
+        sx0 = fr.W - sw
+        self._close_rect = (sx0, 0, fr.W, fr.H)
+        cr.save()
+        # Cairo: save/restore NO guarda el path actual (no es parte del
+        # graphics state), así que un sub-path residual de bloques previos
+        # (texto Pango, wipe clip...) sobreviviría al restore y el
+        # próximo stroke/fill lo dibujaría como "línea fantasma".
+        # new_path() descarta cualquier sub-path huérfano de este frame.
+        cr.new_path()
+        # Clip al card redondeado: el tint respeta las esquinas curvas.
+        rrect(cr, 0, 0, fr.W, fr.H, fr.r)
+        cr.clip()
+        if self._hover_close:
+            cr.set_source_rgba(0.86, 0.15, 0.15, 0.32)   # hover directo: más sólido
+        else:
+            cr.set_source_rgba(0.86, 0.15, 0.15, 0.18)   # normal hover del card
+        cr.rectangle(sx0, 0, sw, fr.H)
+        cr.fill()
+        # Pixel-center: translate 0.5px so the X strokes land on
+        # pixel boundaries (elimina el blur sub-pixel de strokes centrados
+        # en coords enteras; sin esto los bordes se pixelan con fringed
+        # AA que se lee como ghosting).
+        cr.translate(0.5, 0.5)
+        # X con dos trazos stroke (no fill): más limpio que path cerrado.
+        # ANTIALIAS_NONE en la X: los round caps a 2.5px crean fringed
+        # semi-transparent pixels (blur). Sin AA la X es nítida y el
+        # pixel-center (translate 0.5) mantiene las esquinas alineadas.
+        mx = sx0 + sw / 2
+        my = fr.H / 2
+        inset = 7
+        cr.set_antialias(cairo.ANTIALIAS_NONE)
+        cr.set_source_rgba(0.953, 0.482, 0.659, 0.95)   # #f38ba8
+        cr.set_line_width(2.5)
+        cr.set_line_cap(cairo.LINE_CAP_ROUND)
+        cr.move_to(mx - inset, my - inset)
+        cr.line_to(mx + inset, my + inset)
+        cr.move_to(mx + inset, my - inset)
+        cr.line_to(mx - inset, my + inset)
+        cr.stroke()
+        cr.restore()
+
+    def _draw(self, widget, cr):
+        """Orquestador del dibujado — un paso por responsabilidad.
+
+        El ORDEN de dibujo NO es negociable y NO es el orden de lectura del
+        código: el texto se pinta DESPUÉS de la fila de botones y de la barra
+        "Ver más" (que reservan su ancho con rects publicados), así la tinta
+        cae sobre ellos si el layout llegara a solaparse. El bug de mover "el
+        bloque de texto junto a su definición" no es visible en los tests de
+        geometría — lo caza la fixture de píxeles (`test_draw_golden.py`).
+
+        Cada paso publica los rects que el click routing lee:
+        `_image_left_rect`, `_action_rects`, `_expand_rect`, `_close_rect`."""
+        alloc = self.get_allocation()
+        W, H = alloc.width, alloc.height
+        if W < 10 or H < 10:
+            return
+        fr = self._frame(W, H)
+        lay = _layout_metrics(
+            cuerpo=self._cuerpo, text_col_w=fr.text_col_w, body_fs=fr.body_fs,
+            app_name=self._app_name, hide_title=self._hide_title,
+            expanded=self._expanded, has_actions=bool(self._actions),
+            icon_size=_IMAGE_LEFT_W, max_lines=self._MAX_VISIBLE_LINES,
+            btn_h=self._BTN_H,
+        )
+        self._clear_surface(cr)
+        self._draw_background(cr, fr)
+        self._draw_image_left(cr, fr, lay)
+        self._draw_actions(cr, fr, lay)
+        self._draw_expand_bar(cr, fr, lay)
+        self._draw_text_passes(cr, fr, lay)
+        self._draw_banner(cr, fr, lay)
+        self._draw_close_strip(cr, fr)
 
 
 class WaylandPopup:

@@ -57,13 +57,19 @@ def test_metatest_fullwidth_test_rejects_old_pill():
 
 def test_metatest_source_has_zone_markers():
     """Los marcadores de la nueva geometría deben estar en el source (si
-    alguien los quita, los spec tests de geometría fallan)."""
-    src = inspect.getsource(wp.NotificationWidget._draw)
+    alguien los quita, los spec tests de geometría fallan).
+
+    Desde `bajar-complejidad-draw` los marcadores viven en los helpers del
+    orquestador (`_draw_expand_bar`, `_frame`), no en `_draw`; se buscan en el
+    source de toda la clase. La forma de `bar_x1` cambió con el NamedTuple del
+    frame (`fr.W/fr.pad/fr.strip_w`), el invariante es el mismo: la barra
+    termina antes del pad y de la franja de cierre."""
+    src = inspect.getsource(wp.NotificationWidget)
     assert "self._expand_rect = (bar_x0, btn_y, bar_x1, btn_y + btn_h)" in src, (
         "Metatest: el hit-rect de expandir debe ser la barra full-width"
     )
-    assert "bar_x1 = W - pad - strip_w" in src, (
-        "Metatest: la barra debe terminar antes de la franja de cierre"
+    assert "bar_x1 = fr.W - fr.pad - fr.strip_w" in src, (
+        "Metatest: la barra debe terminar antes del pad y de la franja de cierre"
     )
     assert "strip_w = self._strip_w()" in src, (
         "Metatest: la reserva del ancho de franja debe salir del gate "
