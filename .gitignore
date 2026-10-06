@@ -15,6 +15,13 @@ src/__pycache__/
 .coverage
 htmlcov/
 
+# Planificación de OpenSpec y tooling local de agentes
+# (los artifacts del proceso —proposals/designs/tasks/handoffs— viven solo
+#  locales; openspec/specs/ SÍ se trackea: es la verdad del comportamiento
+#  que cita AGENTS.md)
+openspec/changes/
+.opencode/
+
 # QA / artifacts generados
 render_out/
 mutants/
