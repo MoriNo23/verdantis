@@ -11,6 +11,9 @@ Un test por scenario del spec:
     (franja de 44 px) reposiciona igual que cualquier otro cambio de alto.
   - "El reflow es estable": expandir/contraer repetido converge siempre al
     estado correcto, sin oscilaciones ni acumulación de error.
+  - "Un toast que entra no tapa al que ya estaba": el hueco del que entra se
+    reserva ANTES de mapear su superficie (el primer frame commiteado ya está
+    en su offset, nunca sobre el de arriba).
 
 CÓMO SE EJERCE SIN VENTANAS REALES: se deja correr el `_build_ui` REAL de
 `WaylandPopup` (el que instala el `on_resize` del card y el `set_stack_margin`)
@@ -122,7 +125,12 @@ class Harness:
         registro = self.llamadas          # closure: el harness, no el popup
 
         def spy(popup, index):
-            registro.append((popup.window.id, index))
+            # El offset puede reservarse ANTES de que exista la window (así el
+            # primer frame ya llega en su hueco, spec `toast-stack`): sin window
+            # todavía no hay nada que reposicionar — el margen se registra
+            # cuando `_build_ui` lo aplica (`GtkLayerShell.set_margin`).
+            if popup.window is not None:
+                registro.append((popup.window.id, index))
             return original(popup, index)
 
         monkeypatch.setattr(WaylandPopup, "set_stack_margin", spy)
@@ -308,3 +316,48 @@ def test_expandir_y_contraer_repetido_converge(pila):
             "deriva); quedó en %s"
             % (ciclo, tops_iniciales, pila.tops())
         )
+
+
+# ── "Un toast que entra no tapa al que ya estaba" ────────────────────────
+
+def _margenes_al_mapear(pila, monkeypatch):
+    """(offsets con los que cada card mapeó su superficie, popup de arriba).
+
+    Se espía `prepare` —el punto donde la window se mapea y se commitea— y se
+    lee el offset que la card tenía EN ESE MOMENTO: lo que importa es el primer
+    frame, no el estado final (el reflow posterior siempre corrige, pero el
+    frame mal puesto ya se vio).
+    """
+    base = WaylandPopup.prepare          # el lambda del harness: _build_ui
+    visto = []
+
+    def spy(self):
+        visto.append(self._stack_margin)
+        return base(self)
+
+    monkeypatch.setattr(WaylandPopup, "prepare", spy)
+    # Body distinto en cada uno: si no, el dedup los tomaría como el mismo
+    # evento y el segundo ni entraría a la pila.
+    arriba, = pila.mostrar(1, cuerpo=SHORT)
+    visto.clear()
+    pila.mostrar(1, cuerpo=LONG)
+    return visto, arriba
+
+
+def test_el_que_entra_ya_llega_en_su_hueco(pila, monkeypatch):
+    """Scenario "Un toast que entra no tapa al que ya estaba" (spec
+    `toast-stack`): el hueco se reserva ANTES de mapear la superficie, así que
+    el primer frame del que entra ya está debajo del toast de arriba.
+
+    Rojo hoy: `_show_popup` llama `prepare()` —que mapea y commitea con el
+    offset 0— y recién después reflowea: la card nueva se presenta un frame
+    ENCIMA de la de arriba (el toast que "la tapa")."""
+    visto, arriba = _margenes_al_mapear(pila, monkeypatch)
+
+    esperado = pila.alto(arriba) + GAP
+    assert visto == [esperado], (
+        "spec toast-stack / 'Un toast que entra no tapa al que ya estaba': el "
+        "offset del que entra tiene que estar puesto ANTES de mapear su "
+        "superficie (alto de arriba %s + gap %s = %s); al mapear tenía %s"
+        % (pila.alto(arriba), GAP, esperado, visto)
+    )

@@ -18,7 +18,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.9.1"
+VERSION = "0.10.0"
 
 
 def _is_browser(app_name, desktop_entry):
@@ -184,7 +184,10 @@ def _is_local_url(url):
 
 
 class NotificationManager:
-    MAX_VISIBLE = 5
+    # Cuántos toasts conviven en pantalla. El resto ESPERA en la cola FIFO hasta
+    # que se libere un hueco (spec `toast-stack`, "La pila muestra dos toasts a
+    # la vez"): la capacidad es la misma para cualquier `urgency`.
+    MAX_VISIBLE = 2
     # Gap entre cards de la pila, en px. Autoridad única: lo suman `_stack_offsets`
     # al calcular el offset de cada card (spec `toast-stack`, "El reflow es
     # estable": el de abajo arranca a `alto_de_arriba + 12`). Antes este valor
@@ -577,9 +580,30 @@ class NotificationManager:
         # La pila se re-flowea con cada resize de este card (spec `toast-stack`):
         # sin esto, expandir "Ver más" deja a los de abajo con el margen viejo.
         popup.on_resized = self._reflow_stack
-        popup.prepare()
+        # El hueco se reserva ANTES de MAPEAR: `prepare()` crea la superficie y
+        # la commitea con el offset que tenga puesto, así que si se entra a la
+        # pila después de mapear, el primer frame aparece encima del toast de
+        # arriba (el que "la tapa"). `set_stack_margin` sin window todavía solo
+        # guarda el valor, y `_build_ui` → `_apply_margins` lo usa al crear la
+        # superficie: el primer frame ya llega en su hueco (spec `toast-stack`,
+        # "Un toast que entra no tapa al que ya estaba").
         self._active.append((nid, popup))
+        popup.set_stack_margin(self._stack_offsets()[-1])
+        popup.prepare()
         self._reflow_stack()
+
+    def _drenar_cola(self):
+        """Si quedó un hueco en la pila, deja entrar a la primera de la cola.
+
+        La siguiente en entrar es la primera en LLEGAR (FIFO, sin reordenar por
+        `urgency` — spec `toast-orden-llegada`). Lo comparten los DOS caminos de
+        cierre: el explícito (`_close_id`: cierre del usuario, replaces_id,
+        dedup) y el vencimiento por timer (`_on_closed`).
+        """
+        if self._pending and len(self._active) < self.MAX_VISIBLE:
+            nid2, qk2, _ = self._pending.pop(0)
+            self._show_popup(nid2, qk2)
+            self._ensure_pump()
 
     def _close_id(self, nid):
         for i, (aid, popup) in enumerate(self._active):
@@ -597,14 +621,7 @@ class NotificationManager:
         # portador de una clave, esa entrada queda libre para el próximo contenido.
         self._dedup = {k: v for k, v in self._dedup.items() if v[0] != nid}
         self._reflow_stack()
-        # Drena la cola pendiente (una por tick vía _pump); si hay hueco ya,
-        # mostramos la siguiente de inmediato y re-agendamos el resto.
-        if self._pending and len(self._active) < self.MAX_VISIBLE:
-            # La siguiente en entrar es la primera en LLEGAR (FIFO, sin
-            # reordenar por `urgency` — ver spec `toast-orden-llegada`).
-            nid2, qk2, _ = self._pending.pop(0)
-            self._show_popup(nid2, qk2)
-            self._ensure_pump()
+        self._drenar_cola()
         if self._dbus_bus:
             self._dbus_bus.emit_signal(
                 None, "/org/freedesktop/Notifications",
@@ -665,11 +682,17 @@ class NotificationManager:
                 break
 
     def _on_closed(self, nid):
-        # El reflow del stack (re-posicionar _active + drenar _queue) ya lo hace
-        # _close_id de forma inmediata. Aquí solo nos aseguramos de limpiar el
-        # dict por si el callback del popup llega por un path distinto.
+        """Cierre por TIMER del popup (el explícito entra por `_close_id`).
+
+        Además de limpiar el dict hay que re-flowear la pila y darle el hueco a
+        la primera de la cola: sin eso, con la pila llena las pendientes esperan
+        para siempre (nadie más agenda el drenado) y los toasts de abajo quedan
+        con el hueco del que venció (spec `toast-stack`).
+        """
         self._notifications.pop(nid, None)
         self._active = [(aid, p) for aid, p in self._active if aid != nid]
+        self._reflow_stack()
+        self._drenar_cola()
 
     def close_all(self):
         for _, popup in self._active:

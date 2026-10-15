@@ -51,33 +51,52 @@ def _drain_until_active(mgr, scheduled, n):
 
 
 def test_burst_close_timeouts_not_identical():
-    """4 notificaciones simultaneas deben tener timeouts distintos."""
+    """Las notificaciones de un burst que quedan VISIBLES no vencen todas
+    juntas: el holdback por POSICIÓN en la pila las separa (el cierre quedaba
+    en una ventana de ~1.2s que se leía como sincronizado).
+
+    Las posiciones simultáneas son 0..MAX_VISIBLE-1 (el resto espera en la cola),
+    así que el burst se notifica con una de más y se drena hasta llenar la pila:
+    el test vale para cualquier capacidad."""
     mgr, scheduled = _make_manager()
-    for i in range(4):
+    for i in range(vd.NotificationManager.MAX_VISIBLE + 1):
         # expire_timeout=-1 -> duration base 6000ms (default del server)
         mgr.notify(summary="n{}".format(i), app_name="app", expire_timeout=-1)
 
-    durations = _drain_until_active(mgr, scheduled, 4)
-    assert len(durations) == 4
+    durations = _drain_until_active(mgr, scheduled,
+                                    vd.NotificationManager.MAX_VISIBLE)
+    assert len(durations) == vd.NotificationManager.MAX_VISIBLE
     # Ninguna es igual a la anterior: el stagger por posicion las separa.
     assert durations[0] == 6000            # posicion 0: default sin holdback
-    assert durations[1] > durations[0]
-    assert durations[2] > durations[1]
-    assert durations[3] > durations[2]
+    for anterior, actual in zip(durations, durations[1:]):
+        assert actual > anterior, (
+            "el holdback crece con la posicion: %s" % (durations,)
+        )
     # Todas distintas entre si.
-    assert len(set(durations)) == 4
+    assert len(set(durations)) == len(durations)
 
 
 def test_close_stagger_increments_by_position():
-    """El holdback crece linealmente con idx * CLOSE_STAGGER_MS."""
+    """El holdback crece linealmente con idx * CLOSE_STAGGER_MS, donde idx es la
+    posición en la pila (0..MAX_VISIBLE-1)."""
     mgr, scheduled = _make_manager()
-    for i in range(3):
+    for i in range(vd.NotificationManager.MAX_VISIBLE + 1):
         mgr.notify(summary="n{}".format(i), app_name="app", expire_timeout=-1)
 
-    durations = _drain_until_active(mgr, scheduled, 3)
+    durations = _drain_until_active(mgr, scheduled,
+                                    vd.NotificationManager.MAX_VISIBLE)
     base = 6000
     step = vd.NotificationManager.CLOSE_STAGGER_MS
-    assert durations == [base, base + 1 * step, base + 2 * step]
+    assert durations == [base + i * step
+                         for i in range(vd.NotificationManager.MAX_VISIBLE)]
+
+    # La que entra a un hueco libre entra en posición 1 (ya hay otra visible),
+    # así que NO vuelve al default: conserva el holdback.
+    mgr._close_id(mgr._active[0][0])
+    assert mgr._active[-1][1].duration == base + step, (
+        "la noti que entra a un hueco libre va a la posición 1 y mantiene el "
+        "holdback; tuvo %s" % (mgr._active[-1][1].duration,)
+    )
 
 
 def test_close_stagger_preserves_position_zero_default():

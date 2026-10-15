@@ -164,11 +164,12 @@ def _fake_show(mgr):
             hide_title=kwargs.get("hide_title", False),
             persistent=(kwargs.get("duration", 6000) == 0),
         )
-        idx = len(mgr._active)
-        try:
-            widget.set_stack_margin(idx)  # no-op without a window
-        except Exception:
-            pass
+        # El manager re-flowea la pila pidiendo `stack_height()` y
+        # `set_stack_margin()` (spec `toast-stack`): el WaylandPopup real los
+        # tiene y acá no hay ventana que mover, así que el fake los aporta para
+        # ser un stand-in completo.
+        widget.stack_height = lambda: widget.desired_height()
+        widget.set_stack_margin = lambda *a: None
         # The manager's _close_id()/close_all() call popup._close(); on the real
         # WaylandPopup that destroys the window + fires _on_close. Here we make
         # it a no-op (the manager already does the _active removal + drain) so
@@ -195,11 +196,12 @@ def test_e2e_burst_batched_real_scheduler():
     mgr = vd.NotificationManager(corner="top-right")  # scheduler=None -> real GLib
     mgr._show_popup = _fake_show(mgr)
 
-    # Fire a burst of 5 identical-urgency notifications almost instantly.
-    for i in range(5):
+    # Fire a burst bigger than the stack capacity, all identical-urgency.
+    total = vd.NotificationManager.MAX_VISIBLE + 3
+    for i in range(total):
         mgr.notify(summary="n{}".format(i), app_name="app")
     # Nothing should be shown yet (pump waits STAGGER_MS before first reveal).
-    assert len(mgr._pending) == 5, mgr._pending
+    assert len(mgr._pending) == total, mgr._pending
     assert len(mgr._active) == 0
 
     # NOTA (auditoría): antes se alineaba con wall-clock (==1 tras 500ms),
@@ -210,7 +212,8 @@ def test_e2e_burst_batched_real_scheduler():
     # conteo NUNCA salta por más de 1 por intervalo de stagger.
     step, deadline = 0.05, time.time() + 8.0
     seen = 0
-    while seen < 5 and time.time() < deadline:
+    tope = vd.NotificationManager.MAX_VISIBLE
+    while seen < tope and time.time() < deadline:
         _pump(step)
         active = len(mgr._active)
         assert active - seen <= 1, (
@@ -218,8 +221,11 @@ def test_e2e_burst_batched_real_scheduler():
             "{}s (deberían revelarse de a uno)".format(seen, active, step)
         )
         seen = active
-    assert len(mgr._active) == 5, "burst not fully drained: {}".format(
+    assert len(mgr._active) == tope, "la pila no se llenó: {}".format(
         len(mgr._active))
+    # La pila llegó a su capacidad y el resto ESPERA su turno (spec toast-stack).
+    assert len(mgr._pending) == total - tope, (
+        "el resto del burst tiene que quedar esperando: {}".format(mgr._pending))
 
 
 def test_e2e_dedup_replaces_not_stacks_real_scheduler():
@@ -303,21 +309,21 @@ def test_e2e_persistent_toast_is_closeable():
 def test_e2e_close_one_does_not_close_all():
     """Suspected bug: clicking the close (X) on ONE toast closes ALL of them.
     This test proves the opposite — only the clicked persistent toast closes,
-    the other (mixed auto + persistent) toasts stay put."""
+    the other (mixed auto + persistent) toast stays put."""
     mgr = vd.NotificationManager(corner="top-right")
     mgr._show_popup = _fake_show(mgr)
 
-    # Mix: a persistent (sticky) toast, an auto-closing one, another persistent.
+    # Mix de los dos tipos en las dos posiciones que caben en la pila
+    # (MAX_VISIBLE): un auto-cierre y un persistente (sticky).
     n_auto = mgr.notify(summary="auto", app_name="app", expire_timeout=5000)
-    n_sticky1 = mgr.notify(summary="sticky1", app_name="app", expire_timeout=0)
-    n_sticky2 = mgr.notify(summary="sticky2", app_name="app", expire_timeout=0)
-    _pump(2.0)  # all three revealed (one per 400ms)
+    n_sticky = mgr.notify(summary="sticky", app_name="app", expire_timeout=0)
+    _pump(2.0)  # both revealed (one per 400ms)
 
     active_ids = [nid for nid, _ in mgr._active]
-    assert sorted(active_ids) == sorted([n_auto, n_sticky1, n_sticky2]), active_ids
+    assert sorted(active_ids) == sorted([n_auto, n_sticky]), active_ids
 
-    # Find the card for n_sticky2 and click its X.
-    target = [p for (nid, p) in mgr._active if nid == n_sticky2][0]
+    # Find the card for n_sticky and click its X.
+    target = [p for (nid, p) in mgr._active if nid == n_sticky][0]
     card = target
     assert card._persistent is True
     card._hover = True
@@ -339,14 +345,14 @@ def test_e2e_close_one_does_not_close_all():
     mgr._on_closed = spy_closed
     card._on_button_press(card, _Ev())
 
-    # Only the clicked toast closed; the other two remain active.
-    assert closed == [n_sticky2], "clicking one X closed the wrong toast(s): {}".format(
+    # Only the clicked toast closed; the other stays active.
+    assert closed == [n_sticky], "clicking one X closed the wrong toast(s): {}".format(
         closed)
     remaining = [nid for nid, _ in mgr._active]
-    assert sorted(remaining) == sorted([n_auto, n_sticky1]), (
+    assert remaining == [n_auto], (
         "clicking one X closed more than one toast (suspected bug confirmed): "
         "{}".format(remaining))
-    assert len(mgr._active) == 2, "expected 2 toasts still active, got {}".format(
+    assert len(mgr._active) == 1, "expected 1 toast still active, got {}".format(
         len(mgr._active))
 
 
@@ -356,10 +362,12 @@ def test_e2e_close_all_closes_everything():
     mgr = vd.NotificationManager(corner="top-right")
     mgr._show_popup = _fake_show(mgr)
 
-    for i in range(4):
+    total = vd.NotificationManager.MAX_VISIBLE + 2
+    for i in range(total):
         mgr.notify(summary="n{}".format(i), app_name="app")
-    _pump(2.0)  # all 4 revealed
-    assert len(mgr._active) == 4
+    _pump(2.0)  # la pila se llena hasta su capacidad; el resto espera
+    assert len(mgr._active) == vd.NotificationManager.MAX_VISIBLE
+    assert len(mgr._pending) == total - vd.NotificationManager.MAX_VISIBLE
 
     mgr.close_all()
     assert mgr._active == [], "close_all left active toasts"

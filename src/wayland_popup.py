@@ -283,6 +283,28 @@ def rrect(cr, x, y, w, h, r):
     cr.close_path()
 
 
+# Antialiasing del texto del card: FIJO en grises, no heredado del sistema.
+# Pango reparte la cobertura del antialiasing por canal cuando usa subpixel (el
+# default de fontconfig en muchos equipos: `rgba: rgb`); sobre el fondo
+# TRANSLÚCIDO del card eso se ve como franjas de color en los bordes de las
+# letras — la discolouration conocida de pangocairo en superficies con alpha. Se
+# fija en el PangoContext del layout y no en el contexto de Cairo, que es donde
+# el issue se resuelve (spec `toast-texto-nitido`).
+_FONT_OPTIONS = cairo.FontOptions()
+_FONT_OPTIONS.set_antialias(cairo.ANTIALIAS_GRAY)
+
+
+def _create_layout(cr):
+    """Layout de Pango con el antialiasing en grises ya fijado.
+
+    Punto ÚNICO de creación de layouts de texto del card: todo texto dibujado
+    sobre la superficie translúcida del card pasa por acá (spec
+    `toast-texto-nitido`)."""
+    lay = PangoCairo.create_layout(cr)
+    PangoCairo.context_set_font_options(lay.get_context(), _FONT_OPTIONS)
+    return lay
+
+
 def _parse_actions(raw):
     """Parsea la lista plana de actions de D-Bus a pares (key, label).
 
@@ -560,6 +582,11 @@ def _make_placeholder_icon(label, size=16):
     offset del texto quedaba condicional. Va en `__init__` (no en `_draw`) para
     fluir por el mismo camino de dibujado que un logo real, y así el layout de
     la fila es idéntico en ambos casos.
+
+    La inicial NO pasa por `_create_layout`: se dibuja con la API de texto de
+    cairo sobre un square OPACO (el fondo se llena entero), así que su
+    antialiasing no cae sobre el fondo translúcido del card (spec
+    `toast-texto-nitido`).
     """
     import cairo as _c
     surface = _c.ImageSurface(_c.FORMAT_ARGB32, size, size)
@@ -1030,7 +1057,7 @@ class NotificationWidget(Gtk.DrawingArea):
         return w * self._fraction
 
     def _draw_text(self, cr, text, x, y, w, font_size, light_col, dark_col, bold=False, max_lines=2):
-        layout = PangoCairo.create_layout(cr)
+        layout = _create_layout(cr)
         fd = Pango.FontDescription("Manrope " + str(font_size))
         if bold:
             fd.set_weight(Pango.Weight.BOLD)
@@ -1107,7 +1134,7 @@ class NotificationWidget(Gtk.DrawingArea):
                 cr.fill()
 
                 icono = self._action_icon_pbs.get(key)
-                lay = PangoCairo.create_layout(cr)
+                lay = _create_layout(cr)
                 lay.set_font_description(
                     Pango.FontDescription("Manrope " + str(btn_fs)))
                 lay.set_text(label, -1)
@@ -1338,7 +1365,7 @@ class NotificationWidget(Gtk.DrawingArea):
                 # tx = text_col_x + 20 (logo 16 + 4): constante, nunca condicional
                 # al logo (fija tests/test_placeholder_icono.py).
                 tx = fr.text_col_x + 20
-                ll = PangoCairo.create_layout(cr)
+                ll = _create_layout(cr)
                 ll.set_font_description(Pango.FontDescription("Manrope " + str(fr.app_fs)))
                 ll.set_text(label, -1)
                 ll.set_width(int(max(1, fr.text_col_w - tx + fr.text_col_x) * Pango.SCALE))
@@ -1361,7 +1388,7 @@ class NotificationWidget(Gtk.DrawingArea):
             if not self._hide_title:
                 cr.set_source_rgb(*tcol)
                 # Título con elipsis Pango (antes cr.show_text: se salía del card)
-                ll = PangoCairo.create_layout(cr)
+                ll = _create_layout(cr)
                 ll.set_font_description(Pango.FontDescription("Manrope Bold " + str(fr.title_fs)))
                 ll.set_text(self._titulo or "", -1)
                 ll.set_width(int(fr.text_col_w * Pango.SCALE))
