@@ -18,7 +18,7 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   ve python 3.12 del sistema y `gi` no compila desde pip). Instalación: `./install.sh` (apt: libgtk-layer-shell-dev,
   python3-gi, python3-gi-cairo; pip: PyQt6) y copia `verdantis.service` a
   `~/.config/systemd/user/`.
-- 6 módulos en `src/`:
+- 7 módulos en `src/`:
   - `verdantis.py` — entry point; `--daemon` delega al daemon; one-shot elige backend
     Wayland (GTK layer-shell) o fallback PyQt6 (import perezoso, sin Qt al arrancar).
   - `verdantis_daemon.py` — dueño del bus DBus (`Notify`, `CloseNotification`,
@@ -29,6 +29,10 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   - `app_info.py` — fuente única de `APP_NAME`/`APP_ID`/`VENDOR` (nada de literales
     "Verdantis" inline; el vendor de GetServerInformation es MoriNo23, no el nombre).
   - `dashboard.py` — Flask dashboard de historial + replay (thread dentro del daemon).
+  - `history_store.py` — persistencia del historial JSONL
+    (`$XDG_DATA_HOME/verdantis/history.jsonl`) + bytes de iconos/imagen para que el
+    replay del dashboard reproduzca "cómo se veía" cada notificación (las claves
+    `avatar_source`/`avatar_file` son esquema de disco, no vocabulario de layout).
   - `qt_fallback.py` — notificación one-shot PyQt6; solo se importa en ese branch.
 - Métricas de layout: fuente única en `wayland_popup` (`_PAD`/`_rows_above_body`/...),
   consumidas por `_draw`, `calc_card_height` y `_eff_text_width`. No recomputar el
@@ -36,7 +40,10 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 
 ## Build & test
 
-- Tests: `.venv/bin/python -m pytest tests/ -q` (~13s, 240 passed).
+- Tests: `.venv/bin/python -m pytest tests/ -q` (~17s, 362 passed).
+- Simulador de la pila (reloj virtual, sin ventanas: corre el manager real e imprime
+  cada frame con offsets/cola + detectores de bug): `.venv/bin/python tests/qa_sim_pila.py`
+  (`--n`, `--timeout`, `--click`, `--sticky`; sale 1 si detecta un bug).
 - Mockups del toast: viven en `mockups/` (app Next.js + wireframe-ui, parte
   de main). Correr con `pnpm dev` dentro de la carpeta y editar el JSX
   directamente — tokens en `mockups/src/lib/toast-tokens.ts` con la constante
@@ -87,6 +94,15 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   del HR). La columna de texto es una sola, 240 px (196 con la franja de descarte en hover
   de un persistente), y el texto arranca al top del slot (`ty = pad`, sin centrado del
   bloque). `_eff_text_width` y `_rows_above_body` no tienen ramas por variante.
+- Verificación visual de los toasts: la da el USUARIO. El agente no saca capturas ni
+  inspecciona la pantalla por su cuenta (nada de `spectacle`/`grim`/`import` ni leer
+  imágenes de la pila): manda notificaciones de prueba y espera el reporte visual del
+  usuario, que es la fuente de verdad. Spec: `openspec/specs/verificacion-visual/spec.md`.
+- Antialiasing del texto: se fija por CÓDIGO (helper `_create_layout` con `_FONT_OPTIONS`
+  = `ANTIALIAS_GRAY`), NO se hereda del fontconfig del usuario. El subpixel del fontconfig
+  destiñe el texto sobre las superficies transparentes del toast (issue conocido de
+  pangocairo); por eso todo layout del card se crea con el helper y no con
+  `PangoCairo.create_layout` suelto.
 
 ## Pitfalls
 
