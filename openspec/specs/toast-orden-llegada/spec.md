@@ -12,7 +12,9 @@ reordene la pila.
 Las notificaciones pendientes de mostrar SHALL aparecer en el mismo orden en que
 llegaron, con independencia de su `urgency`. Ningún aviso, drainage ni
 reordenamiento por tipo SHALL mover una notificación delante de otra que llegó
-antes.
+antes. La cola pendiente SHALL tener un tope: cuando se supere, el daemon SHALL
+descartar las notificaciones MÁS VIEJAS de la cola (nunca las recién llegadas) y
+liberar su estado interno; las que quedan conservan el orden de llegada.
 
 #### Scenario: Burst de tipos mezclados sale en orden de llegada
 
@@ -33,6 +35,12 @@ antes.
 
 - **WHEN** se cierra un toast y se libera un hueco de la pila
 - **THEN** entra la siguiente notificación **por orden de llegada**, sin reordenar la cola por tipo
+
+
+#### Scenario: Flood sobre el tope de la cola
+
+- **WHEN** la cola pendiente ya tiene 20 notificaciones esperando y llega una más
+- **THEN** se descarta la MÁS VIEJA de la cola (la recién llegada queda) y lo que queda sale en orden de llegada
 
 ### Requirement: La urgencia no reordena, solo define la vida del toast
 
