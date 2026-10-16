@@ -1,6 +1,7 @@
 import math
 import os
 import re
+import sys
 import ctypes
 import configparser
 import cairo
@@ -121,6 +122,13 @@ def _exact_desktop_file(app_name):
         return None
     if _desktop_cache is None:
         _rebuild_desktop_cache()
+    entries = _desktop_cache.get(app_name.lower().strip())
+    if entries:
+        return entries[0]["path"]
+    # Miss con cache poblada: la app se instaló DESPUÉS del primer toast.
+    # Rebuild UNA vez y re-lookup — sin esto, semanas de uptime dejan a toda
+    # app nueva con placeholder (auditoría #11).
+    _rebuild_desktop_cache()
     entries = _desktop_cache.get(app_name.lower().strip())
     if entries:
         return entries[0]["path"]
@@ -398,11 +406,9 @@ def _layout_metrics(cuerpo, text_col_w, body_fs, app_name, hide_title,
     sea testeable sin display y para que el orquestador quede legible como una
     lista de pasos. Los comentarios de cada bloque viven acá, con la fórmula.
 
-    NO es la fuente única de la altura: `calc_card_height` recalcula lo mismo
-    (ambas DEBEN coincidir — divergen = render desborda o deja slack).
-    Unificarlas es un change aparte — el radio de impacto de esa unificación es
-    `desired_height` + el stack manager, y queda como non-goal
-    explícito de `bajar-complejidad-draw`.
+    NO es la fuente única de la altura: `calc_card_height` DELEGA acá (ver
+    test_auditoria_fixes: la igualdad es contrato — divergen = render
+    desborda o deja slack).
     """
     total_lines = _count_body_lines(cuerpo, text_col_w, body_fs)
     cap = min(total_lines, max_lines)
@@ -1546,6 +1552,15 @@ class WaylandPopup:
         self.image_data_raw = image_data_raw
         self.duration = duration
         self.margin = margin
+        # Margins por instancia (spec entrada-fallback: --margin honrado
+        # también en Wayland — antes un dict de clase hardcodeaba 16 y el
+        # flag solo funcionaba en el X11).
+        self._margins = {
+            "top-right": (margin, margin, 0, 0),
+            "top-left": (margin, 0, 0, margin),
+            "bottom-right": (0, margin, margin, 0),
+            "bottom-left": (0, 0, margin, margin),
+        }
         self.corner = corner
         self.accent = accent
         self._closed = False
@@ -1591,12 +1606,6 @@ class WaylandPopup:
         "bottom-right": ("bottom", "right"),
         "bottom-left": ("bottom", "left"),
     }
-    _MARGIN_MAP = {
-        "top-right": (16, 16, 0, 0),
-        "top-left": (16, 0, 0, 16),
-        "bottom-right": (0, 16, 16, 0),
-        "bottom-left": (0, 0, 16, 16),
-    }
 
     def _build_ui(self):
         if not GtkLayerShell.is_supported():
@@ -1626,9 +1635,7 @@ class WaylandPopup:
         self._apply_margins()
         GtkLayerShell.set_exclusive_zone(self.window, -1)
 
-        CARD_WIDTH = 360
-        if CARD_WIDTH:
-            self.window.set_size_request(CARD_WIDTH, -1)
+        self.window.set_size_request(_CARD_WIDTH, -1)
 
         self._card = NotificationWidget(
             self.app_name, self.app_icon,
@@ -1643,9 +1650,8 @@ class WaylandPopup:
             persistent=(self.duration == 0),
             actions=self.actions, action_icons=self.action_icons,
         )
-        h = self._card.desired_height() if self._card else WaylandPopup.calc_card_height(
-            self.app_name, self.cuerpo, self.image_path)
-        self._card.set_size_request(CARD_WIDTH, h)
+        h = self._card.desired_height()
+        self._card.set_size_request(_CARD_WIDTH, h)
         self.window.add(self._card)
         if not self._on_close:
             self.window.connect("destroy", lambda *a: Gtk.main_quit())
@@ -1691,7 +1697,7 @@ class WaylandPopup:
         # El usuario cierra con la X (hover → pill rojizo).
         if self.duration <= 0:
             return False
-        elapsed = (time.time() - self._start) * 1000
+        elapsed = (time.monotonic() - self._start) * 1000
         remaining = max(0, self.duration - elapsed)
         self._card.set_fraction(remaining / self.duration)
         if remaining <= 0:
@@ -1703,7 +1709,7 @@ class WaylandPopup:
     def calc_card_height(app_name, cuerpo, image_path, text_width=_TEXT_COL_W,
                          expanded=False, hide_title=False, font_scale=1.0,
                          actions_count=0):
-        """Altura de la card según el wrap REAL del cuerpo.
+        """Altura de la card — DELEGA en `_layout_metrics` (fuente única).
 
         `text_width` es el ancho EFECTIVO de la columna de texto (card 360 − pad
         14 − slot 80 − gap 12 − pad 14 = 240). Antes se contaban líneas físicas
@@ -1718,28 +1724,16 @@ class WaylandPopup:
         `font_scale` aplica la misma escala de resolución que usa _draw, y el
         tamaño de fuente sale de `_BODY_FS` — la MISMA constante que dibuja el
         body. Con el slot de imagen izquierda siempre presente no hay dos
-        variantes de stack que medir: una sola columna, una sola fuente."""
+        variantes de stack que medir: una sola columna, una sola fuente.
+        Antes había DOS fórmulas que debían coincidir a mano (auditoría #10);
+        ahora la igualdad la fija test_auditoria_fixes."""
         _body_fs = max(9, round(_BODY_FS * font_scale))
-        total = _count_body_lines(cuerpo, text_width, _body_fs)
-        text_h = _rows_above_body(app_name, hide_title)
-        if expanded:
-            _, body_h = _body_metrics(cuerpo, text_width, _body_fs, max_lines=None)
-        else:
-            cap = min(total, NotificationWidget._MAX_VISIBLE_LINES)
-            _, body_h = _body_metrics(cuerpo, text_width, _body_fs, max_lines=cap)
-        text_h += body_h
-        # PISO del slot (spec toast-acciones, mismo bug del live): la imagen
-        # izquierda (80px) siempre cabe antes de las bandas — si el texto es
-        # más corto, la card crece y las bandas arrancan debajo del slot.
-        # Misma fórmula que `_draw` (fuente única: divergir aquí desalinea
-        # altura y wrap).
-        piso = max(text_h, _IMAGE_LEFT_W)
-        bands_h = (NotificationWidget._BTN_H + _BTN_GAP
-                   if total > NotificationWidget._MAX_VISIBLE_LINES else 0)
-        if actions_count:
-            bands_h += _ACTIONS_ROW_H + _ACTIONS_GAP
-        row_h = max(piso + bands_h, _ROW_MIN_H)
-        h = _PAD + row_h + _PAD
+        lay = _layout_metrics(
+            cuerpo, text_width, _body_fs, app_name, hide_title, expanded,
+            actions_count > 0, _IMAGE_LEFT_W,
+            NotificationWidget._MAX_VISIBLE_LINES, NotificationWidget._BTN_H,
+        )
+        h = _PAD + lay.row_h + _PAD
         if image_path and os.path.exists(image_path):
             h += 8 + 140
         return h
@@ -1759,7 +1753,8 @@ class WaylandPopup:
     def _apply_margins(self):
         if not self.window:
             return
-        base_top, base_right, base_bottom, base_left = self._MARGIN_MAP.get(self.corner, (16, 16, 0, 0))
+        base_top, base_right, base_bottom, base_left = self._margins.get(
+            self.corner, (16, 16, 0, 0))
         offset = self._stack_margin
         if "top" in self.corner:
             t, b = base_top + offset, base_bottom
@@ -1787,11 +1782,15 @@ class WaylandPopup:
 
     def prepare(self):
         if not os.environ.get("WAYLAND_DISPLAY"):
-            print("[wayland] No WAYLAND_DISPLAY", file=__import__('sys').stderr)
-            return
+            # Falla limpio (spec entrada-fallback): raise en vez de print+return
+            # — antes el one-shot quedaba colgado en Gtk.main() sin window y
+            # el daemon con el slot de _active fugado para siempre.
+            raise RuntimeError(
+                "sin WAYLAND_DISPLAY no hay layer-shell: nada que preparar")
         self._build_ui()
         self.window.show_all()
-        self._start = time.time()
+        # monotonic: NTP/suspend no congela ni acelera los timers (auditoría #14)
+        self._start = time.monotonic()
         GLib.timeout_add(50, self._update_progress)
 
     def _close(self, source="timeout", *a):

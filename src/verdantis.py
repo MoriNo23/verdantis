@@ -38,10 +38,8 @@ def main():
     args = parser.parse_args()
 
     if args.daemon:
-        from verdantis_daemon import main as daemon_main
-        import sys as _sys
-        _sys.argv = [_sys.argv[0], "--corner", args.corner]
-        daemon_main()
+        from verdantis_daemon import NotificationDaemon
+        NotificationDaemon(corner=args.corner).run()
         return
 
     is_wayland = (
@@ -76,6 +74,7 @@ def main():
         icon_path=args.icon, image_path=args.image,
         duration=args.duration, margin=args.margin,
         corner=args.corner, accent=args.accent,
+        app_name=args.app_name, app_icon=args.app_icon,
     )
     n.show()
 

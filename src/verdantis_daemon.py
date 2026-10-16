@@ -15,7 +15,7 @@ from wayland_popup import (
     _extract_markup_url,
 )
 
-VERSION = "0.12.0"
+VERSION = "0.12.1"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -217,6 +217,10 @@ class NotificationManager:
     # posición en el stack al momento de mostrarse (ver _show_popup). Así
     # desaparecen escalonadas en vez de colapsar en una ventana de ~1.2s.
     CLOSE_STAGGER_MS = 800
+    # Tope de la cola pendiente (spec toast-orden-llegada, escenario flood):
+    # un burst deja de ser minutos de toasts stale y RAM fija. Se dropea la
+    # MÁS VIEJA (estilo dunst); la recién llegada siempre entra.
+    MAX_PENDING = 20
     # Todo contenido idéntico emitido dentro de esta ventana (seg) se considera
     # el MISMO evento y se reemplaza en vez de apilar un duplicado. Pasada la
     # ventana, dos notificaciones iguales vuelven a ser eventos legitimos
@@ -224,7 +228,6 @@ class NotificationManager:
     DEDUP_WINDOW = 10.0
 
     def __init__(self, corner="top-right", scheduler=None):
-        self.corner = corner
         self._active = []
         # Cola de entrada pendiente de mostrar: lista de (nid, kwargs, urgency).
         self._pending = []
@@ -445,6 +448,13 @@ class NotificationManager:
         # La `urgency` sigue viva donde sirve: duración y opacidad del card
         # (WaylandPopup.__init__), nunca la posición.
         self._pending.append((nid, kwargs, urgency))
+        # Tope de la cola: si ya está llena, la MÁS VIEJA sale (con su estado
+        # limpio) para que la recién llamada entre siempre.
+        while len(self._pending) > self.MAX_PENDING:
+            old_nid, _, _ = self._pending.pop(0)
+            self._notifications.pop(old_nid, None)
+            self._dedup = {k: v for k, v in self._dedup.items()
+                           if v[0] != old_nid}
         self._ensure_pump()
 
         return nid
@@ -497,7 +507,16 @@ class NotificationManager:
         # "Un toast que entra no tapa al que ya estaba").
         self._active.append((nid, popup))
         popup.set_stack_margin(self._stack_offsets()[-1])
-        popup.prepare()
+        try:
+            popup.prepare()
+        except Exception:
+            # prepare() roto (sin display, sin layer-shell): liberar el hueco
+            # YA reservado o el slot queda fugado y dos notificaciones así
+            # mudean el daemon de por vida (auditoría #2).
+            self._active = [(aid, p) for aid, p in self._active if aid != nid]
+            self._notifications.pop(nid, None)
+            self._dedup = {k: v for k, v in self._dedup.items() if v[0] != nid}
+            return
         self._reflow_stack()
 
     def _drenar_cola(self):
@@ -604,6 +623,10 @@ class NotificationManager:
         """
         self._notifications.pop(nid, None)
         self._active = [(aid, p) for aid, p in self._active if aid != nid]
+        # Limpieza de dedup igual que _close_id: el path de timer también
+        # saca al portador, o el dict crece una entrada por contenido único
+        # en un daemon de semanas (leak lento, auditoría #6).
+        self._dedup = {k: v for k, v in self._dedup.items() if v[0] != nid}
         self._reflow_stack()
         self._drenar_cola()
         reason = _reason_for(source)
@@ -613,17 +636,6 @@ class NotificationManager:
                 "org.freedesktop.Notifications", "NotificationClosed",
                 GLib.Variant("(uu)", (nid, reason)),
             )
-
-    def close_all(self):
-        for _, popup in self._active:
-            # Apagado/limpieza interna: sin emisión (fuente None) — no es un
-            # cierre con razón para el cliente (spec `contrato-dbus`).
-            popup._close(None)
-        self._active = []
-        self._pending = []
-        self._pump_scheduled = False
-        self._notifications = {}
-
 
 class NotificationDaemon:
     def __init__(self, corner="top-right"):

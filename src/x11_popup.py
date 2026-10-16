@@ -49,7 +49,8 @@ class NotificacionX11:
     `posicion_esquina`. Sin display, GTK emite su propio error y sale ≠ 0."""
 
     def __init__(self, titulo="", cuerpo="", icon_path=None, image_path=None,
-                 duration=8000, margin=16, corner="top-right", accent="#89b4fa"):
+                 duration=8000, margin=16, corner="top-right", accent="#89b4fa",
+                 app_name="", app_icon=""):
         self.titulo = titulo
         self.cuerpo = cuerpo
         self.icon_path = icon_path
@@ -58,6 +59,8 @@ class NotificacionX11:
         self.margin = margin
         self.corner = corner
         self.accent = accent
+        self.app_name = app_name
+        self.app_icon = app_icon
         self.window = None
         self._card = None
         self._h = 0
@@ -77,7 +80,7 @@ class NotificacionX11:
             self.window.set_visual(visual)
 
         self._card = NotificationWidget(
-            "", None, self.titulo, self.cuerpo,
+            self.app_name, self.app_icon, self.titulo, self.cuerpo,
             self.icon_path, self.image_path, self.accent,
             on_resize=self._resize_card,
             on_close=self._close,
@@ -115,7 +118,8 @@ class NotificacionX11:
     def _tick(self):
         if self._closed or self.duration <= 0:
             return False
-        elapsed = (time.time() - self._start) * 1000
+        # monotonic: NTP/suspend no congela ni acelera el timer (auditoría #14)
+        elapsed = (time.monotonic() - self._start) * 1000
         remaining = max(0, self.duration - elapsed)
         self._card.set_fraction(remaining / self.duration)
         if remaining <= 0:
@@ -142,7 +146,7 @@ class NotificacionX11:
         self._build_ui()
         self.window.show_all()
         self._posicionar()
-        self._start = time.time()
+        self._start = time.monotonic()
         if self.duration > 0:
             GLib.timeout_add(50, self._tick)
         Gtk.main()

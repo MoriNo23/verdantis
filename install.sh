@@ -4,17 +4,21 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "==> Dependencias del sistema..."
-sudo apt install -y libgtk-layer-shell-dev python3-gi python3-gi-cairo 2>&1 | tail -2
+sudo apt install -y libgtk-layer-shell-dev 2>&1 | tail -1
 
-echo "==> Entorno virtual..."
+echo "==> Entorno virtual (PyGObject/pycairo/pytest via pip)..."
 python3 -m venv "$SCRIPT_DIR/.venv"
 source "$SCRIPT_DIR/.venv/bin/activate"
+python -m pip install -r "$SCRIPT_DIR/requirements.txt"
 
-echo ""
 echo "==> Servicio systemd (user) para daemon DBus..."
 mkdir -p "$HOME/.config/systemd/user/"
-cp "$SCRIPT_DIR/verdantis.service" "$HOME/.config/systemd/user/"
+# El template lleva @DIR@: el servicio queda atado al path REAL del repo,
+# sobrevive moverlo si se reinstala (auditoría #18).
+sed "s|@DIR@|$SCRIPT_DIR|g" "$SCRIPT_DIR/service.template" \
+  > "$HOME/.config/systemd/user/verdantis.service"
 systemctl --user daemon-reload
+
 echo ""
 echo "Done: source .venv/bin/activate"
 echo ""

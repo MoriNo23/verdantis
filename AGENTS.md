@@ -14,10 +14,11 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 
 ## Dev environment
 
-- Python 3.13 en `.venv/` (venv clásico; la migración a uv quedó bloqueada — uv solo
-  ve python 3.12 del sistema y `gi` no compila desde pip). Instalación: `./install.sh` (apt: libgtk-layer-shell-dev,
-  python3-gi, python3-gi-cairo; cero deps pip) y copia `verdantis.service` a
-  `~/.config/systemd/user/`.
+- Python 3.13 en `.venv/` (venv aislado). Deps pip declaradas en
+  `requirements.txt` (PyGObject, pycairo, pytest — gi SÍ compila desde pip en
+  3.13): `./install.sh` (apt: libgtk-layer-shell-dev; venv + pip install) y
+  genera `~/.config/systemd/user/verdantis.service` desde `service.template`
+  con el path real (`@DIR@`).
 - 5 módulos en `src/`:
   - `verdantis.py` — entry point; `--daemon` delega al daemon; one-shot elige backend
     por sesión: Wayland (GTK layer-shell) → X11 (`x11_popup`); Wayland SIN layer-shell

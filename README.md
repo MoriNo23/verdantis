@@ -37,7 +37,7 @@ Las apps mandan notificaciones por DBus y verdantis las dibuja:
 systemctl --user status verdantis.service
 busctl --user call org.freedesktop.Notifications \
   /org/freedesktop/Notifications org.freedesktop.Notifications GetServerInformation
-# → ssss "Verdantis" "MoriNo23" "0.10.0" "1.3"
+# → ssss "Verdantis" "MoriNo23" "0.12.1" "1.2"
 ```
 
 ### Reglas de la pila
@@ -45,6 +45,8 @@ busctl --user call org.freedesktop.Notifications \
 - Máximo **2 toasts simultáneos**; las demás esperan en una fila.
 - La fila es **FIFO por llegada**: ningún tipo (low/normal/critical) gana un hueco ni
   salta la fila — la `urgency` solo cambia duración y estilo, nunca la posición.
+- La fila tiene **tope de 20**: en un flood se descartan las más viejas, las
+  recién llegadas siempre entran.
 - **Una toast no se crea hasta que hay hueco visual**: las que esperan son datos,
   sin ventana ni timer.
 - El hueco se libera cuando el toast **vence** o el usuario lo **cierra**; en ese
@@ -53,11 +55,6 @@ busctl --user call org.freedesktop.Notifications \
   hueco (debajo del de arriba, con el gap de 12 px).
 - El texto se rasteriza con antialiasing en grises fijado por código: nítido en
   cualquier equipo, sin heredar el subpixel del fontconfig.
-
-### Dashboard e historial
-
-`http://127.0.0.1:8777` — historial (`~/.local/share/verdantis/history.jsonl`) y
-replay de notificaciones pasadas.
 
 ## One-shot (sin daemon)
 
