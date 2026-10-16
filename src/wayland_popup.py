@@ -434,65 +434,24 @@ def _layout_metrics(cuerpo, text_col_w, body_fs, app_name, hide_title,
 
 # Tags de markup que Pango SOPORTA de verdad. Pango NO conoce <a> ni <img>:
 # mandarle un body con <a href> a set_markup rompe el parseo (warning
-# "Unknown tag 'a'") y el texto deja de envolverse. Por eso los <a> se
-# transforman a mano en body_markup (spec `body-hyperlinks`).
+# "Unknown tag 'a'") y el texto deja de envolverse. Por eso se sanitizan.
 _PANGO_TAGS = ("b>", "i>", "u>", "s>", "big>", "small>", "tt>", "sub>",
                "sup>", "span", "strikethrough>")
 
-_A_HREF_RE = re.compile(
-    r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
-    re.S | re.I)
-_TAG_RE = re.compile(r'<[^>]*>')
 
+def _sanitize_pango_markup(text):
+    """Convierte markup de body (freedesktop 1.2) a markup que Pango entienda.
 
-def body_markup(text, accent="#80cbc4"):
-    """Body → (markup Pango, zonas de link) — FUENTE ÚNICA del spec
-    `body-hyperlinks`: la consumen el dibujado, la medición (`_body_metrics`)
-    y el hit-test del click (siempre el mismo markup → medición == dibujado,
-    spec `toast-body-ajuste`).
-
-    Cada <a href="URL">label</a> con scheme soportado (http/https/mailto/tel)
-    pasa a <span underline="single" color="accent">label</span> y su label
-    queda registrado como (url, start, end) — byte-exacto sobre el texto
-    PLANO que Pango renderiza (las coords que devuelve xy_to_index). Los
-    <a> sin scheme válido aplanan a label plano, como siempre: sin estilo
-    ni zona de click. Los <a> que no matchean el patrón (sin cerrar, sin
-    href) viajan verbatim y caen al fallback set_text del layout.
-    """
-    if not text or "<a " not in text:
-        return text, []
-    out = []      # markup (con tags, lo que ve set_markup)
-    plain = []    # texto renderizado (sin tags) — mide los rangos
-    links = []
-    pos = 0
-    for m in _A_HREF_RE.finditer(text):
-        out.append(text[pos:m.start()])
-        plain.append(_TAG_RE.sub("", text[pos:m.start()]))
-        url, label = m.group(1), m.group(2)
-        label_plain = _TAG_RE.sub("", label)
-        if url.startswith(("http://", "https://", "mailto:", "tel:")):
-            out.append('<span underline="single" color="{}">'.format(accent))
-            out.append(label)
-            out.append("</span>")
-            plain.append(label_plain)
-            start = sum(len(p) for p in plain[:-1])
-            links.append((url, start, start + len(label_plain)))
-        else:
-            out.append(label)
-            plain.append(label_plain)
-        pos = m.end()
-    out.append(text[pos:])
-    plain.append(_TAG_RE.sub("", text[pos:]))
-    return "".join(out), links
-
-
-def link_at(links, idx):
-    """URL del link cuyo rango [start, end) contiene idx; None si ninguno
-    (rango semiabierto: el byte SIGUIENTE al label ya es cuerpo)."""
-    for url, start, end in links:
-        if start <= idx < end:
-            return url
-    return None
+    - <a href="URL">label</a> → label plano (SIN subrayado ni color de link).
+      El toast ES el botón: el único propósito es el click (action/URL que ya
+      extrae el daemon). No hay links internos, nada de <a href> visible.
+    - Devuelve el texto tal cual si no hay tags reconocibles."""
+    import re
+    text = re.sub(
+        r'<a\s+[^>]*>(.*?)</a>',
+        r'\1',
+        text, flags=re.S | re.I)
+    return text
 
 
 def _has_pango_markup(text):
@@ -520,7 +479,7 @@ def _body_metrics(cuerpo, width, font_size=13, max_lines=None):
     cuerpo = (cuerpo or "").strip()
     if not cuerpo:
         return 0, 0
-    cuerpo = body_markup(cuerpo)[0]
+    cuerpo = _sanitize_pango_markup(cuerpo)
     ctx = Pango.Context()
     ctx.set_font_map(PangoCairo.font_map_get_default())
     layout = Pango.Layout(ctx)
@@ -676,7 +635,7 @@ class NotificationWidget(Gtk.DrawingArea):
     def __init__(self, app_name, app_icon, titulo, cuerpo, icon_path, image_path, accent,
                  image_data_raw=None, on_click=None, on_resize=None, on_close=None,
                  app_label=None, hide_title=False, persistent=False,
-                 actions=None, action_icons=False, on_link=None):
+                 actions=None, action_icons=False):
         super().__init__()
         self.set_app_paintable(True)
         screen = self.get_screen()
@@ -743,13 +702,6 @@ class NotificationWidget(Gtk.DrawingArea):
         # El URL se usa para el click (ya lo extrae el daemon del body/hints);
         # en el TEXTO VISIBLE no se muestra (las notificaciones son un botón).
         self._cuerpo = _strip_urls(cuerpo)
-        # Hyperlinks del body (spec `body-hyperlinks`): el markup con spans
-        # de link y la tabla de zonas se computan UNA vez — los consumen
-        # _draw, calc_card_height y el hit-test del click.
-        self._body_markup_text, self._body_links = body_markup(self._cuerpo, accent)
-        self._body_layout = None
-        self._body_xy = (0, 0)
-        self._on_link = on_link
         self._accent_rgb = _hex_rgb(accent)
         self._card_bg = _hex_rgb("#1e1e2e")
 
@@ -1041,17 +993,6 @@ class NotificationWidget(Gtk.DrawingArea):
                 if self._on_click:
                     self._on_click(key)
                 return True
-        # Click en un hyperlink del body (spec `body-hyperlinks`): SU url por
-        # hit-test de índice contra las zonas del markup — consume el evento,
-        # no dispara la default. Sin callback (X11 one-shot) no hay zona.
-        if self._on_link and self._body_links and self._body_layout is not None:
-            inside, idx, _trailing = self._body_layout.xy_to_index(
-                int((event.x - self._body_xy[0]) * Pango.SCALE),
-                int((event.y - self._body_xy[1]) * Pango.SCALE))
-            url = link_at(self._body_links, idx) if inside else None
-            if url:
-                self._on_link(url)
-                return True
         # Click del cuerpo: action_key=None → el daemon resuelve la default
         # (o xdg-open si no hay actions), exactamente como hoy.
         if self._on_click:
@@ -1122,10 +1063,8 @@ class NotificationWidget(Gtk.DrawingArea):
         if bold:
             fd.set_weight(Pango.Weight.BOLD)
         layout.set_font_description(fd)
-        # El body llega YA transformado (body_markup: spans de link + resto
-        # del markup del sender, spec `body-hyperlinks`). El layout queda
-        # guardado para el hit-test de links (xy_to_index da índices sobre
-        # ESTE layout, con el max_lines/ellipsis del estado dibujado).
+        # Soportar markup (body-markup): <b>, <i>, <u> y <a href> (sanitizado a span)
+        text = _sanitize_pango_markup(text)
         if _has_pango_markup(text):
             try:
                 layout.set_markup(text, -1)
@@ -1150,10 +1089,6 @@ class NotificationWidget(Gtk.DrawingArea):
         cr.move_to(x, y)
         PangoCairo.show_layout(cr, layout)
         ink, logical = layout.get_pixel_extents()
-        # Estado para el hit-test de links del body (spec `body-hyperlinks`):
-        # el layout vivo con el wrap/cap del frame dibujado.
-        self._body_layout = layout
-        self._body_xy = (x, y)
 
     def _draw_actions_row(self, cr, W, wx, actions_y, x0, x1, fs):
         """Fila de botones de acción (spec `toast-acciones`).
@@ -1463,9 +1398,9 @@ class NotificationWidget(Gtk.DrawingArea):
                 PangoCairo.show_layout(cr, ll)
                 yy += _TITLE_ROW_H
 
-            # Body con wrap real + ellipsis cuando colapsa (markup pre-transformado)
+            # Body con wrap real + ellipsis cuando colapsa
             cr.set_source_rgb(*bcol)
-            self._draw_text(cr, self._body_markup_text, fr.text_col_x, yy, fr.text_col_w,
+            self._draw_text(cr, self._cuerpo, fr.text_col_x, yy, fr.text_col_w,
                             fr.body_fs, bcol, bcol, bold=False,
                             max_lines=(0 if lay.expanded else lay.cap))
 
@@ -1599,7 +1534,7 @@ class WaylandPopup:
                  duration=8000, margin=16, corner="top-right", accent="#89b4fa",
                  app_name="", app_icon="", on_close=None, image_data_raw=None,
                  on_click=None, urgency=1, app_label=None, hide_title=False,
-                 actions=None, action_icons=False, on_link=None):
+                 actions=None, action_icons=False):
         self.app_name = app_name
         self.app_icon = app_icon
         self.titulo = titulo
@@ -1707,7 +1642,6 @@ class WaylandPopup:
             app_label=self.app_label, hide_title=self.hide_title,
             persistent=(self.duration == 0),
             actions=self.actions, action_icons=self.action_icons,
-            on_link=on_link,
         )
         h = self._card.desired_height() if self._card else WaylandPopup.calc_card_height(
             self.app_name, self.cuerpo, self.image_path)
