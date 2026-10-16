@@ -94,6 +94,7 @@ def api_replay(nid):
         expire_timeout=entry["expire_timeout"],
         replaces_id=0,
         sender="dashboard-replay",
+        replay=True,  # dibuja el card pero no emite señales al bus
     )
     return jsonify({"ok": True, "replayed": nid})
 

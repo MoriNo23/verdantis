@@ -18,7 +18,22 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.11.0"
+VERSION = "0.11.1"
+# Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
+# GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
+# hay features de 1.3 implementadas, no se anuncia.
+SPEC_VERSION = "1.2"
+
+# Fuente simbólica del cierre → razón NotificationClosed del spec 1.2
+# (1=expiró, 2=usuario, 3=CloseNotification). Único mapeo del contrato:
+# la UI comunica la fuente ("timeout"/"user"/"action"/"dbus-close"), nunca
+# el número. None como fuente = cierre silencioso (replaces/dedup/replay).
+_RAZONES = {"timeout": 1, "user": 2, "action": 2, "dbus-close": 3}
+
+
+def _reason_for(source):
+    """Fuente simbólica → razón del spec; None = no emitir señal."""
+    return _RAZONES.get(source)
 
 
 def _is_browser(app_name, desktop_entry):
@@ -227,6 +242,9 @@ class NotificationManager:
         # dedup key -> (nid, timestamp): rastrea la última emisión de cada
         # contenido para detectar duplicados dentro de DEDUP_WINDOW.
         self._dedup = {}
+        # Ids reproducidos por el dashboard: su cierre/acción no toca el bus
+        # (spec `contrato-dbus`, escenario replay).
+        self._replay = set()
         # Ring buffer of recent notifications for the dashboard + replay
         self.history = []
         self.MAX_HISTORY = 200
@@ -299,17 +317,21 @@ class NotificationManager:
 
     def notify(self, app_name="", app_icon="", summary="", body="",
                actions=None, hints=None, expire_timeout=-1, replaces_id=0,
-               sender=""):
+               sender="", replay=False):
         if hints is None:
             hints = {}
         if actions is None:
             actions = []
 
         if replaces_id > 0:
-            self._close_id(replaces_id)
+            # Reemplazo in-place: el card sigue vivo, NO es un cierre (spec
+            # `contrato-dbus`) — fuente None = sin emisión.
+            self._close_id(replaces_id, source=None)
 
         nid = self._next_id
         self._next_id += 1
+        if replay:
+            self._replay.add(nid)
 
         # Dedup por contenido: si la MISMA notificación (app + summary + body)
         # ya fue emitida en la ventana de DEDUP_WINDOW, reemplazamos la anterior
@@ -324,8 +346,9 @@ class NotificationManager:
                 self._dedup.pop(key, None)
             elif now - old_ts <= self.DEDUP_WINDOW:
                 # Duplicado real dentro de la ventana: cerrar el anterior para
-                # que el nuevo lo reemplace sin dejar dos toasts iguales.
-                self._close_id(old_id)
+                # que el nuevo lo reemplace sin dejar dos toasts iguales. No es
+                # un cierre del contrato (spec `contrato-dbus`): fuente None.
+                self._close_id(old_id, source=None)
                 self._dedup.pop(key, None)
         self._dedup[key] = (nid, now)
 
@@ -410,7 +433,10 @@ class NotificationManager:
             # ("network-wireless-disconnected", "dialog-warning", ...) llegaba
             # como "" y el popup no podía resolver el logo por tema.
             "app_icon": app_icon_file or app_icon,
-            "on_close": lambda nid=nid: self._on_closed(nid),
+            # Fuente simbólica de cierre ("timeout"/"user"/"action"): la razón
+            # del spec la resuelve el daemon (único mapeo, ver _RAZONES). El
+            # popup llama cb(source) con UN solo argumento posicional.
+            "on_close": lambda source="timeout", nid=nid: self._on_closed(nid, source),
             # La key viaja como PRIMER posicional (el widget llama
             # `on_click(key)`): si el lambda la declarara después de nid, se
             # la comería como nid (bug del live: el toast no se cerraba y
@@ -605,10 +631,15 @@ class NotificationManager:
             self._show_popup(nid2, qk2)
             self._ensure_pump()
 
-    def _close_id(self, nid):
+    def _close_id(self, nid, source="dbus-close"):
+        """Cierre explícito por id. `source` es la fuente simbólica del
+        contrato ("dbus-close" desde el bus; None = silencio para
+        replaces/dedup): la emisión la hace `_on_closed` vía el callback del
+        popup, así hay UN solo trazado y los ids sin popup en pantalla
+        (desconocidos o en cola) no emiten nada (spec `contrato-dbus`)."""
         for i, (aid, popup) in enumerate(self._active):
             if aid == nid:
-                popup._close()
+                popup._close(source)
                 break
         self._pending = [(qid, qk, q) for qid, qk, q in self._pending if qid != nid]
         # Reflow inmediato: remover de _active y re-posicionar el stack AHORA
@@ -620,14 +651,9 @@ class NotificationManager:
         # Sincroniza la tabla de dedup: si el toast que se cierra era el último
         # portador de una clave, esa entrada queda libre para el próximo contenido.
         self._dedup = {k: v for k, v in self._dedup.items() if v[0] != nid}
+        self._replay.discard(nid)
         self._reflow_stack()
         self._drenar_cola()
-        if self._dbus_bus:
-            self._dbus_bus.emit_signal(
-                None, "/org/freedesktop/Notifications",
-                "org.freedesktop.Notifications", "NotificationClosed",
-                GLib.Variant("(uu)", (nid, 2)),
-            )
 
     def _on_action_invoked(self, nid, action_key=None):
         info = self._notifications.get(nid, {})
@@ -643,7 +669,11 @@ class NotificationManager:
         action_key = action_key or _pick_action_key(actions)
         sender = info.get("sender", "") or None
 
-        if action_key and self._dbus_bus:
+        # Replay del dashboard: no emite ActionInvoked al bus (spec
+        # `contrato-dbus`, escenario replay). El xdg-open de abajo sí puede
+        # correr: es local, no toca el bus.
+        es_replay = nid in self._replay
+        if action_key and self._dbus_bus and not es_replay:
             try:
                 self._dbus_bus.emit_signal(
                     sender, "/org/freedesktop/Notifications",
@@ -675,28 +705,45 @@ class NotificationManager:
             except Exception:
                 pass
 
-        # Cierre inmediato del popup visual (su callback dispara _on_closed)
+        # Cierre inmediato del popup visual con fuente "action": su callback
+        # dispara _on_closed, que emite NotificationClosed razón 2 — DESPUÉS
+        # del ActionInvoked de arriba (orden fijo del spec `contrato-dbus`).
         for aid, popup in list(self._active):
             if aid == nid:
-                popup._close()
+                popup._close("action")
                 break
 
-    def _on_closed(self, nid):
-        """Cierre por TIMER del popup (el explícito entra por `_close_id`).
+    def _on_closed(self, nid, source="timeout"):
+        """Cierre de un popup vivo (timer por defecto; la UI pasa "user"
+        desde la franja/teclado y "action" desde el click).
 
         Además de limpiar el dict hay que re-flowear la pila y darle el hueco a
         la primera de la cola: sin eso, con la pila llena las pendientes esperan
         para siempre (nadie más agenda el drenado) y los toasts de abajo quedan
         con el hueco del que venció (spec `toast-stack`).
+
+        La emisión del contrato vive acá (único trazado): fuente → razón en
+        _RAZONES; fuente None o replay = silencio.
         """
         self._notifications.pop(nid, None)
         self._active = [(aid, p) for aid, p in self._active if aid != nid]
         self._reflow_stack()
         self._drenar_cola()
+        es_replay = nid in self._replay
+        self._replay.discard(nid)
+        reason = _reason_for(source)
+        if reason is not None and not es_replay and self._dbus_bus:
+            self._dbus_bus.emit_signal(
+                None, "/org/freedesktop/Notifications",
+                "org.freedesktop.Notifications", "NotificationClosed",
+                GLib.Variant("(uu)", (nid, reason)),
+            )
 
     def close_all(self):
         for _, popup in self._active:
-            popup._close()
+            # Apagado/limpieza interna: sin emisión (fuente None) — no es un
+            # cierre con razón para el cliente (spec `contrato-dbus`).
+            popup._close(None)
         self._active = []
         self._pending = []
         self._pump_scheduled = False
@@ -748,7 +795,7 @@ class NotificationDaemon:
             invocation.return_value(GLib.Variant("(as)", (caps,)))
         elif method_name == "GetServerInformation":
             invocation.return_value(GLib.Variant("(ssss)", (
-                APP_NAME, VENDOR, VERSION, "1.3",
+                APP_NAME, VENDOR, VERSION, SPEC_VERSION,
             )))
 
     def _handle_get_property(self, conn, sender, obj_path, iface_name, prop_name):

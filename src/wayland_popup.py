@@ -975,8 +975,10 @@ class NotificationWidget(Gtk.DrawingArea):
         # Click en el pill de cerrar (X) → cierra el toast (solo persistentes).
         # NO dispara on_click/ActionInvoked: es cierre manual del usuario.
         if self._persistent and self._in_close_rect(event.x, event.y):
+            # Fuente simbólica "user": el daemon la mapea a la razón del spec
+            # (spec `contrato-dbus`) — el widget nunca ve el número.
             if self._on_close:
-                self._on_close()
+                self._on_close("user")
             return True
         # Click en la franja Expandir/Contraer → toggle el estado (consume el evento)
         if self._expand_rect:
@@ -1648,7 +1650,7 @@ class WaylandPopup:
         self.window.add(self._card)
         if not self._on_close:
             self.window.connect("destroy", lambda *a: Gtk.main_quit())
-        self.window.connect("key-press-event", lambda *a: self._close())
+        self.window.connect("key-press-event", lambda *a: self._close("user"))
 
     def stack_height(self):
         """Alto con el que esta card ocupa su hueco en la pila.
@@ -1793,7 +1795,11 @@ class WaylandPopup:
         self._start = time.time()
         GLib.timeout_add(50, self._update_progress)
 
-    def _close(self, *a):
+    def _close(self, source="timeout", *a):
+        """Cierra el toast comunicando la FUENTE simbólica del cierre
+        ("timeout" por defecto — lo que pasa `_update_progress`; "user" desde
+        franja/teclado; "action"/"dbus-close"/None llegan del daemon). La
+        razón del spec la resuelve el daemon (spec `contrato-dbus`)."""
         if self._closed:
             return
         self._closed = True
@@ -1802,7 +1808,7 @@ class WaylandPopup:
             self.window.destroy()
             self.window = None
         if cb:
-            cb()
+            cb(source)
 
     def show(self):
         self.prepare()
