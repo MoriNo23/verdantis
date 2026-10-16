@@ -165,6 +165,25 @@ def test_replay_no_emite_ni_cierre_ni_accion():
     )
 
 
+# --- GetCapabilities: solo caps servidas de verdad ---
+
+def test_get_capabilities_sin_body_hyperlinks():
+    # La cap se quitó con el revert del por-región (spec `body-hyperlinks`,
+    # "GetCapabilities no anuncia body-hyperlinks"): anunciarla sin servir
+    # links interactivos es prometer de más.
+    d = NotificationDaemon()
+    invocation = Mock()
+    d._handle_method_call(
+        None, ":1.1", "/org/freedesktop/Notifications",
+        "org.freedesktop.Notifications", "GetCapabilities",
+        None, invocation,
+    )
+    caps = invocation.return_value.call_args[0][0].unpack()[0]
+    assert "body-hyperlinks" not in caps
+    assert "body" in caps
+    assert "body-markup" in caps
+
+
 # --- GetServerInformation: spec_version 1.2 ---
 
 def test_get_server_information_spec_version():

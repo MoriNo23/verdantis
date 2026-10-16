@@ -18,7 +18,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.11.1"
+VERSION = "0.11.2"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -789,8 +789,12 @@ class NotificationDaemon:
             # (fila de botones renderizada) y "action-icons" es real (hint →
             # icono del tema por key, con fallback a label). "sound" NO se
             # anuncia: los hints sound-* se siguen ignorando.
+            # "body-hyperlinks" tampoco: el <a href> se aplanan a label plano
+            # y el click usa la URL única extraída (spec `body-hyperlinks`
+            # de ausencia — se construyó el por-región y se revirtió, ver
+            # history d64ce38).
             caps = ["actions", "action-icons", "body", "body-markup",
-                    "body-hyperlinks", "icon-static", "persistence"]
+                    "icon-static", "persistence"]
             invocation.return_value(GLib.Variant("(as)", (caps,)))
         elif method_name == "GetServerInformation":
             invocation.return_value(GLib.Variant("(ssss)", (

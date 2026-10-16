@@ -43,7 +43,7 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 ## Build & test
 
 - Tests: `.venv/bin/python -m pytest tests/ -q` (suite mínima viva: contrato
-  D-Bus de cierre + hyperlinks del body + metatests de sensibilidad, <5s).
+  D-Bus de cierre + caps + metatests de sensibilidad, <5s).
   La suite de render completa fue eliminada a pedido del usuario
   (recuperable por historia de git).
 - Mockups del toast: viven en `mockups/` (app Next.js + wireframe-ui, parte
