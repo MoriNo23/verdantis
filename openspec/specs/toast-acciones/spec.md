@@ -65,3 +65,56 @@ La fila de botones SHALL sumar su altura a la card en la misma fuente de métric
 #### Scenario: La pila respeta la card con botones
 - **WHEN** un toast con botones convive con otros en la pila y cambia de alto (expandir/contraer)
 - **THEN** las cards mantienen el gap constante, igual que ante cualquier otro cambio de altura
+
+### Requirement: Los botones muestran estados interactivos
+
+Cada botón de acción SHALL mostrar estado hover — el fill de su segmento se intensifica con el puntero encima — y estado pressed: durante la presión del botón el fill SHALL intensificarse aún más que en hover. La acción SHALL ejecutarse al soltar el botón dentro de su rect; soltar fuera del rect SHALL cancelar sin emitir `ActionInvoked`.
+
+#### Scenario: Hover sobre un botón
+
+- **WHEN** el puntero está sobre un botón de acción
+- **THEN** el fill del segmento se intensifica respecto del estado de reposo
+
+#### Scenario: Pressed visible durante la presión
+
+- **WHEN** un botón está presionado sin soltar
+- **THEN** el fill del segmento se intensifica aún más que en hover
+
+#### Scenario: Soltar dentro ejecuta la acción
+
+- **WHEN** se presiona un botón y se suelta dentro de su rect
+- **THEN** se emite `ActionInvoked(id, key)` de ese botón, y solo esa, y el toast se cierra como hoy
+
+#### Scenario: Arrastrar fuera cancela
+
+- **WHEN** se presiona un botón, se arrastra fuera de su rect y se suelta
+- **THEN** no se emite `ActionInvoked` alguna y el toast permanece en pantalla
+
+### Requirement: El cursor promete solo el click real
+
+El cursor sobre el cuerpo y los botones SHALL ser pointer únicamente cuando el click en ese elemento tiene efecto en esa instancia del toast; cuando el click no tiene efecto, SHALL ser el cursor default. El click del cuerpo en el daemon siempre tiene efecto (acción default, apertura de URL o cierre), por lo que en el daemon el cursor sobre el cuerpo es siempre pointer.
+
+#### Scenario: Daemon con click efectivo
+
+- **WHEN** un toast del daemon muestra el cuerpo y el puntero pasa sobre el cuerpo o un botón
+- **THEN** el cursor es pointer (el click tiene efecto: default, URL, cierre o action)
+
+#### Scenario: Daemon sin default y sin URL
+
+- **WHEN** un toast del daemon no tiene default ni URL y el puntero pasa sobre el cuerpo
+- **THEN** el cursor es pointer: el click cierra el toast
+
+#### Scenario: Replay con URL archivada
+
+- **WHEN** se reproduce un registro con URL archivada y el puntero pasa sobre el cuerpo
+- **THEN** el cursor es pointer
+
+#### Scenario: Sin click efectivo no hay pointer
+
+- **WHEN** se muestra un one-shot sin URL, o un registro reproducido sin URL, y el puntero recorre el card
+- **THEN** el cursor es default en todo el card — ningún elemento promete un click que no ocurre
+
+#### Scenario: Botones de replay sin efecto
+
+- **WHEN** un registro reproducido renderiza botones de acción (no hay sender que los ejecute) y el puntero pasa sobre ellos
+- **THEN** el cursor es default sobre los botones, aunque el cuerpo con URL muestre pointer

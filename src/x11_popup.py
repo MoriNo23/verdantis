@@ -24,6 +24,7 @@ import time
 # `wayland_popup` PRIMERO: fija Gtk/Gdk 3.0 (pitfall de imports gi) y aporta
 # el render — la ventana de acá es solo el contenedor.
 from wayland_popup import NotificationWidget, _CARD_WIDTH
+from app_info import APP_ID, DEFAULT_ACCENT
 from gi.repository import Gtk, GLib, Gdk
 
 
@@ -49,8 +50,8 @@ class NotificacionX11:
     `posicion_esquina`. Sin display, GTK emite su propio error y sale ≠ 0."""
 
     def __init__(self, titulo="", cuerpo="", icon_path=None, image_path=None,
-                 duration=8000, margin=16, corner="top-right", accent="#89b4fa",
-                 app_name="", app_icon=""):
+                 duration=8000, margin=16, corner="top-right", accent=DEFAULT_ACCENT,
+                 app_name="", app_icon="", on_click=None, buttons_actionable=True):
         self.titulo = titulo
         self.cuerpo = cuerpo
         self.icon_path = icon_path
@@ -61,10 +62,13 @@ class NotificacionX11:
         self.accent = accent
         self.app_name = app_name
         self.app_icon = app_icon
+        self._on_click = on_click
+        self._buttons_actionable = buttons_actionable
         self.window = None
         self._card = None
         self._h = 0
         self._start = 0
+        self._hover_credit_ms = 0   # ms de hover: el crédito que pausa el wipe
         self._closed = False
 
     def _build_ui(self):
@@ -82,16 +86,22 @@ class NotificacionX11:
         self._card = NotificationWidget(
             self.app_name, self.app_icon, self.titulo, self.cuerpo,
             self.icon_path, self.image_path, self.accent,
+            on_click=self._on_click,
             on_resize=self._resize_card,
             on_close=self._close,
             persistent=(self.duration == 0),
+            buttons_actionable=self._buttons_actionable,
         )
         self._h = self._card.desired_height()
         self._card.set_size_request(_CARD_WIDTH, self._h)
         self.window.set_size_request(_CARD_WIDTH, self._h)
         self.window.add(self._card)
         self.window.connect("destroy", lambda *a: Gtk.main_quit())
-        self.window.connect("key-press-event", lambda *a: self._close())
+        # Solo Escape cierra por teclado (antes: cualquier tecla).
+        self.window.connect(
+            "key-press-event",
+            lambda w, e: self._close()
+            if e.keyval == Gdk.KEY_Escape else False)
 
     def _posicionar(self):
         display = Gdk.Display.get_default()
@@ -118,8 +128,14 @@ class NotificacionX11:
     def _tick(self):
         if self._closed or self.duration <= 0:
             return False
+        # Hover = pausa del vencimiento (spec `toast-franja-descarte`), igual
+        # que el tick Wayland: el crédito congela el wipe tick a tick.
+        if self._card and self._card._hover:
+            self._hover_credit_ms = min(
+                self._hover_credit_ms + 50, self.duration)
         # monotonic: NTP/suspend no congela ni acelera el timer (auditoría #14)
-        elapsed = (time.monotonic() - self._start) * 1000
+        elapsed = ((time.monotonic() - self._start) * 1000
+                   - self._hover_credit_ms)
         remaining = max(0, self.duration - elapsed)
         self._card.set_fraction(remaining / self.duration)
         if remaining <= 0:
@@ -140,7 +156,7 @@ class NotificacionX11:
         # context): mejor aviso por stderr + exit 1 (spec `entrada-fallback`,
         # "Forzar fallback en headless").
         if not Gtk.init_check()[0]:
-            print("[notify] sin display de GTK: no hay display para el "
+            print(f"[{APP_ID}] sin display de GTK: no hay display para el "
                   "fallback X11", file=sys.stderr)
             sys.exit(1)
         self._build_ui()

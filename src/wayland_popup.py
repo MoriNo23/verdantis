@@ -15,7 +15,7 @@ gi.require_version('GtkLayerShell', '0.1')
 gi.require_version('PangoCairo', '1.0')
 from gi.repository import Gtk, GtkLayerShell, GLib, Gdk, GdkPixbuf, Pango, PangoCairo
 
-from app_info import APP_ID, APP_NAME
+from app_info import APP_ID, APP_NAME, DEFAULT_ACCENT
 
 
 # ── Bundled font: Manrope (OFL) ──────────────────────────────────────
@@ -275,6 +275,20 @@ _APP_FS = 10
 # logo resolvió o no.
 _PLACEHOLDER_BG = "#313244"
 _PLACEHOLDER_FG = "#a6adc8"
+
+# Paleta del card — constantes de módulo para que tests/test_contraste.py
+# (spec `toast-contraste`) mida LOS hex reales que dibuja el render; una copia
+# en el test divergiría silenciosamente. Zona izquierda = sin wipe; derecha
+# = sobre el tinte del acento. _TXT_BANDA_R es el label de "Ver más" y de los
+# botones en la zona oscura (en la clara se usa _TXT_TITLE_L).
+_CARD_BG_HEX = "#1e1e2e"
+_TXT_TITLE_L = "#e6e9f2"   # título más claro que el body: jerarquía
+_TXT_BODY_L = "#cdd6f4"
+_TXT_APP_L = "#a6adc8"
+_TXT_TITLE_R = "#d4edd4"
+_TXT_BODY_R = "#c8e6c8"
+_TXT_APP_R = "#8cb88c"
+_TXT_BANDA_R = (0.85, 0.95, 0.85)
 
 
 def rrect(cr, x, y, w, h, r):
@@ -625,7 +639,7 @@ class NotificationWidget(Gtk.DrawingArea):
     # Constantes de layout / colapso
     _MAX_VISIBLE_LINES = 3      # líneas visibles del body antes de colapsar
     _BTN_H = 28                 # alto de la franja expandir/contraer (target de toque holgado)
-    _CLOSE_STRIP_W = 44         # ancho de la franja vertical de descarte (persistentes)
+    _CLOSE_STRIP_W = 80         # ancho de la franja vertical de descarte (hover)
 
     # Fuente: Manrope (geométrica, moderna). Empaquetada en src/fonts/ y
     # registrada via fontconfig al importar (sin instalar system-wide).
@@ -636,12 +650,11 @@ class NotificationWidget(Gtk.DrawingArea):
     _BODY_FONT = "Manrope 11"
     _TITLE_FONT = "Manrope Bold 11"
     _APP_FONT = "Manrope 10"
-    _BTN_FONT_SIZE = 10         # botón Ver más/menos + pill de cerrar
 
     def __init__(self, app_name, app_icon, titulo, cuerpo, icon_path, image_path, accent,
                  image_data_raw=None, on_click=None, on_resize=None, on_close=None,
                  app_label=None, hide_title=False, persistent=False,
-                 actions=None, action_icons=False):
+                 actions=None, action_icons=False, buttons_actionable=True):
         super().__init__()
         self.set_app_paintable(True)
         screen = self.get_screen()
@@ -696,9 +709,17 @@ class NotificationWidget(Gtk.DrawingArea):
         self._on_click = on_click
         self._on_close = on_close
         self._persistent = persistent
+        # ¿Los botones ejecutan? El daemon siempre (ActionInvoked al sender);
+        # el replay no (no hay sender — renderizan por fidelidad, sin efecto).
+        self._buttons_actionable = buttons_actionable
         self._hover = False            # mouse sobre el card
         self._hover_close = False     # mouse sobre el pill de cerrar
         self._close_rect = None       # (x0, y0, x1, y1) del pill de cerrar
+        # Estados pressed (release-based en franja/X y botones): el press
+        # marca, el release dentro del mismo rect ejecuta (specs ADDED).
+        self._pressed_close = False
+        self._pressed_action_idx = None
+        self._cursor_hand = False      # último cursor pedido (anti-spam)
         # Label de app compuesto: "Brave - <tab>" (navegadores). Con hide_title,
         # el título va dentro del label y no se dibuja como línea aparte.
         self._app_label = app_label
@@ -709,18 +730,18 @@ class NotificationWidget(Gtk.DrawingArea):
         # en el TEXTO VISIBLE no se muestra (las notificaciones son un botón).
         self._cuerpo = _strip_urls(cuerpo)
         self._accent_rgb = _hex_rgb(accent)
-        self._card_bg = _hex_rgb("#1e1e2e")
+        self._card_bg = _hex_rgb(_CARD_BG_HEX)
 
         # Left (uncovered) - normal colors
-        # Título más claro que el body (#e6e9f2 vs #cdd6f4) para jerarquía
-        self._left_title = _hex_rgb("#e6e9f2")
-        self._left_body = _hex_rgb("#cdd6f4")
-        self._left_app = _hex_rgb("#a6adc8")
+        # Título más claro que el body para jerarquía
+        self._left_title = _hex_rgb(_TXT_TITLE_L)
+        self._left_body = _hex_rgb(_TXT_BODY_L)
+        self._left_app = _hex_rgb(_TXT_APP_L)
 
         # Right (covered by green wipe) - readable on dark green
-        self._right_title = _hex_rgb("#d4edd4")
-        self._right_body = _hex_rgb("#c8e6c8")
-        self._right_app = _hex_rgb("#8cb88c")
+        self._right_title = _hex_rgb(_TXT_TITLE_R)
+        self._right_body = _hex_rgb(_TXT_BODY_R)
+        self._right_app = _hex_rgb(_TXT_APP_R)
         self._app_icon_pb = None
         self._image_left_pb = None
         self._image_pb = None
@@ -825,18 +846,20 @@ class NotificationWidget(Gtk.DrawingArea):
         self.connect("draw", self._draw)
         self.add_events(
             Gdk.EventMask.BUTTON_PRESS_MASK
+            | Gdk.EventMask.BUTTON_RELEASE_MASK
             | Gdk.EventMask.ENTER_NOTIFY_MASK
             | Gdk.EventMask.LEAVE_NOTIFY_MASK
             | Gdk.EventMask.POINTER_MOTION_MASK
         )
         self.connect("button-press-event", self._on_button_press)
+        self.connect("button-release-event", self._on_button_release)
         self.connect("enter-notify-event", self._on_enter)
         self.connect("leave-notify-event", self._on_leave)
         self.connect("motion-notify-event", self._on_motion)
 
     def _on_enter(self, widget, event):
         self._hover = True
-        self._set_cursor_hand()
+        self._aplicar_cursor(event.x, event.y)
         self.queue_draw()
         self._resize_por_hover()
 
@@ -844,6 +867,11 @@ class NotificationWidget(Gtk.DrawingArea):
         self._hover = False
         self._hover_close = False
         self._hover_action_idx = None
+        # La presión en curso muere con el leave (release-based): el release
+        # posterior, aunque vuelva al rect, ya no ejecuta.
+        self._pressed_close = False
+        self._pressed_action_idx = None
+        self._cursor_hand = False
         self._set_cursor(False)
         self.queue_draw()
         self._resize_por_hover()
@@ -851,15 +879,15 @@ class NotificationWidget(Gtk.DrawingArea):
     def _resize_por_hover(self):
         """Redimensiona el card si el cambio de hover altera el wrap.
 
-        Al entrar/salir del hover de un persistente la franja reclama (o
-        devuelve) sus 44 px y el texto re-wrappea: si eso cambia el número de
-        líneas, el alto requerido también. Se reutiliza la vía de resize ya
-        existente (la de `toggle_expanded` → `on_resize` → `_resize_card`), y
-        solo se dispara cuando el alto REALmente cambió: un body de 1-2 líneas
-        no cambia de líneas al pasar de 332 a 288 y no genera ningún resize
-        (sin esto, cada hover de un card chico sería un loop de eventos).
+        Al entrar/salir del hover la franja reclama (o devuelve) sus 80 px y
+        el texto re-wrappea: si eso cambia el número de líneas, el alto
+        requerido también. Se reutiliza la vía de resize ya existente (la de
+        `toggle_expanded` → `on_resize` → `_resize_card`), y solo se dispara
+        cuando el alto REALmente cambió: un body de 1-2 líneas no cambia de
+        líneas al re-wrappear y no genera ningún resize (sin esto, cada hover
+        de un card chico sería un loop de eventos).
         """
-        if not self._persistent or not self._on_resize:
+        if not self._on_resize:
             return
         h = self.desired_height()
         if h != self.get_size_request()[1]:
@@ -931,9 +959,10 @@ class NotificationWidget(Gtk.DrawingArea):
             return
         self._hover = dentro
         if dentro:
-            self._set_cursor_hand()
+            self._aplicar_cursor(x, y)
         else:
             self._hover_close = False
+            self._cursor_hand = False
             self._set_cursor(False)
         self.queue_draw()
         self._resize_por_hover()
@@ -941,7 +970,7 @@ class NotificationWidget(Gtk.DrawingArea):
     def _on_motion(self, widget, event):
         # Hover de la fila de botones (spec toast-acciones): el segmento bajo
         # el puntero intensifica su fill (22% → 38%). Aplica a CUALQUIER toast
-        # con actions — la franja de descarte sigue siendo solo persistentes.
+        # con actions, igual que la franja (spec `toast-franja-descarte`).
         over_action = None
         for i, rect in enumerate(self._action_rects):
             if rect[0] <= event.x <= rect[2] and rect[1] <= event.y <= rect[3]:
@@ -950,19 +979,11 @@ class NotificationWidget(Gtk.DrawingArea):
         if over_action != self._hover_action_idx:
             self._hover_action_idx = over_action
             self.queue_draw()
-        if not self._persistent:
-            return
         over_close = self._in_close_rect(event.x, event.y)
         if over_close != self._hover_close:
             self._hover_close = over_close
-            self._set_cursor(over_close)
             self.queue_draw()
-
-    def _set_cursor_hand(self):
-        win = self.get_window()
-        if win:
-            win.set_cursor(Gdk.Cursor.new_from_name(
-                self.get_display(), "pointer"))
+        self._aplicar_cursor(event.x, event.y)
 
     def _set_cursor(self, hand):
         win = self.get_window()
@@ -976,14 +997,35 @@ class NotificationWidget(Gtk.DrawingArea):
         x0, y0, x1, y1 = self._close_rect
         return x0 <= x <= x1 and y0 <= y <= y1
 
+    def _cursor_por_posicion(self, x, y):
+        """Cursor honesto (spec `toast-acciones`, ADDED): pointer SOLO donde
+        el click tiene efecto — franja/X siempre (cierre manual), cuerpo si
+        hay callback (daemon, o replay con URL archivada), botones solo si el
+        sender puede ejecutarlos (replay: no). El resto: default."""
+        if self._in_close_rect(x, y):
+            return True
+        en_boton = any(
+            rect[0] <= x <= rect[2] and rect[1] <= y <= rect[3]
+            for rect in self._action_rects)
+        if en_boton:
+            return bool(self._buttons_actionable and self._on_click)
+        return self._on_click is not None
+
+    def _aplicar_cursor(self, x, y):
+        """Pide el cursor honesto para (x, y), solo cuando cambia."""
+        hand = self._cursor_por_posicion(x, y)
+        if hand != self._cursor_hand:
+            self._cursor_hand = hand
+            self._set_cursor(hand)
+
     def _on_button_press(self, widget, event):
-        # Click en el pill de cerrar (X) → cierra el toast (solo persistentes).
-        # NO dispara on_click/ActionInvoked: es cierre manual del usuario.
-        if self._persistent and self._in_close_rect(event.x, event.y):
-            # Fuente simbólica "user": el daemon la mapea a la razón del spec
-            # (spec `contrato-dbus`) — el widget nunca ve el número.
-            if self._on_close:
-                self._on_close("user")
+        # Press en el pill de cerrar (X) → marca pressed y consume (cualquier
+        # toast, persistente o con timer — spec `toast-franja-descarte`): el
+        # cierre va al SOLTAR dentro de la franja (estados pressed). NO
+        # dispara on_click/ActionInvoked: es cierre manual del usuario.
+        if self._in_close_rect(event.x, event.y):
+            self._pressed_close = True
+            self.queue_draw()
             return True
         # Click en la franja Expandir/Contraer → toggle el estado (consume el evento)
         if self._expand_rect:
@@ -991,19 +1033,50 @@ class NotificationWidget(Gtk.DrawingArea):
             if x0 <= event.x <= x1 and y0 <= event.y <= y1:
                 self.toggle_expanded()
                 return True
-        # Click en un botón de acción (spec toast-acciones) → SU key: consume
-        # el evento — nada de default/URL fantasma por fall-through.
-        for rect in self._action_rects:
+        # Press en un botón de acción (spec toast-acciones): consume SIEMPRE
+        # (nada de default/URL fantasma por fall-through); marca pressed y
+        # ejecuta al SOLTAR — solo si es accionable (replay: sin sender).
+        for i, rect in enumerate(self._action_rects):
             x0, y0, x1, y1, key = rect
             if x0 <= event.x <= x1 and y0 <= event.y <= y1:
-                if self._on_click:
-                    self._on_click(key)
+                if self._buttons_actionable and self._on_click:
+                    self._pressed_action_idx = i
+                    self.queue_draw()
                 return True
         # Click del cuerpo: action_key=None → el daemon resuelve la default
-        # (o xdg-open si no hay actions), exactamente como hoy.
+        # (o xdg-open si no la hay). Si el callback pide cierre (retorna
+        # True — p. ej. el replay, que no tiene daemon), se cierra "action".
         if self._on_click:
-            self._on_click(None)
+            if self._on_click(None):
+                self._close("action")
         return True
+
+    def _on_button_release(self, widget, event):
+        """Release de franja/X y botones (estados pressed): la acción se
+        ejecuta al SOLTAR dentro del MISMO rect; soltar fuera cancela y
+        restaura el estado de hover. La barra "Ver más" y el cuerpo quedan
+        press-based (PRODUCT.md no los nombra en los estados)."""
+        if self._pressed_close:
+            dentro = self._in_close_rect(event.x, event.y)
+            self._pressed_close = False
+            self.queue_draw()
+            # Fuente simbólica "user": el daemon la mapea a la razón del spec
+            # (spec `contrato-dbus`) — el widget nunca ve el número.
+            if dentro and self._on_close:
+                self._on_close("user")
+            return True
+        if self._pressed_action_idx is not None:
+            i = self._pressed_action_idx
+            self._pressed_action_idx = None
+            dentro = False
+            if 0 <= i < len(self._action_rects):
+                x0, y0, x1, y1, key = self._action_rects[i]
+                dentro = x0 <= event.x <= x1 and y0 <= event.y <= y1
+            self.queue_draw()
+            if dentro and self._buttons_actionable and self._on_click:
+                self._on_click(key)
+            return True
+        return False
 
     def toggle_expanded(self):
         self._expanded = not self._expanded
@@ -1012,15 +1085,16 @@ class NotificationWidget(Gtk.DrawingArea):
             self._on_resize(self.desired_height())
 
     def _strip_w(self):
-        """Ancho que la franja de descarte RECLAMA en el estado actual (0 o 44).
+        """Ancho que la franja de descarte RECLAMA en el estado actual (0 u 80).
 
         ÚNICA autoridad del gate hover-dependiente: la consumen `_eff_text_width`
         (medición del wrap), `_draw` (columna de texto, barra y dibujado de la
-        franja) y el hit-rect de cierre. La franja solo existe en persistentes
-        y solo con el puntero encima: sin hover NO se dibuja (cero píxeles de
-        tinte/X) y su ancho NO se reserva (la columna de texto queda completa).
+        franja) y el hit-rect de cierre. La franja existe en CUALQUIER toast
+        (persistente o con timer, spec `toast-franja-descarte`) y solo con el
+        puntero encima: sin hover NO se dibuja (cero píxeles de tinte/X) y su
+        ancho NO se reserva (la columna de texto queda completa).
         """
-        if self._persistent and self._hover:
+        if self._hover:
             return self._CLOSE_STRIP_W
         return 0
 
@@ -1032,9 +1106,9 @@ class NotificationWidget(Gtk.DrawingArea):
         sola para todos los toasts: 360 − 14 − 80 − 12 − 14 = 240. Antes un
         toast sin imagen resuelta se iba a ancho completo (~332) con otras
         fuentes, y la barra "Ver más" aterrizaba en otro lugar.
-        Persistentes CON hover: menos el ancho de la franja de descarte (44px),
-        que _draw reserva para que el texto no quede bajo el tinte. Sin hover
-        la franja no se dibuja y no se le cede ancho al texto."""
+        CON hover: menos el ancho de la franja de descarte (80px), que _draw
+        reserva para que el texto no quede bajo el tinte. Sin hover la franja
+        no se dibuja y no se le cede ancho al texto."""
         return _TEXT_COL_W - self._strip_w()
 
     def desired_height(self):
@@ -1100,8 +1174,9 @@ class NotificationWidget(Gtk.DrawingArea):
         """Fila de botones de acción (spec `toast-acciones`).
 
         Banda estilo "Ver más" (mismo lenguaje visual: fill accent 22%,
-        radio 8, hover del segmento 38%): hasta 3 segmentos con su label
-        (ellipsis Pango si no cabe) entre el body y la barra expandir.
+        radio 8, hover del segmento 38%, pressed 50% — la acción va al
+        release): hasta 3 segmentos con su label (ellipsis Pango si no
+        cabe) entre el body y la barra expandir.
         Con el hint action-icons, cada key se resolvió como icono del tema
         en `__init__` y se dibuja 16px + label (icon-only rechazado: el
         label sigue visible, "attempt" de la spec con fallback legible).
@@ -1134,9 +1209,15 @@ class NotificationWidget(Gtk.DrawingArea):
                 cr.clip()
             for i, (key, label) in enumerate(self._actions):
                 sx0, sy0, sx1, sy1, _ = self._action_rects[i]
-                hover = (self._hover_action_idx == i)
-                cr.set_source_rgba(accent_r, accent_g, accent_b,
-                                   0.38 if hover else 0.22)
+                # Estados interactivos (spec toast-acciones): hover 38%,
+                # pressed 50% — la acción va al release dentro del rect.
+                if self._pressed_action_idx == i:
+                    alpha = 0.50
+                elif self._hover_action_idx == i:
+                    alpha = 0.38
+                else:
+                    alpha = 0.22
+                cr.set_source_rgba(accent_r, accent_g, accent_b, alpha)
                 rrect(cr, sx0, sy0, sx1 - sx0, _ACTIONS_ROW_H, 8)
                 cr.fill()
 
@@ -1153,7 +1234,7 @@ class NotificationWidget(Gtk.DrawingArea):
                 content_w = icon_w + ink.width
                 tx = sx0 + ((sx1 - sx0) - content_w) / 2
                 if is_dark:
-                    cr.set_source_rgb(0.85, 0.95, 0.85)
+                    cr.set_source_rgb(*_TXT_BANDA_R)
                 else:
                     cr.set_source_rgb(*self._left_title)
                 if icono:
@@ -1184,7 +1265,7 @@ class NotificationWidget(Gtk.DrawingArea):
         # la inicial, así que la columna de texto no depende de qué resolviera.
         icon_size = _IMAGE_LEFT_W
         text_col_x = pad + icon_size + _IMAGE_LEFT_GAP
-        # Persistentes CON hover: la franja vertical de descarte (44px) se
+        # Cualquier toast CON hover: la franja vertical de descarte (80px) se
         # RESERVA en la columna de texto — el texto nunca queda debajo del
         # tint. Sin hover la franja no se dibuja y no se le cede ancho.
         strip_w = self._strip_w()
@@ -1198,7 +1279,7 @@ class NotificationWidget(Gtk.DrawingArea):
                       title_fs=max(9, round(_TITLE_FS * fs)),
                       body_fs=max(9, round(_BODY_FS * fs)),
                       app_fs=max(8, round(_APP_FS * fs)),
-                      r=12)  # radio card: 8→12 (más moderno/redondeado, Linear usa 8-12)
+                      r=_CARD_RADIUS)  # radio card: 8→12 (más moderno/redondeado, Linear usa 8-12)
 
     def _clear_surface(self, cr):
         """Clear inicial con OPERATOR_CLEAR: deja la superficie transparente
@@ -1281,8 +1362,8 @@ class NotificationWidget(Gtk.DrawingArea):
         accent_r, accent_g, accent_b = self._accent_rgb
 
         # Barra FULL-WIDTH: TODO el ancho interior de la card es clickeable
-        # (anti-misclick: antes solo el pill compacto de la derecha). En
-        # persistentes termina antes de la franja de descarte (sin overlap).
+        # (anti-misclick: antes solo el pill compacto de la derecha). Con
+        # hover termina antes de la franja de descarte (sin overlap).
         bar_x0 = fr.pad
         bar_x1 = fr.W - fr.pad - fr.strip_w
         bar_w = bar_x1 - bar_x0
@@ -1311,7 +1392,7 @@ class NotificationWidget(Gtk.DrawingArea):
             rrect(cr, bar_x0, btn_y, bar_w, btn_h, 8)
             cr.fill()
             if is_dark:  # dark pass: texto en la parte cubierta
-                cr.set_source_rgb(0.85, 0.95, 0.85)
+                cr.set_source_rgb(*_TXT_BANDA_R)
             else:
                 cr.set_source_rgb(*self._left_title)
             base_y = btn_y + btn_h / 2 + (fe[0] - fe[1]) / 2
@@ -1446,9 +1527,9 @@ class NotificationWidget(Gtk.DrawingArea):
         cr.restore()
 
     def _draw_close_strip(self, cr, fr):
-        """Franja de descarte vertical — solo persistentes + hover.
+        """Franja de descarte vertical — cualquier toast + hover.
 
-        44px de ancho × altura del card (antes: pill 28x28 en la esquina,
+        80px de ancho × altura del card (antes: pill 28x28 en la esquina,
         imposible no misclickear: el fall-through abría el video/URL). El gate
         vive en _strip_w (mismo que la reserva de _frame): sin hover no se
         dibuja NADA de la franja. El ancho YA está reservado en text_col_w —
@@ -1472,7 +1553,9 @@ class NotificationWidget(Gtk.DrawingArea):
         # Clip al card redondeado: el tint respeta las esquinas curvas.
         rrect(cr, 0, 0, fr.W, fr.H, fr.r)
         cr.clip()
-        if self._hover_close:
+        if self._pressed_close:
+            cr.set_source_rgba(0.86, 0.15, 0.15, 0.45)   # pressed: aún más sólido
+        elif self._hover_close:
             cr.set_source_rgba(0.86, 0.15, 0.15, 0.32)   # hover directo: más sólido
         else:
             cr.set_source_rgba(0.86, 0.15, 0.15, 0.18)   # normal hover del card
@@ -1489,10 +1572,12 @@ class NotificationWidget(Gtk.DrawingArea):
         # pixel-center (translate 0.5) mantiene las esquinas alineadas.
         mx = sx0 + sw / 2
         my = fr.H / 2
-        inset = 7
+        # X de ~24 px (PRODUCT.md: "targets de click cómodos"); el hit-rect
+        # sigue siendo la franja completa de 80px, no el glyph.
+        inset = 12
         cr.set_antialias(cairo.ANTIALIAS_NONE)
         cr.set_source_rgba(0.953, 0.482, 0.659, 0.95)   # #f38ba8
-        cr.set_line_width(2.5)
+        cr.set_line_width(3)
         cr.set_line_cap(cairo.LINE_CAP_ROUND)
         cr.move_to(mx - inset, my - inset)
         cr.line_to(mx + inset, my + inset)
@@ -1537,10 +1622,10 @@ class NotificationWidget(Gtk.DrawingArea):
 
 class WaylandPopup:
     def __init__(self, titulo="", cuerpo="", icon_path=None, image_path=None,
-                 duration=8000, margin=16, corner="top-right", accent="#89b4fa",
+                 duration=8000, margin=16, corner="top-right", accent=DEFAULT_ACCENT,
                  app_name="", app_icon="", on_close=None, image_data_raw=None,
                  on_click=None, urgency=1, app_label=None, hide_title=False,
-                 actions=None, action_icons=False):
+                 actions=None, action_icons=False, buttons_actionable=True):
         self.app_name = app_name
         self.app_icon = app_icon
         self.titulo = titulo
@@ -1569,30 +1654,29 @@ class WaylandPopup:
         self._start = 0
         self._on_close = on_close
         self._on_click = on_click
+        self._buttons_actionable = buttons_actionable
         # Hook POST-resize: lo inyecta el manager para re-flowear la pila
         # cuando este card cambia de alto (spec `toast-stack`). None = nadie
         # escucha (uso one-shot).
         self.on_resized = None
         self._stack_margin = 0
+        self._hover_credit_ms = 0   # ms de hover: el crédito que pausa el wipe
 
         # Urgency (spec freedesktop 1.2): 0=low, 1=normal, 2=critical
         self.urgency = urgency if urgency in (0, 1, 2) else 1
         self.app_label = app_label
         self.hide_title = hide_title
-        # Ajustes por nivel de urgencia (respeta duration=0 => nunca expirar)
+        # Ajustes por nivel de urgencia (respeta duration=0 => nunca expirar).
+        # La urgency decide SOLO la duración (spec `toast-orden-llegada`): la
+        # opacidad del card no depende de ella (el alpha la fija _draw).
         if self.urgency == 0:
-            # low: más tenue y corto
-            self._bg_alpha = 0.55
+            # low: más corto
             if duration > 0:
                 self.duration = int(duration * 0.7)
         elif self.urgency == 2:
-            # critical: opaco y persistente (no expirar si duration<=0)
-            self._bg_alpha = 1.0
+            # critical: más largo y persistente (no expirar si duration<=0)
             if duration > 0:
                 self.duration = int(duration * 1.5)
-        else:
-            # normal: comportamiento actual
-            self._bg_alpha = 0.85
 
     _EDGES = {
         "top": GtkLayerShell.Edge.TOP,
@@ -1649,13 +1733,21 @@ class WaylandPopup:
             app_label=self.app_label, hide_title=self.hide_title,
             persistent=(self.duration == 0),
             actions=self.actions, action_icons=self.action_icons,
+            buttons_actionable=self._buttons_actionable,
         )
         h = self._card.desired_height()
         self._card.set_size_request(_CARD_WIDTH, h)
         self.window.add(self._card)
         if not self._on_close:
             self.window.connect("destroy", lambda *a: Gtk.main_quit())
-        self.window.connect("key-press-event", lambda *a: self._close("user"))
+        # Solo Escape cierra por teclado (antes: cualquier tecla). El handler
+        # es hoy inalcanzable — la surface nunca pide keyboard interactivity
+        # (no roba el tipeo de la app activa) — pero queda correcto por si
+        # algún día la toma.
+        self.window.connect(
+            "key-press-event",
+            lambda w, e: self._close("user")
+            if e.keyval == Gdk.KEY_Escape else False)
 
     def stack_height(self):
         """Alto con el que esta card ocupa su hueco en la pila.
@@ -1694,10 +1786,18 @@ class WaylandPopup:
         if self._closed:
             return False
         # Persistent (duration=0): no hay barra de progreso ni auto-cierre.
-        # El usuario cierra con la X (hover → pill rojizo).
+        # El usuario cierra con la X (hover → franja con X).
         if self.duration <= 0:
             return False
-        elapsed = (time.monotonic() - self._start) * 1000
+        # Hover = pausa del vencimiento (spec `toast-franja-descarte`): el
+        # crédito compensa tick a tick y congela el wipe mientras el puntero
+        # esté sobre el card — sin esto, la X de un toast de 6s es una
+        # carrera que el usuario siempre pierde. Granularidad 50ms: la misma
+        # del tick.
+        if self._card and self._card._hover:
+            self._hover_credit_ms = min(
+                self._hover_credit_ms + 50, self.duration)
+        elapsed = (time.monotonic() - self._start) * 1000 - self._hover_credit_ms
         remaining = max(0, self.duration - elapsed)
         self._card.set_fraction(remaining / self.duration)
         if remaining <= 0:
@@ -1718,7 +1818,7 @@ class WaylandPopup:
         líneas; si no, se limitan a _MAX_VISIBLE_LINES y se reserva la franja
         del botón.
         NO resta la franja de descarte: el caller pasa el ancho ya efectivo
-        (`NotificationWidget._eff_text_width`, que descuenta los 44px solo con
+        (`NotificationWidget._eff_text_width`, que descuenta los 80px solo con
         hover) — restarla aquí además sería la divergencia altura/wrap que este
         docstring prohíbe.
         `font_scale` aplica la misma escala de resolución que usa _draw, y el

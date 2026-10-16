@@ -14,6 +14,8 @@ window (prepare() nunca se llama). FakeBus registra las señales emitidas.
 """
 from unittest.mock import Mock
 
+import subprocess
+
 import verdantis_daemon
 from verdantis_daemon import NotificationManager, NotificationDaemon, VERSION
 from app_info import APP_NAME, VENDOR
@@ -75,7 +77,7 @@ def test_timer_expiry_emite_razon_1():
 # --- Razón 2: cierre por usuario ---
 
 def test_cierre_usuario_franja_emite_razon_2():
-    # Franja/pill del persistente → WaylandPopup._close("user")
+    # Franja/X de descarte (cualquier toast) → WaylandPopup._close("user")
     m, nid = _manager_con_toast()
     m._active[0][1]._close("user")
     assert _closes(m._dbus_bus) == [(nid, 2)]
@@ -100,6 +102,34 @@ def test_click_cuerpo_url_sin_default_razon_2(monkeypatch):
     m._on_action_invoked(nid)
     assert _invokes(m._dbus_bus) == []
     assert _closes(m._dbus_bus) == [(nid, 2)]
+
+
+def test_click_cuerpo_actions_sin_default_no_inventa_key():
+    # Spec contrato-dbus: sin "default" el daemon NO emite la primera action
+    # del sender por defecto — click casual no dispara "delete" invisible.
+    m, nid = _manager_con_toast(actions=["settings", "Ajustes"])
+    m._on_action_invoked(nid)
+    assert _invokes(m._dbus_bus) == []
+    assert _closes(m._dbus_bus) == [(nid, 2)]
+
+
+def test_click_cuerpo_actions_sin_default_con_url_abre_url(monkeypatch):
+    # Sin default, con URL: la URL se abre aunque el sender haya mandado
+    # actions (la regla dunst "con actions nunca xdg-open" solo aplica a la
+    # action default real).
+    popen = Mock()
+    monkeypatch.setattr("verdantis_daemon.subprocess.Popen", popen)
+    m, nid = _manager_con_toast(
+        actions=["settings", "Ajustes"],
+        hints={"url": "https://ejemplo.com/x"},
+    )
+    m._on_action_invoked(nid)
+    assert _invokes(m._dbus_bus) == []
+    assert _closes(m._dbus_bus) == [(nid, 2)]
+    popen.assert_called_once_with(
+        ["xdg-open", "https://ejemplo.com/x"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
 
 
 def test_click_boton_accion_key_real_y_razon_2():

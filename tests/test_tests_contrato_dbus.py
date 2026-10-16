@@ -14,7 +14,17 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import verdantis_daemon
 
-from test_contrato_dbus import _manager_con_toast, _closes
+from test_contrato_dbus import _manager_con_toast, _closes, _invokes
+
+
+def _pick_action_key_bugeada(actions):
+    """La versión pre-fix: sin 'default' devuelve la primera key real."""
+    if not actions or len(actions) < 2:
+        return None
+    for i in range(0, len(actions) - 1, 2):
+        if actions[i] == "default":
+            return "default"
+    return actions[0]
 
 
 def test_metatest_mapeo_fijo_2_detectado_en_timer(monkeypatch):
@@ -44,4 +54,18 @@ def test_metatest_dbus_close_razon_2_detectado(monkeypatch):
     assert _closes(m._dbus_bus) != [(nid, 3)], (
         "Metatest roto: con dbus-close → 2 el test de CloseNotification "
         "queda en verde — la razón 3 no estaría cubierta"
+    )
+
+
+def test_metatest_fallback_actions0_detectado(monkeypatch):
+    """Inyección: _pick_action_key vuelve a inventar actions[0] cuando no hay
+    'default' (el fallback pre-fix). El test de click sin default (espera
+    cero ActionInvoked) debe quedar en rojo."""
+    monkeypatch.setattr(
+        verdantis_daemon, "_pick_action_key", _pick_action_key_bugeada)
+    m, nid = _manager_con_toast(actions=["settings", "Ajustes"])
+    m._on_action_invoked(nid)
+    assert _invokes(m._dbus_bus) != [], (
+        "Metatest roto: con el fallback a actions[0] el test de click sin "
+        "default queda en verde — el ActionInvoked inventado no se detecta"
     )

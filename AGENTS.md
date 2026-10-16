@@ -19,12 +19,13 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   3.13): `./install.sh` (apt: libgtk-layer-shell-dev; venv + pip install) y
   genera `~/.config/systemd/user/verdantis.service` desde `service.template`
   con el path real (`@DIR@`).
-- 5 módulos en `src/`:
-  - `verdantis.py` — entry point; `--daemon` delega al daemon; one-shot elige backend
-    por sesión: Wayland (GTK layer-shell) → X11 (`x11_popup`); Wayland SIN layer-shell
-    → error por stderr + exit ≠ 0 (sin fallback). Import perezoso en ambos branches.
+- 7 módulos en `src/`:
+  - `verdantis.py` — entry point; `--daemon` delega al daemon; subcomandos
+    `list`/`replay`/`clear` (historial) delegan a `replay`; el one-shot delega la rama
+    de backend a `replay.mostrar_toast`. Import perezoso en todos los branches.
   - `verdantis_daemon.py` — dueño del bus DBus (`Notify`, `CloseNotification`,
-    `GetCapabilities`, `GetServerInformation`, signals), cola de toasts, click→action.
+    `GetCapabilities`, `GetServerInformation`, signals), cola de toasts, click→action,
+    archivo al historial (`_persist_to_disk`, salvo hints `transient`).
   - `wayland_popup.py` — render del toast: `NotificationWidget` (Gtk.DrawingArea con
     cairo), layout (imagen izquierda de 80px siempre / columna de texto única), wrap Pango,
     franja vertical de descarte + barra expandir full-width, wipe de tiempo.
@@ -32,9 +33,13 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
     "Verdantis" inline; el vendor de GetServerInformation es MoriNo23, no el nombre).
   - `x11_popup.py` — fallback X11 (Gtk.Window posicionable, sin layer-shell) que
     reutiliza `NotificationWidget`; solo se importa en ese branch. Qt no existe.
-  - (Eliminado en `eliminar-dashboard`: `dashboard.py` + `history_store.py` —
-    Flask/historial/replay fuera por YAGNI; datos en
-    `$XDG_DATA_HOME/verdantis/` intactos, recuperables por git.)
+  - `history_store.py` — historial en `$XDG_DATA_HOME/verdantis/history.jsonl` +
+    `icons/`: `append`/`read`/`copy_icon`/`icon_path`/`clear`, tope 1000 registros y
+    rotación con borrado de iconos. Best-effort: NUNCA tumba un `Notify`.
+  - `replay.py` — `list`/`replay`/`clear` del historial y `mostrar_toast` (la rama de
+    backend, única copia para one-shot y replay). Sin gi al importar: `list` y `clear`
+    no tocan display. `history_store` reapareció con este ciclo (v0.12.0 lo había
+    eliminado junto al dashboard, que sigue muerto y recuperable por git).
 - Métricas de layout: fuente única en `wayland_popup` (`_PAD`/`_rows_above_body`/...),
   consumidas por `_draw`, `calc_card_height` y `_eff_text_width`. No recomputar el
   stack a mano o divergen.
@@ -42,7 +47,8 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 ## Build & test
 
 - Tests: `.venv/bin/python -m pytest tests/ -q` (suite mínima viva: contrato
-  D-Bus de cierre + caps + metatests de sensibilidad, <5s).
+  D-Bus de cierre + caps + auditoría + historial/replay + metatests de
+  sensibilidad, <5s).
   La suite de render completa fue eliminada a pedido del usuario
   (recuperable por historia de git).
 - Mockups del toast: viven en `mockups/` (app Next.js + wireframe-ui, parte
@@ -78,6 +84,15 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 - Click en toast: emite `ActionInvoked` con la key real del sender (`_pick_action_key`)
   y/o `xdg-open` si hay URL. NUNCA lanzar la app (`Gio.DesktopAppInfo.launch`/`gtk-launch`)
   — abría ventanas de navegador duplicadas.
+- Historial y replay: el daemon archiva cada `Notify` no-`transient` (`_debe_archivar`)
+  en `history_store`, copiando los bytes del icono (los de `/tmp` son efímeros). El
+  replay NO pasa por el bus: reconstruye el toast con `replay.record_a_kwargs` y lo
+  muestra con `mostrar_toast` (rama de backend única, compartida con el one-shot), así
+  no re-archiva, la dedup no lo filtra y anda sin daemon; click = `xdg-open` de la URL
+  archivada, sin `ActionInvoked` (no hay sender). `--id` toma el último match (los ids
+  se repiten entre reinicios del daemon). Registro sin `avatar_file` en disco →
+  el popup resuelve icono de app/placeholder (nunca queda sin imagen). Claves del
+  registro (`avatar_file`/`banner_file`): esquema ya escrito en disco, NO se renombran.
 - Body visible: se sanitiza con `_strip_urls` (quita http(s)://, hosts desnudos tipo
   `xat.com`/`127.0.0.1:8766`, y colapsa `\n\n+`). Los navegadores inyectan el URL del
   sitio como primer link; además el `set_height`+ellipsize de Pango colapsa TODO el
@@ -91,9 +106,10 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   imagen de la notificación (image-path / image-data del tab) → icono de la app (`.desktop`
   exacto → tema) → placeholder con la inicial (`_make_placeholder_icon` + clip circular).
   Nunca queda `None`: no existe la variante sin imagen (columna ancha, fuentes 12/13, gap
-  del HR). La columna de texto es una sola, 240 px (196 con la franja de descarte en hover
-  de un persistente), y el texto arranca al top del slot (`ty = pad`, sin centrado del
-  bloque). `_eff_text_width` y `_rows_above_body` no tienen ramas por variante.
+  del HR). La columna de texto es una sola, 240 px (160 con la franja de descarte de 80 px
+  en hover de CUALQUIER toast), y el texto arranca al top del slot (`ty = pad`, sin centrado
+  del bloque). El hover pausa el vencimiento (crédito por tick en `_update_progress`).
+  `_eff_text_width` y `_rows_above_body` no tienen ramas por variante.
 - Verificación visual de los toasts: la da el USUARIO. El agente no saca capturas ni
   inspecciona la pantalla por su cuenta (nada de `spectacle`/`grim`/`import` ni leer
   imágenes de la pila): manda notificaciones de prueba y espera el reporte visual del
@@ -118,3 +134,6 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   (puerto 8765 lo ocupa un server stale). Vive mientras la sesión que la lanzó esté viva.
 - `read_file` trunca outputs grandes en este repo a ~5.5K chars por llamada; usar
   `sed -n 'a,bp'` por terminal para rangos largos.
+- `.pyc` rancio tras mutar y restaurar `src/*.py` (mtime con resolución de segundos):
+  un test puede fallar contra código que ya no existe. Ante un fallo imposible,
+  `rm -rf src/__pycache__` antes de dudar del test.

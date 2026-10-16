@@ -8,7 +8,9 @@ Contrato D-Bus visible del daemon: razones concretas de `NotificationClosed` por
 
 ### Requirement: NotificationClosed reporta la razón real del path de cierre
 
-El daemon SHALL emitir `NotificationClosed(id: u, reason: u)` en todo cierre de una notificación viva en pantalla, con la razón del spec 1.2 correspondiente al path: expiración del timer → `1`; cierre por usuario (click del cuerpo, click de un botón de acción, franja de descarte) → `2`; llamada `CloseNotification` D-Bus → `3`. Cuando el path del cierre incluye una acción (click del cuerpo con acción default o click de un botón), el daemon SHALL emitir `ActionInvoked` ANTES de `NotificationClosed`. La barra de expandir y la expansión del card no cierran la notificación y por tanto no emiten nada.
+El daemon SHALL emitir `NotificationClosed(id: u, reason: u)` en todo cierre de una notificación viva en pantalla, con la razón del spec 1.2 correspondiente al path: expiración del timer → `1`; cierre por usuario (click del cuerpo, click de un botón de acción, franja de descarte) → `2`; llamada `CloseNotification` D-Bus → `3`. Cuando el path del cierre incluye una acción (click del cuerpo con acción default o click de un botón), el daemon SHALL emitir `ActionInvoked` ANTES de `NotificationClosed`.
+
+El click del cuerpo sin acción `default` SHALL NOT emitir `ActionInvoked` con una action inventada: el daemon SHALL NOT emitir la primera action del sender por defecto. Con URL extraída, el click la abre con `xdg-open`; sin URL, solo cierra. La barra de expandir y la expansión del card no cierran la notificación y por tanto no emiten nada.
 
 #### Scenario: Vencimiento por timer
 - **WHEN** el timer de una notificación no crítica llega a 0 y el card se cierra solo
@@ -20,14 +22,18 @@ El daemon SHALL emitir `NotificationClosed(id: u, reason: u)` en todo cierre de 
 
 #### Scenario: Click del cuerpo abre URL sin default
 - **WHEN** el usuario hace click en el cuerpo de un toast sin acción default pero con URL extraída
-- **THEN** no se emite `ActionInvoked` y se emite `NotificationClosed(id, 2)`
+- **THEN** no se emite `ActionInvoked`, se abre la URL con `xdg-open` y se emite `NotificationClosed(id, 2)`
+
+#### Scenario: Click del cuerpo con actions sin default y sin URL
+- **WHEN** el usuario hace click en el cuerpo de un toast cuyo sender registró actions sin `default` y el body no trae URL
+- **THEN** no se emite `ActionInvoked` (ninguna action del sender se ejecuta) y se emite `NotificationClosed(id, 2)`
 
 #### Scenario: Click de un botón de acción
 - **WHEN** el usuario hace click en el botón con key `settings`
 - **THEN** se emite `ActionInvoked(id, "settings")` y después `NotificationClosed(id, 2)`
 
 #### Scenario: Franja de descarte
-- **WHEN** el usuario cierra un toast persistente por su franja vertical de descarte
+- **WHEN** el usuario cierra un toast — persistente o con timer — por su franja vertical de descarte
 - **THEN** se emite `NotificationClosed(id, 2)` sin `ActionInvoked`
 
 #### Scenario: CloseNotification del bus

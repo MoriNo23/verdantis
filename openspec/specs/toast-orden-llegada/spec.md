@@ -26,7 +26,7 @@ liberar su estado interno; las que quedan conservan el orden de llegada.
 - **WHEN** ya hay notificaciones en cola y llega una `critical`
 - **THEN** aparece detrás de las que ya estaban esperando, no delante
 
-#### Scenario: Un low no se rezaqa al final
+#### Scenario: Un low no se rezaga al final
 
 - **WHEN** llega una notificación `low` después de otras
 - **THEN** conserva su lugar en la secuencia (no se la mueve al final)
@@ -44,14 +44,12 @@ liberar su estado interno; las que quedan conservan el orden de llegada.
 
 ### Requirement: La urgencia no reordena, solo define la vida del toast
 
-La `urgency` SHALL seguir decidiendo la duración y la opacidad de cada toast
-(`low` más corto y tenue, `critical` más largo y opaco) y SHALL NOT decidir su
-posición en la pila.
+La `urgency` SHALL seguir decidiendo la duración de cada toast (`low` más corto, `critical` más largo) y SHALL NOT decidir su posición en la pila. La opacidad del card NO SHALL depender de la `urgency`: todos los toasts comparten la misma opacidad de fondo, hover mediante.
 
 #### Scenario: La urgencia sigue distinguiendo la vida del toast
 
 - **WHEN** se envían una `low`, una `normal` y una `critical` en ese orden
-- **THEN** cada una conserva su duración y su opacidad propias
+- **THEN** cada una conserva su duración propia
 
 #### Scenario: La urgencia no cambia la posición
 

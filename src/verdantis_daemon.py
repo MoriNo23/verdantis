@@ -9,13 +9,14 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('GtkLayerShell', '0.1')
 from gi.repository import Gtk, GtkLayerShell, GLib, Gio
 
-from app_info import APP_NAME, VENDOR
+from app_info import APP_NAME, DEFAULT_ACCENT, VENDOR
 from wayland_popup import (
     WaylandPopup,
     _extract_markup_url,
 )
+import history_store
 
-VERSION = "0.12.1"
+VERSION = "0.14.0"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -31,6 +32,12 @@ _RAZONES = {"timeout": 1, "user": 2, "action": 2, "dbus-close": 3}
 def _reason_for(source):
     """Fuente simbólica → razón del spec; None = no emitir señal."""
     return _RAZONES.get(source)
+
+
+def _debe_archivar(hints):
+    """¿La notificación va al historial del replay? Las `transient` no: la app
+    las trata como efímeras (nada que volver a ver)."""
+    return not hints.get("transient", False)
 
 
 def _is_browser(app_name, desktop_entry):
@@ -77,17 +84,17 @@ def _dedup_key(app_name, summary, body, sender=""):
 
 
 def _pick_action_key(actions):
-    """Devuelve la action key que el sender registró (spec 1.2):
-    - "default" si el sender la proveyó (click en el cuerpo del toast),
-    - la primera key real si hay actions pero no "default",
-    - None si no hay actions (no emitir ActionInvoked inventando keys).
+    """Devuelve la action key que el sender registró para el click del cuerpo
+    (spec 1.2): "default" si el sender la proveyó; None si no — jamás la
+    primera key real por defecto (un click casual del cuerpo no puede
+    disparar un "delete" invisible).
     """
     if not actions or len(actions) < 2:
         return None
     for i in range(0, len(actions) - 1, 2):
         if actions[i] == "default":
             return "default"
-    return actions[0]
+    return None
 
 
 def _is_pwa(desktop_entry):
@@ -362,8 +369,8 @@ class NotificationManager:
         #   resident      : bool — la app cierra la noti; el daemon NO la
         #                  auto-expira (forza duration=0). Confirmado en
         #                  KDE (notification.cpp:423) y mako.
-        # transient no se parsea: sin historial no hay nada que saltar.
-        # category / sound-name / suppress-sound tampoco: nada los consume
+        # transient no se archiva en el historial del replay (`_debe_archivar`).
+        # category / sound-name / suppress-sound no se parsean: nada los consume
         # (ver el change eliminar-dashboard).
         is_resident = bool(hints.get("resident", False))
         self._notifications[nid] = {
@@ -406,7 +413,7 @@ class NotificationManager:
                          else expire_timeout if expire_timeout > 0
                          else 6000),
             "corner": self._corner,
-            "accent": hints.get("accent", "#80cbc4"),
+            "accent": hints.get("accent", DEFAULT_ACCENT),
             "urgency": urgency,
             "app_name": app_name,
             # Path normalizado si el icono es un archivo existente; si no, el
@@ -457,7 +464,56 @@ class NotificationManager:
                            if v[0] != old_nid}
         self._ensure_pump()
 
+        # Historial en disco para `verdantis replay` (best-effort: nunca puede
+        # tumbar una notificación; transient no se archiva).
+        if _debe_archivar(hints):
+            self._persist_to_disk(nid, app_name, app_icon, summary, body,
+                                  actions, hints, expire_timeout, sender, url,
+                                  image_left_path, app_icon_file, banner_path,
+                                  kwargs["duration"])
+
         return nid
+
+    def _persist_to_disk(self, nid, app_name, app_icon, summary, body, actions,
+                         hints, expire_timeout, sender, url, image_left_path,
+                         app_icon_file, banner_path, duration):
+        """Archiva la notificación en `history_store` (JSONL en el XDG data home).
+
+        Los favicons de los navegadores viven en /tmp y mueren con la sesión que
+        los creó: se COPIAN al directorio propio para que el replay muestre "cómo
+        se veía X app tal cual".
+
+        Claves `avatar_file`/`banner_file` (esquema de persistencia ya escrito en
+        disco, ver `history_store`): NO se renombran al vocabulario del layout
+        ("imagen izquierda") o el historial viejo queda huérfano."""
+        try:
+            image_left_file = None
+            if image_left_path:
+                image_left_file = history_store.copy_icon(nid, image_left_path, "avatar")
+            elif app_icon_file:
+                image_left_file = history_store.copy_icon(nid, app_icon_file, "avatar")
+            banner_file = None
+            if banner_path:
+                banner_file = history_store.copy_icon(nid, banner_path, "banner")
+            history_store.append({
+                "id": nid,
+                "timestamp": time.time(),
+                "app_name": app_name,
+                "app_icon": app_icon,
+                "summary": summary,
+                "body": body,
+                "actions": list(actions) if actions else [],
+                "hints": {k: (v if isinstance(v, (str, int, float, bool)) else str(v))
+                          for k, v in hints.items()},
+                "expire_timeout": expire_timeout,
+                "sender": sender,
+                "url": url or "",
+                "duration": duration,
+                "avatar_file": image_left_file,
+                "banner_file": banner_file,
+            })
+        except Exception:
+            pass  # best-effort: un fallo de disco nunca puede romper Notify
 
     def _stack_offsets(self):
         """Offset vertical (px) de cada popup activo, en orden de pila.
@@ -580,22 +636,17 @@ class NotificationManager:
                 pass
 
         # El click NO lanza ventanas de la app (evita abrir navegadores a lo loco).
-        # Regla estilo dunst (mutuamente excluyente):
-        #   - SI el sender registró actions: emitir ActionInvoked y YA (el sender
-        #     se activa solo: navegador re-enfoca tab/PWA, app nativa corre su
-        #     callback). NUNCA xdg-open en ese caso -> evita doble-abierto.
-        #   - SOLO si NO hay actions PERO sí URL: xdg-open (apps nativas que no
-        #     manejan ActionInvoked).
-        # El navegador SIEMPRE manda actions=["default",...], así que Pinterest/
-        # Slack/WhatsApp Web caen en la rama ActionInvoked y no abren página extra.
-        desktop_entry = info.get("desktop_entry", "")
-        is_pwa = _is_pwa(desktop_entry)
-        has_actions = bool(actions)
+        # Regla (mutuamente excluyente, keyeada en la action INVOCADA):
+        #   - SI se invocó una action (default real o botón): ActionInvoked y
+        #     YA — el sender se activa solo. NUNCA xdg-open en ese caso ->
+        #     evita doble-abierto.
+        #   - SIN action invocada (sin default): xdg-open de la URL si existe
+        #     (apps nativas que no manejan ActionInvoked); sin URL, solo cierra.
         # Jamas abrir urls a la maquina local/red privada (ver _is_local_url).
         # Es la ultima linea de defensa: ni siquiera con PWA borra esto.
         if url and _is_local_url(url):
             url = ""
-        if url and not has_actions:
+        if url and not action_key:
             try:
                 subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
