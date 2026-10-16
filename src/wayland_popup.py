@@ -238,9 +238,8 @@ _TEXT_COL_W = _CARD_WIDTH - 14 - 80 - 12 - 14  # 240: pad, icon, gap, pad
 # ── Métricas de layout — FUENTE ÚNICA ──────────────────────────────────────
 # _draw (posiciones) y calc_card_height/_eff_text_width (medición de alto y
 # ancho) consumen estas constantes + _rows_above_body. Si el stack se computa
-# "por separado", el render desborda o deja slack — bug real cazado por
-# tests/test_layout_consistency.py (la barra flotaba 8px y, sin app_name,
-# desbordaba la card 30px).
+# "por separado", el render desborda o deja slack — bug real: la barra
+# flotaba 8px y, sin app_name, desbordaba la card 30px.
 _PAD = 14            # padding interior del card
 _IMAGE_LEFT_W = 80   # slot izquierdo de imagen (siempre presente)
 _IMAGE_LEFT_GAP = 12 # gap slot → columna de texto
@@ -274,7 +273,7 @@ def rrect(cr, x, y, w, h, r):
     """Rounded rect path (clockwise). Vive a nivel de módulo porque la usan
     `_draw` (card, barra "Ver más", franja) y `_draw_actions_row` (segmentos
     de botones) — antes era una función anidada y el helper de la fila no la
-    veía. Misma forma que tests/render_helpers.rrect."""
+    veía."""
     r = min(r, w / 2, h / 2)
     cr.arc(x + w - r, y + r, r, 3 * math.pi / 2, 2 * math.pi)
     cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
@@ -400,8 +399,8 @@ def _layout_metrics(cuerpo, text_col_w, body_fs, app_name, hide_title,
     lista de pasos. Los comentarios de cada bloque viven acá, con la fórmula.
 
     NO es la fuente única de la altura: `calc_card_height` recalcula lo mismo
-    (ver `tests/test_layout_consistency.py`, que exige que coincidan). Unificarlas
-    es un change aparte — el radio de impacto de esa unificación es
+    (ambas DEBEN coincidir — divergen = render desborda o deja slack).
+    Unificarlas es un change aparte — el radio de impacto de esa unificación es
     `desired_height` + el stack manager + el dashboard, y queda como non-goal
     explícito de `bajar-complejidad-draw`.
     """
@@ -1364,8 +1363,8 @@ class NotificationWidget(Gtk.DrawingArea):
                 cr.set_source_rgb(*acol)
                 # Label de app (puede ser "Brave - <tab>") con elipsis real de Pango
                 label = self._app_label or self._app_name
-                # tx = text_col_x + 20 (logo 16 + 4): constante, nunca condicional
-                # al logo (fija tests/test_placeholder_icono.py).
+                # tx = text_col_x + 20 (logo 16 + 4): constante, nunca
+                # condicional al logo — el slot se reserva siempre.
                 tx = fr.text_col_x + 20
                 ll = _create_layout(cr)
                 ll.set_font_description(Pango.FontDescription("Manrope " + str(fr.app_fs)))

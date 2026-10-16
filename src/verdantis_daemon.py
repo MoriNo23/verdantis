@@ -513,9 +513,8 @@ class NotificationManager:
         EXCEPCIÓN DE TERMINOLOGÍA: las claves del registro y los nombres de los
         PNG en disco (`avatar_source`, `avatar_file`, `n<id>_avatar.png`) NO se
         renombran — son un esquema de PERSISTENCIA ya escrito en el historial de
-        disco; renombrarlas lo dejaría huérfano (y es lo que fija
-        tests/test_history_store.py). El vocabulario del layout, en cambio, es
-        "imagen izquierda" en todo src/."""
+        disco; renombrarlas lo dejaría huérfano. El vocabulario del layout, en
+        cambio, es "imagen izquierda" en todo src/."""
         try:
             image_left_file = None
             if image_data is not None:
