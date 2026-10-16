@@ -18,7 +18,7 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   ve python 3.12 del sistema y `gi` no compila desde pip). Instalación: `./install.sh` (apt: libgtk-layer-shell-dev,
   python3-gi, python3-gi-cairo; cero deps pip) y copia `verdantis.service` a
   `~/.config/systemd/user/`.
-- 7 módulos en `src/`:
+- 5 módulos en `src/`:
   - `verdantis.py` — entry point; `--daemon` delega al daemon; one-shot elige backend
     por sesión: Wayland (GTK layer-shell) → X11 (`x11_popup`); Wayland SIN layer-shell
     → error por stderr + exit ≠ 0 (sin fallback). Import perezoso en ambos branches.
@@ -29,13 +29,11 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
     franja vertical de descarte + barra expandir full-width, wipe de tiempo.
   - `app_info.py` — fuente única de `APP_NAME`/`APP_ID`/`VENDOR` (nada de literales
     "Verdantis" inline; el vendor de GetServerInformation es MoriNo23, no el nombre).
-  - `dashboard.py` — Flask dashboard de historial + replay (thread dentro del daemon).
-  - `history_store.py` — persistencia del historial JSONL
-    (`$XDG_DATA_HOME/verdantis/history.jsonl`) + bytes de iconos/imagen para que el
-    replay del dashboard reproduzca "cómo se veía" cada notificación (las claves
-    `avatar_source`/`avatar_file` son esquema de disco, no vocabulario de layout).
   - `x11_popup.py` — fallback X11 (Gtk.Window posicionable, sin layer-shell) que
     reutiliza `NotificationWidget`; solo se importa en ese branch. Qt no existe.
+  - (Eliminado en `eliminar-dashboard`: `dashboard.py` + `history_store.py` —
+    Flask/historial/replay fuera por YAGNI; datos en
+    `$XDG_DATA_HOME/verdantis/` intactos, recuperables por git.)
 - Métricas de layout: fuente única en `wayland_popup` (`_PAD`/`_rows_above_body`/...),
   consumidas por `_draw`, `calc_card_height` y `_eff_text_width`. No recomputar el
   stack a mano o divergen.

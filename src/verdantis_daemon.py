@@ -9,16 +9,13 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('GtkLayerShell', '0.1')
 from gi.repository import Gtk, GtkLayerShell, GLib, Gio
 
-from app_info import APP_ID, APP_NAME, VENDOR
+from app_info import APP_NAME, VENDOR
 from wayland_popup import (
     WaylandPopup,
     _extract_markup_url,
-    _get_app_icon_from_desktop,
-    _icon_from_theme,
 )
-import history_store
 
-VERSION = "0.11.2"
+VERSION = "0.12.0"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -27,7 +24,7 @@ SPEC_VERSION = "1.2"
 # Fuente simbólica del cierre → razón NotificationClosed del spec 1.2
 # (1=expiró, 2=usuario, 3=CloseNotification). Único mapeo del contrato:
 # la UI comunica la fuente ("timeout"/"user"/"action"/"dbus-close"), nunca
-# el número. None como fuente = cierre silencioso (replaces/dedup/replay).
+# el número. None como fuente = cierre silencioso (replaces/dedup).
 _RAZONES = {"timeout": 1, "user": 2, "action": 2, "dbus-close": 3}
 
 
@@ -242,12 +239,6 @@ class NotificationManager:
         # dedup key -> (nid, timestamp): rastrea la última emisión de cada
         # contenido para detectar duplicados dentro de DEDUP_WINDOW.
         self._dedup = {}
-        # Ids reproducidos por el dashboard: su cierre/acción no toca el bus
-        # (spec `contrato-dbus`, escenario replay).
-        self._replay = set()
-        # Ring buffer of recent notifications for the dashboard + replay
-        self.history = []
-        self.MAX_HISTORY = 200
 
     def set_dbus(self, bus):
         self._dbus_bus = bus
@@ -317,7 +308,7 @@ class NotificationManager:
 
     def notify(self, app_name="", app_icon="", summary="", body="",
                actions=None, hints=None, expire_timeout=-1, replaces_id=0,
-               sender="", replay=False):
+               sender=""):
         if hints is None:
             hints = {}
         if actions is None:
@@ -330,8 +321,6 @@ class NotificationManager:
 
         nid = self._next_id
         self._next_id += 1
-        if replay:
-            self._replay.add(nid)
 
         # Dedup por contenido: si la MISMA notificación (app + summary + body)
         # ya fue emitida en la ventana de DEDUP_WINDOW, reemplazamos la anterior
@@ -370,13 +359,10 @@ class NotificationManager:
         #   resident      : bool — la app cierra la noti; el daemon NO la
         #                  auto-expira (forza duration=0). Confirmado en
         #                  KDE (notification.cpp:423) y mako.
-        #   transient     : bool — no guardar en historial.
-        # category / sound-name / suppress-sound NO se parsean: nada los
-        # consume (el daemon no reproduce sonido; cap "sound" no anunciada)
-        # y guardarlos "para después" era parsing muerto. Un change futuro
-        # de sonido los vuelve a leer del hints dict crudo.
+        # transient no se parsea: sin historial no hay nada que saltar.
+        # category / sound-name / suppress-sound tampoco: nada los consume
+        # (ver el change eliminar-dashboard).
         is_resident = bool(hints.get("resident", False))
-        is_transient = bool(hints.get("transient", False))
         self._notifications[nid] = {
             "actions": actions,
             "hints": hints,
@@ -386,7 +372,6 @@ class NotificationManager:
             "urgency": urgency,
             "sender": sender,
             "is_resident": is_resident,
-            "is_transient": is_transient,
         }
 
         image_left_path = _local_path(hints.get("image-path", ""))
@@ -462,103 +447,7 @@ class NotificationManager:
         self._pending.append((nid, kwargs, urgency))
         self._ensure_pump()
 
-        # Capture for dashboard history + replay
-        import time as _time
-        self.history.append({
-            "id": nid,
-            "timestamp": _time.time(),
-            "app_name": app_name,
-            "app_icon": app_icon,
-            "summary": summary,
-            "body": body,
-            "actions": list(actions) if actions else [],
-            "hints": {k: (v if isinstance(v, (str, int, float, bool)) else str(v))
-                      for k, v in hints.items()},
-            "expire_timeout": expire_timeout,
-            "sender": sender,
-        })
-        if len(self.history) > self.MAX_HISTORY:
-            self.history = self.history[-self.MAX_HISTORY:]
-
-        # ── Persistencia a disco (historial JSONL + bytes de iconos) ──────
-        # El archivo nunca debe tumbar una notificación: best-effort total.
-        if not is_transient:
-            self._persist_to_disk(
-                nid, app_name, app_icon, summary, body, actions, hints,
-                expire_timeout, sender, url,
-                image_left_path, app_icon_file, banner_path, image_data,
-                kwargs["duration"],
-            )
-
         return nid
-
-    def _persist_to_disk(self, nid, app_name, app_icon, summary, body, actions,
-                         hints, expire_timeout, sender, url,
-                         image_left_path, app_icon_file, banner_path, image_data,
-                         duration):
-        """Archiva la notificación en history_store (JSONL en el XDG data
-        home) con los bytes de la imagen izquierda del sender.
-
-        Los favicons de los navegadores viven en /tmp y mueren con la sesión
-        que los creó: se COPIAN al directorio propio para que el replay del
-        dashboard pueda reproducir "cómo se veía X app tal cual".
-        image_left_source documenta de dónde salió el slot izquierdo.
-
-        EXCEPCIÓN DE TERMINOLOGÍA: las claves del registro y los nombres de los
-        PNG en disco (`avatar_source`, `avatar_file`, `n<id>_avatar.png`) NO se
-        renombran — son un esquema de PERSISTENCIA ya escrito en el historial de
-        disco; renombrarlas lo dejaría huérfano. El vocabulario del layout, en
-        cambio, es "imagen izquierda" en todo src/."""
-        try:
-            image_left_file = None
-            if image_data is not None:
-                image_left_file = history_store.save_image_data(nid, image_data)
-            elif image_left_path:
-                image_left_file = history_store.copy_icon(nid, image_left_path, "avatar")
-            elif app_icon_file:
-                image_left_file = history_store.copy_icon(nid, app_icon_file, "avatar")
-            banner_file = None
-            if banner_path:
-                banner_file = history_store.copy_icon(nid, banner_path, "banner")
-            history_store.append({
-                "id": nid,
-                "timestamp": time.time(),
-                "app_name": app_name,
-                "app_icon": app_icon,
-                "summary": summary,
-                "body": body,
-                "actions": list(actions) if actions else [],
-                "hints": {k: (v if isinstance(v, (str, int, float, bool)) else str(v))
-                          for k, v in hints.items()},
-                "expire_timeout": expire_timeout,
-                "sender": sender,
-                "url": url or "",
-                "duration": duration,
-                "avatar_source": self._image_left_source_for(
-                    app_name, image_left_path, app_icon, image_data, hints),
-                "avatar_file": image_left_file,
-                "banner_file": banner_file,
-            })
-        except Exception:
-            pass  # best-effort: un fallo de disco nunca puede romper Notify
-
-    @staticmethod
-    def _image_left_source_for(app_name, image_left_path, app_icon, image_data,
-                               hints):
-        """Diagnóstico de proveniencia del slot de imagen izquierda (para el
-        historial): image-path / app_icon (sender), image-data (tab),
-        app-icon-fallback (desktop exacto o tema), none (nada resolvió — el slot
-        cae al placeholder con la inicial)."""
-        if image_data is not None:
-            return "image-data"
-        if image_left_path:
-            img_hint = _local_path(hints.get("image-path", ""))
-            return "image-path" if image_left_path == img_hint else "app_icon"
-        if (_get_app_icon_from_desktop(app_name, 16)
-                or _icon_from_theme(app_icon, 16)
-                or _icon_from_theme(app_name, 16)):
-            return "app-icon-fallback"
-        return "none"
 
     def _stack_offsets(self):
         """Offset vertical (px) de cada popup activo, en orden de pila.
@@ -644,7 +533,6 @@ class NotificationManager:
         # Sincroniza la tabla de dedup: si el toast que se cierra era el último
         # portador de una clave, esa entrada queda libre para el próximo contenido.
         self._dedup = {k: v for k, v in self._dedup.items() if v[0] != nid}
-        self._replay.discard(nid)
         self._reflow_stack()
         self._drenar_cola()
 
@@ -662,11 +550,7 @@ class NotificationManager:
         action_key = action_key or _pick_action_key(actions)
         sender = info.get("sender", "") or None
 
-        # Replay del dashboard: no emite ActionInvoked al bus (spec
-        # `contrato-dbus`, escenario replay). El xdg-open de abajo sí puede
-        # correr: es local, no toca el bus.
-        es_replay = nid in self._replay
-        if action_key and self._dbus_bus and not es_replay:
+        if action_key and self._dbus_bus:
             try:
                 self._dbus_bus.emit_signal(
                     sender, "/org/freedesktop/Notifications",
@@ -716,16 +600,14 @@ class NotificationManager:
         con el hueco del que venció (spec `toast-stack`).
 
         La emisión del contrato vive acá (único trazado): fuente → razón en
-        _RAZONES; fuente None o replay = silencio.
+        _RAZONES; fuente None = silencio.
         """
         self._notifications.pop(nid, None)
         self._active = [(aid, p) for aid, p in self._active if aid != nid]
         self._reflow_stack()
         self._drenar_cola()
-        es_replay = nid in self._replay
-        self._replay.discard(nid)
         reason = _reason_for(source)
-        if reason is not None and not es_replay and self._dbus_bus:
+        if reason is not None and self._dbus_bus:
             self._dbus_bus.emit_signal(
                 None, "/org/freedesktop/Notifications",
                 "org.freedesktop.Notifications", "NotificationClosed",
@@ -826,16 +708,9 @@ def main():
     parser = argparse.ArgumentParser(description="Daemon de notificaciones Wayland (DBus)")
     parser.add_argument("--corner", default="top-right",
                         choices=["top-right", "top-left", "bottom-right", "bottom-left"])
-    parser.add_argument("--dashboard", action="store_true", default=True,
-                        help="Start the Flask dashboard on 127.0.0.1:8777")
     args = parser.parse_args()
 
     daemon = NotificationDaemon(corner=args.corner)
-
-    if args.dashboard:
-        from dashboard import start_dashboard
-        start_dashboard(daemon)
-        print(f"[{APP_ID}] Dashboard: http://127.0.0.1:8777")
 
     try:
         daemon.run()

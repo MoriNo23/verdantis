@@ -401,7 +401,7 @@ def _layout_metrics(cuerpo, text_col_w, body_fs, app_name, hide_title,
     NO es la fuente única de la altura: `calc_card_height` recalcula lo mismo
     (ambas DEBEN coincidir — divergen = render desborda o deja slack).
     Unificarlas es un change aparte — el radio de impacto de esa unificación es
-    `desired_height` + el stack manager + el dashboard, y queda como non-goal
+    `desired_height` + el stack manager, y queda como non-goal
     explícito de `bajar-complejidad-draw`.
     """
     total_lines = _count_body_lines(cuerpo, text_col_w, body_fs)

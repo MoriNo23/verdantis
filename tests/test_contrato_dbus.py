@@ -145,26 +145,6 @@ def test_dedup_no_emite():
     )
 
 
-def test_replay_no_emite_ni_cierre_ni_accion():
-    m = _manager_headless()
-    nid_acc = m.notify(
-        app_name="r", summary="s", body="b",
-        actions=["default", "Abrir"], hints={"transient": True},
-        expire_timeout=5000, replay=True,
-    )
-    m._pump()
-    m._on_action_invoked(nid_acc)
-    nid_exp = m.notify(
-        app_name="r", summary="otro", body="b",
-        hints={"transient": True}, expire_timeout=5000, replay=True,
-    )
-    m._pump()
-    m._active[0][1]._close()
-    assert m._dbus_bus.emitted == [], (
-        "replay del dashboard: dibuja el card pero no toca el bus"
-    )
-
-
 # --- GetCapabilities: solo caps servidas de verdad ---
 
 def test_get_capabilities_sin_body_hyperlinks():
