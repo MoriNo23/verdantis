@@ -366,20 +366,17 @@ class NotificationManager:
             urgency = 1
         if urgency not in (0, 1, 2):
             urgency = 1
-        # Hints del spec freedesktop 1.2 que verdantis no parseaba (gaps):
+        # Hints del spec freedesktop 1.2 que el daemon consume:
         #   resident      : bool — la app cierra la noti; el daemon NO la
         #                  auto-expira (forza duration=0). Confirmado en
         #                  KDE (notification.cpp:423) y mako.
-        #   transient     : bool — no guardar en historial (verdantis no
-        #                  tiene historial, se guarda para future-proofing).
-        #   category      : str — agrupacion ("im", "email", "presence"...).
-        #   suppress-sound: bool — NO reproducir sonido (no implementado yet).
-        #   sound-name    : str — nombre en el freedesktop sound theme.
+        #   transient     : bool — no guardar en historial.
+        # category / sound-name / suppress-sound NO se parsean: nada los
+        # consume (el daemon no reproduce sonido; cap "sound" no anunciada)
+        # y guardarlos "para después" era parsing muerto. Un change futuro
+        # de sonido los vuelve a leer del hints dict crudo.
         is_resident = bool(hints.get("resident", False))
         is_transient = bool(hints.get("transient", False))
-        category = hints.get("category", "") or ""
-        suppress_sound = bool(hints.get("suppress-sound", False))
-        sound_name = hints.get("sound-name", "") or ""
         self._notifications[nid] = {
             "actions": actions,
             "hints": hints,
@@ -390,9 +387,6 @@ class NotificationManager:
             "sender": sender,
             "is_resident": is_resident,
             "is_transient": is_transient,
-            "category": category,
-            "suppress_sound": suppress_sound,
-            "sound_name": sound_name,
         }
 
         image_left_path = _local_path(hints.get("image-path", ""))
