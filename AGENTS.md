@@ -38,14 +38,14 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
     reutiliza `NotificationWidget`; solo se importa en ese branch. Qt no existe.
 - Métricas de layout: fuente única en `wayland_popup` (`_PAD`/`_rows_above_body`/...),
   consumidas por `_draw`, `calc_card_height` y `_eff_text_width`. No recomputar el
-  stack a mano o divergen (ver `tests/test_layout_consistency.py`).
+  stack a mano o divergen.
 
 ## Build & test
 
-- Tests: `.venv/bin/python -m pytest tests/ -q` (~17s, 372 passed).
-- Simulador de la pila (reloj virtual, sin ventanas: corre el manager real e imprime
-  cada frame con offsets/cola + detectores de bug): `.venv/bin/python tests/qa_sim_pila.py`
-  (`--n`, `--timeout`, `--click`, `--sticky`; sale 1 si detecta un bug).
+- Tests: `.venv/bin/python -m pytest tests/ -q` (suite mínima viva: contrato
+  D-Bus de cierre + hyperlinks del body + metatests de sensibilidad, <5s).
+  La suite de render completa fue eliminada a pedido del usuario
+  (recuperable por historia de git).
 - Mockups del toast: viven en `mockups/` (app Next.js + wireframe-ui, parte
   de main). Correr con `pnpm dev` dentro de la carpeta y editar el JSX
   directamente — tokens en `mockups/src/lib/toast-tokens.ts` con la constante
@@ -57,8 +57,7 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   si hay `WAYLAND_DISPLAY`, offscreen si no) y del path hacia `src/` — corre antes que
   cualquier módulo de test, así que los archivos no repiten ese preámbulo.
   `wayland_popup` forza `GDK_BACKEND=wayland` al importarse, por eso el env debe
-  fijarse antes de importarlo. Excepción: `test_version_constant.py` conserva su
-  propio path porque declara que debe correr aislado. El orden "wayland_popup
+  fijarse antes de importarlo. El orden "wayland_popup
   primero entre los imports gi" se mantiene DENTRO de cada módulo (fija Gdk 3.0).
 - Convención de tests: unit + metatests de sensibilidad (test_tests_*.py que inyectan
   la versión bugueada y verifican que la suite la detecta).
