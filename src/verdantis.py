@@ -1,13 +1,19 @@
 """Entry point de verdantis.
 
-`--daemon` delega al daemon DBus (GTK + layer-shell, SIN Qt). El one-shot
-elige backend Wayland (WaylandPopup) o, si no hay layer-shell, el fallback
-PyQt6 — que se importa recién en ese branch (qt_fallback), nunca al arrancar.
+`--daemon` delega al daemon DBus (GTK + layer-shell). El one-shot elige
+backend por sesión:
+
+- `WAYLAND_DISPLAY` → WaylandPopup (GTK3 + layer-shell).
+- solo X11 (o `--force-fallback`) → `x11_popup` (Gtk.Window posicionable,
+  mismo render cairo/Pango, sin layer-shell).
+- Wayland SIN layer-shell → error por stderr y exit ≠ 0: no hay fallback
+  mal posicionado (spec `entrada-fallback`).
+
+Los imports del one-shot son perezosos: ni el daemon ni el path Wayland
+cargan el fallback. Qt no existe en el proyecto.
 """
 import sys
 import os
-
-from app_info import APP_NAME
 
 
 def main():
@@ -25,7 +31,8 @@ def main():
     parser.add_argument("--accent", default="#89b4fa")
     parser.add_argument("--app-name", default="", help="Nombre de app (Telegram, Firefox...)")
     parser.add_argument("--force-wayland", action="store_true")
-    parser.add_argument("--force-qt", action="store_true")
+    parser.add_argument("--force-fallback", action="store_true",
+                        help="Forzar el branch X11 de fallback (pruebas)")
     parser.add_argument("--daemon", action="store_true",
                         help="Iniciar como daemon DBus (org.freedesktop.Notifications)")
     args = parser.parse_args()
@@ -39,7 +46,7 @@ def main():
 
     is_wayland = (
         args.force_wayland
-        or (not args.force_qt and os.environ.get("WAYLAND_DISPLAY"))
+        or (not args.force_fallback and os.environ.get("WAYLAND_DISPLAY"))
     )
 
     if is_wayland:
@@ -55,20 +62,22 @@ def main():
             popup.show()
             return
         except Exception as e:
-            print(f"[notify] Wayland falló ({e}); usando Qt", file=sys.stderr)
+            # En Wayland SIN layer-shell NO hay fallback: una ventana toplevel
+            # sin anclaje sale donde quiere el compositor — peor que ningún
+            # toast (spec `entrada-fallback`, "falla limpio").
+            print(f"[notify] Wayland sin layer-shell ({e}); no hay fallback "
+                  f"en sesión Wayland", file=sys.stderr)
+            sys.exit(1)
 
-    # Import perezoso del fallback Qt: el daemon y el path GTK no cargan PyQt6.
-    from qt_fallback import QApplication, NotificacionPersonalizada
-    app = QApplication.instance() or QApplication(sys.argv)
-    app.setApplicationName(APP_NAME)
-    n = NotificacionPersonalizada(
+    # Import perezoso del fallback X11: el daemon y el path Wayland no lo cargan.
+    from x11_popup import NotificacionX11
+    n = NotificacionX11(
         titulo=args.title, cuerpo=args.body,
         icon_path=args.icon, image_path=args.image,
         duration=args.duration, margin=args.margin,
         corner=args.corner, accent=args.accent,
     )
     n.show()
-    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

@@ -78,18 +78,19 @@ replay de notificaciones pasadas.
 | `--corner` | `top-right` | `top-right`, `top-left`, `bottom-right`, `bottom-left` |
 | `--accent` | `#89b4fa` | Color acento hex |
 | `--force-wayland` | | Forzar backend GTK+layer-shell |
-| `--force-qt` | | Forzar backend PyQt6 |
+| `--force-fallback` | | Forzar el branch X11 de fallback |
 | `--daemon` | | Iniciar como daemon DBus |
 
 ## Backends
 
 - **Wayland**: GTK3 + gtk-layer-shell (anclaje preciso a esquinas)
-- **X11/fallback**: PyQt6 (posicionamiento via `move()`)
+- **X11/fallback**: GTK3 (`Gtk.Window` posicionable via `move()`); en Wayland sin
+  layer-shell el one-shot falla limpio (stderr + exit ≠ 0), sin fallback
 
 ## Pruebas y herramientas
 
 ```bash
-.venv/bin/python -m pytest tests/ -q        # suite completa (362, ~17 s)
+.venv/bin/python -m pytest tests/ -q        # suite completa (372, ~17 s)
 .venv/bin/python tests/qa_sim_pila.py       # simulador de la pila en texto (reloj virtual)
 sh tests/fixtures/serve-tester.sh           # tester real en el navegador (Enviar x5)
 ```

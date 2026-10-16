@@ -16,11 +16,12 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 
 - Python 3.13 en `.venv/` (venv clásico; la migración a uv quedó bloqueada — uv solo
   ve python 3.12 del sistema y `gi` no compila desde pip). Instalación: `./install.sh` (apt: libgtk-layer-shell-dev,
-  python3-gi, python3-gi-cairo; pip: PyQt6) y copia `verdantis.service` a
+  python3-gi, python3-gi-cairo; cero deps pip) y copia `verdantis.service` a
   `~/.config/systemd/user/`.
 - 7 módulos en `src/`:
   - `verdantis.py` — entry point; `--daemon` delega al daemon; one-shot elige backend
-    Wayland (GTK layer-shell) o fallback PyQt6 (import perezoso, sin Qt al arrancar).
+    por sesión: Wayland (GTK layer-shell) → X11 (`x11_popup`); Wayland SIN layer-shell
+    → error por stderr + exit ≠ 0 (sin fallback). Import perezoso en ambos branches.
   - `verdantis_daemon.py` — dueño del bus DBus (`Notify`, `CloseNotification`,
     `GetCapabilities`, `GetServerInformation`, signals), cola de toasts, click→action.
   - `wayland_popup.py` — render del toast: `NotificationWidget` (Gtk.DrawingArea con
@@ -33,14 +34,15 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
     (`$XDG_DATA_HOME/verdantis/history.jsonl`) + bytes de iconos/imagen para que el
     replay del dashboard reproduzca "cómo se veía" cada notificación (las claves
     `avatar_source`/`avatar_file` son esquema de disco, no vocabulario de layout).
-  - `qt_fallback.py` — notificación one-shot PyQt6; solo se importa en ese branch.
+  - `x11_popup.py` — fallback X11 (Gtk.Window posicionable, sin layer-shell) que
+    reutiliza `NotificationWidget`; solo se importa en ese branch. Qt no existe.
 - Métricas de layout: fuente única en `wayland_popup` (`_PAD`/`_rows_above_body`/...),
   consumidas por `_draw`, `calc_card_height` y `_eff_text_width`. No recomputar el
   stack a mano o divergen (ver `tests/test_layout_consistency.py`).
 
 ## Build & test
 
-- Tests: `.venv/bin/python -m pytest tests/ -q` (~17s, 362 passed).
+- Tests: `.venv/bin/python -m pytest tests/ -q` (~17s, 372 passed).
 - Simulador de la pila (reloj virtual, sin ventanas: corre el manager real e imprime
   cada frame con offsets/cola + detectores de bug): `.venv/bin/python tests/qa_sim_pila.py`
   (`--n`, `--timeout`, `--click`, `--sticky`; sale 1 si detecta un bug).

@@ -10,9 +10,6 @@ echo "==> Entorno virtual..."
 python3 -m venv "$SCRIPT_DIR/.venv"
 source "$SCRIPT_DIR/.venv/bin/activate"
 
-echo "==> Dependencias Python..."
-pip install PyQt6 2>&1 | tail -1
-
 echo ""
 echo "==> Servicio systemd (user) para daemon DBus..."
 mkdir -p "$HOME/.config/systemd/user/"
