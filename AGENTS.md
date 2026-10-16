@@ -77,6 +77,8 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   NO bumpan. Un commit que bumea actualiza `VERSION` en el mismo commit y lo reporta al
   usuario; verificar el bump con `busctl --user call ... GetServerInformation` tras
   reiniciar el servicio. Sin tags de git: el número vive solo en el código.
+- `README.md` está en inglés (excepción deliberada: es la cara pública del repo en
+  GitHub); specs, PRD, PRODUCT y AGENTS siguen en español.
 - TDD: test que falla primero (documenta el bug), luego fix mínimo, luego suite verde.
 - Resolución de .desktop: SOLO match exacto (`_exact_desktop_file`). El match difuso
   (`_find_desktop_file`) rompe con PWAs de Brave (`brave-<appid>.desktop`) — un
