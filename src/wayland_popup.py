@@ -1619,7 +1619,6 @@ class WaylandPopup:
         self._start = 0
         self._on_close = on_close
         self._on_click = on_click
-        self._on_link = on_link
         # Hook POST-resize: lo inyecta el manager para re-flowear la pila
         # cuando este card cambia de alto (spec `toast-stack`). None = nadie
         # escucha (uso one-shot).
@@ -1708,7 +1707,7 @@ class WaylandPopup:
             app_label=self.app_label, hide_title=self.hide_title,
             persistent=(self.duration == 0),
             actions=self.actions, action_icons=self.action_icons,
-            on_link=self._on_link,
+            on_link=on_link,
         )
         h = self._card.desired_height() if self._card else WaylandPopup.calc_card_height(
             self.app_name, self.cuerpo, self.image_path)
