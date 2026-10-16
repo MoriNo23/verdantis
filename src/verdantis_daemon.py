@@ -18,7 +18,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.11.1"
+VERSION = "0.12.0"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -442,6 +442,8 @@ class NotificationManager:
             # la comería como nid (bug del live: el toast no se cerraba y
             # notify-send nunca recibía la action). nid queda por closure.
             "on_click": lambda action_key=None, nid=nid: self._on_action_invoked(nid, action_key),
+            # Hyperlink del body (spec `body-hyperlinks`): SU url, no una key.
+            "on_link": lambda url, nid=nid: self._on_link_clicked(nid, url),
             # Botones de acción (spec toast-acciones): la lista plana cruda
             # la parsea el widget (default fuera, dedup, cap 3). El hint
             # action-icons pide interpretar cada key como icono del tema.
@@ -707,6 +709,27 @@ class NotificationManager:
         # Cierre inmediato del popup visual con fuente "action": su callback
         # dispara _on_closed, que emite NotificationClosed razón 2 — DESPUÉS
         # del ActionInvoked de arriba (orden fijo del spec `contrato-dbus`).
+        for aid, popup in list(self._active):
+            if aid == nid:
+                popup._close("action")
+                break
+
+    def _on_link_clicked(self, nid, url):
+        """Click en un hyperlink del body (spec `body-hyperlinks`): abre ESA
+        url y cierra igual que un click del cuerpo — razón 2, SIN
+        `ActionInvoked` (un link no es action key)."""
+        # Jamás abrir urls locales/privadas (misma regla que el click de body).
+        if url and _is_local_url(url):
+            url = ""
+        if url:
+            try:
+                subprocess.Popen(["xdg-open", url],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+        # Cierre inmediato con fuente "action": el callback dispara
+        # _on_closed → NotificationClosed razón 2, después de nada (sin
+        # ActionInvoked en este path, spec `contrato-dbus`).
         for aid, popup in list(self._active):
             if aid == nid:
                 popup._close("action")
