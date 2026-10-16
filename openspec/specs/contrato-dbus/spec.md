@@ -34,9 +34,9 @@ El daemon SHALL emitir `NotificationClosed(id: u, reason: u)` en todo cierre de 
 - **WHEN** un cliente llama `CloseNotification(id)`
 - **THEN** se emite `NotificationClosed(id, 3)`
 
-### Requirement: Reemplazo, dedup y replay no emiten NotificationClosed
+### Requirement: Reemplazo y dedup no emiten NotificationClosed
 
-El daemon SHALL tratar estos paths como no-cierre y no emitir señal alguna por ellos: llegada con `replaces_id` (reemplazo in-place del card), dedup por contenido dentro de su ventana de 10s, y replay desde el dashboard.
+El daemon SHALL tratar estos paths como no-cierre y no emitir señal alguna por ellos: llegada con `replaces_id` (reemplazo in-place del card) y dedup por contenido dentro de su ventana de 10s.
 
 #### Scenario: replaces_id
 - **WHEN** llega una notificación con `replaces_id` apuntando a un card vivo y el card se actualiza en sitio
@@ -45,10 +45,6 @@ El daemon SHALL tratar estos paths como no-cierre y no emitir señal alguna por 
 #### Scenario: Dedup dentro de la ventana
 - **WHEN** una notificación idéntica (misma app + resumen + body) llega dentro de 10s de la anterior y se deduplica
 - **THEN** no se emite nada por la duplicada
-
-#### Scenario: Replay del dashboard
-- **WHEN** el dashboard reproduce un toast histórico
-- **THEN** el replay dibuja el card pero no emite `ActionInvoked` ni `NotificationClosed` hacia el bus
 
 ### Requirement: GetServerInformation reporta spec_version 1.2
 
