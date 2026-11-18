@@ -142,7 +142,7 @@ aportar su percepción pero no es la fuente exclusiva.
   contraste AA corregido sobre wallpaper claro, dependencias auditadas (pip 26.3).
   Historial/replay por CLI, rama de backend unificada y metatests de sensibilidad.
 - Pendiente: verificación visual del replay por el agente, push a `origin/main`
-  (3 commits locales: 17c589e, df6c6f1, 650a5a8).
+  (5 commits locales: 17c589e, df6c6f1, 2208f53, d36051d, +este).
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.
 - Riesgo abierto: el usuario vio una vez un "toast de más" en la transición de

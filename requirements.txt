@@ -1,3 +1,8 @@
-PyGObject>=3.56
-pycairo>=1.29
-pytest>=8
+# Dependencias de ejecución/testing — fijadas para builds reproducibles.
+# Antes usaban >= y un install futuro podía traer versiones distintas sin aviso.
+PyGObject==3.56.3
+pycairo==1.29.0
+pytest==9.1.1
+
+# Auditoría de dependencias (no necesarias para correr el daemon):
+#   pip install -r requirements-audit.txt

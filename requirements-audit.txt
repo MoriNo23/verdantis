@@ -1,0 +1,10 @@
+# Auditoría de supply chain y análisis REA — NO son dependencias de runtime.
+# Instalar aparte: .venv/bin/pip install -r requirements-audit.txt
+pip==26.3
+pip-audit==2.10.1
+click==8.5.1
+mutmut==3.7.0
+# Proveedor de descompilación offline para REA (inspect_binary_layout):
+pwntools==4.15.0
+pyelftools==0.33
+unicorn==2.1.2

@@ -14,11 +14,15 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
 
 ## Dev environment
 
-- Python 3.13 en `.venv/` (venv aislado). Deps pip declaradas en
-  `requirements.txt` (PyGObject, pycairo, pytest — gi SÍ compila desde pip en
-  3.13): `./install.sh` (apt: libgtk4-layer-shell0 + gir1.2-gtk4layershell-1.0;
-  venv + pip install) y genera `~/.config/systemd/user/verdantis.service`
-  desde `service.template` con el path real (`@DIR@`).
+- Python 3.13 en `.venv/` (venv aislado). Deps pip **fijadas** en `requirements.txt`
+  (PyGObject 3.56.3, pycairo 1.29.0, pytest 9.1.1); auditoría/REA en
+  `requirements-audit.txt` (pip-audit, mutmut, pwntools — NO son runtime).
+  `./install.sh` (apt: libgtk4-layer-shell0 + gir1.2-gtk4layershell-1.0; venv +
+  pip install) y genera `~/.config/systemd/user/verdantis.service` desde
+  `service.template` con el path real (`@DIR@`).
+- Tests de render GSK (`tests/test_render_gsk.py`): serializan el `Gsk.RenderNode`
+  de `do_snapshot` sin ventana. Si falta un nodo (gradiente, sombra, texto,
+  clip), la suite falla — es la red de seguridad que faltaba antes de v0.15.2.
 - GTK4: cargar `libgtk4-layer-shell` con `ctypes.CDLL(..., RTLD_GLOBAL)` ANTES
   de `import gi` (en `wayland_popup.py` y `verdantis_daemon.py`): si libwayland
   se carga primero, `is_supported()` da False. No hace falta `LD_PRELOAD`.
