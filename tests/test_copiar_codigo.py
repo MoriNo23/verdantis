@@ -63,15 +63,13 @@ def test_widget_ofrece_boton_copiar_cuando_hay_codigo():
         _on_click=None,
     )
     assert wp._find_code(w._cuerpo) == "482193"
-    assert "Copiar código" in wp._copy_label(w._cuerpo)
 
 
-def test_widget_sin_codigo_ofrece_copiar_texto():
+def test_widget_sin_codigo_no_ofrece_copiar():
     w = wp.NotificationWidget.__new__(wp.NotificationWidget)
     w.__dict__.update(
         _cuerpo="Reunión a las 5pm", _copy_rect=None, _on_click=None)
     assert wp._find_code(w._cuerpo) is None
-    assert wp._copy_label(w._cuerpo) == "Copiar texto"
 
 
 def test_layout_reserva_altura_para_el_boton_copiar():
@@ -106,3 +104,14 @@ def test_click_en_boton_copiar_copia_sin_disparar_on_click():
         w._on_button_release(None, evt)     # release ejecuta
     copiar.assert_called_once_with("482193")
     assert calls == []   # no emite ActionInvoked ni cierra
+
+
+def test_constructor_solo_arma_el_boton_con_codigo():
+    """El widget real (no el fake de render) no ofrece Copiar sin código."""
+    sin = wp.NotificationWidget("Brave", "", "Título", "Reunión a las 5pm",
+                                None, None, "#80cbc4", None)
+    assert sin._copy_text is None
+    con = wp.NotificationWidget("Brave", "", "Título",
+                                "Tu código de verificación es 482193",
+                                None, None, "#80cbc4", None)
+    assert con._copy_text == "482193"

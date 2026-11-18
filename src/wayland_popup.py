@@ -226,9 +226,7 @@ def _find_code(text):
     return None
 
 
-def _copy_label(text):
-    """Etiqueta del botón Copiar: código específico si lo hay, texto si no."""
-    return "Copiar código" if _find_code(text) else "Copiar texto"
+
 
 
 def _copy_to_clipboard(text):
@@ -696,7 +694,9 @@ class NotificationWidget(Gtk.Widget):
         self._app_name = _get_app_display_name(app_name)
         self._titulo = (titulo or "").replace("\n", " ").replace("\t", " ").strip()
         self._cuerpo = _strip_urls(cuerpo)
-        self._copy_text = _find_code(self._cuerpo) or self._cuerpo or None
+        # Solo con código de verificación: el botón es para pegar el código en
+        # la app, no un "copiar todo" que aparecería en casi todos los toasts.
+        self._copy_text = _find_code(self._cuerpo)
         self._accent_rgb = _hex_rgb(accent)
         self._card_bg = _hex_rgb(_CARD_BG_HEX)
 
@@ -1175,7 +1175,7 @@ class NotificationWidget(Gtk.Widget):
             _append_sink(s, ax0, ay0, ax1 - ax0)
         s.pop()
         s.restore()
-        label = _copy_label(self._cuerpo)
+        label = "Copiar código"
         fs = max(10, round(12 * fr.fs))
         fdesc = Pango.FontDescription("Manrope " + str(fs))
         fdesc.set_weight(Pango.Weight.SEMIBOLD)

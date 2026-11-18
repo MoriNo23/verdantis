@@ -22,6 +22,17 @@ código.
 - **WHEN** el body dice "Wyeth, 1991" o "b200148"
 - **THEN** no se ofrece botón "Copiar código"
 
+### Requirement: El botón solo existe cuando hay código
+
+El toast SHALL dibujar la banda "Copiar código" solo si `_find_code` encontró un
+código. Sin código SHALL NOT reservarse la banda ni mostrar "Copiar texto": en el
+historial real solo 26 de 1000 notificaciones traen código, así que una banda fija
+es peso visual sin uso y cambia el alto de casi todos los toasts.
+
+#### Scenario: Toast sin código
+- **WHEN** el body no contiene un código de verificación
+- **THEN** el toast no muestra ninguna banda de copiar y su alto no la reserva
+
 ### Requirement: Copiar sin foco (compatibilidad con keyboard-mode=NONE)
 
 El toast SHALL copiar con `wl-copy` en Wayland y `xclip`/`xsel` en X11, sin

@@ -21,7 +21,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.15.7"
+VERSION = "0.15.8"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.

@@ -153,6 +153,9 @@ aportar su percepción pero no es la fuente exclusiva.
   salía gris verdoso (`#41575F`) sobre la card. Etiquetas semibold y sombra
   interior de 2 px al presionar (cierra el hueco con `toast-vibrancia`).
   Specs y tokens del mockup actualizados.
+- Hecho (0.15.8): la banda "Copiar código" existe solo cuando hay código
+  (26 de 1000 notificaciones del historial lo traen). Antes se reservaba siempre
+  y, al hacerse visible, metía una banda de 36 px en casi todos los toasts.
 - Pendiente: push a `origin/main`.
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.

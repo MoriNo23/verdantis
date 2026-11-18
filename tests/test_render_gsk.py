@@ -36,7 +36,7 @@ def _widget(cuerpo="Tu código de verificación es 482193",
         _image_left_pb=None, _image_pb=None, _app_icon_pb=None,
         _action_icon_pbs={}, _action_rects=[], _close_rect=None,
         _copy_rect=None,
-        _copy_text=wp._find_code(cuerpo) or cuerpo,
+        _copy_text=wp._find_code(cuerpo),
         _pressed_copy=False, _hover_copy=False,
         _pressed_action_idx=None, _pressed_close=False, _hover_action_idx=None,
     )
@@ -80,9 +80,18 @@ def test_render_gsk_botones_publican_rect_y_se_dibujan():
 
 def test_render_gsk_copiar_solo_sin_acciones_db():
     """El botón Copiar local aparece cuando no hay acciones D-Bus compitiendo."""
-    data, w = _nodos("Mensaje sin acciones")
+    data, w = _nodos("Tu código de verificación es 482193")
     assert w._action_rects == []
     assert w._copy_rect is not None, "sin acciones D-Bus debe aparecer Copiar"
+
+
+def test_render_gsk_sin_codigo_no_dibuja_banda_copiar():
+    """Sin código de verificación no hay banda: la mayoría de los toasts no
+    tiene código (26 de 1000 en el historial) y una banda de 36 px en todos
+    era peso visual sin uso."""
+    data, w = _nodos("Reunión a las 5pm")
+    assert w._copy_text is None
+    assert w._copy_rect is None
 
 
 def test_render_gsk_codigo_muestra_boton_copiar():
