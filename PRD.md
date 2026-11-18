@@ -7,8 +7,9 @@ Versión del documento: 1.1 (ciclo 0.13.0). Fuente de verdad del *comportamiento
 ## 1. Resumen
 
 Verdantis es el dueño de `org.freedesktop.Notifications` en el bus de sesión y dibuja
-los toasts con GTK3 + gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza
-a mako/deadd. Corre como servicio de usuario (`systemd --user`) desde el mismo repo.
+los toasts con GTK4 + GSK + gtk4-layer-shell (sin cairo en el pipeline de dibujo), sin
+depender de Plasma. Reemplaza a mako/deadd. Corre como servicio de usuario
+(`systemd --user`) desde el mismo repo.
 
 ## 2. Problema
 
@@ -20,10 +21,10 @@ a mako/deadd. Corre como servicio de usuario (`systemd --user`) desde el mismo r
 
 ## 3. Usuario
 
-Usuario único: MoriNo23 (autor). Sin telemetría ni multiusuario. El usuario es además
-el **verificador visual** del producto (spec `verificacion-visual`): el agente manda
-notificaciones de prueba y el usuario reporta cómo se ven; no hay auto-verificación
-pantallera.
+Usuario único: MoriNo23 (autor). Sin telemetría ni multiusuario. El **verificador
+visual** del producto es el agente (spec `verificacion-visual`): manda notificaciones
+de prueba, toma capturas e inspecciona la pantalla por su cuenta; el usuario puede
+aportar su percepción pero no es la fuente exclusiva.
 
 ## 4. Objetivos
 
@@ -58,9 +59,9 @@ pantallera.
 ### R3 — Texto nítido en cualquier equipo
 
 - Todo el texto del card (app, título, body con markup, labels de acciones) se
-  rasteriza con antialiasing **en grises**, fijado por código (`_create_layout` +
-  `_FONT_OPTIONS`), sin heredar el subpixel del fontconfig.
-- Fijar el AA no cambia métricas (alto del card, wrap, cap de líneas) ni paleta.
+  rasteriza con GSK (`append_layout`), que resuelve el antialiasing en el
+  renderer; ya no se fija `_FONT_OPTIONS` ni se usa `_create_layout(cr)`.
+  El cambio no altera métricas (alto del card, wrap, cap de líneas) ni paleta.
 
 ### R4 — Interacción
 
@@ -95,10 +96,10 @@ pantallera.
   nada). `--id` toma el match más reciente: los ids se repiten entre reinicios del
   daemon y el JSONL acumula hasta 1000 registros.
 
-### R7 — Verificación visual por el usuario
+### R7 — Verificación visual por el agente
 
-- La confirmación de cómo se ven los toasts la da el usuario; el agente no saca
-  capturas ni inspecciona la pantalla (spec `verificacion-visual`).
+- La confirmación de cómo se ven los toasts la da el agente: puede sacar capturas
+  e inspeccionar la pantalla (spec `verificacion-visual`).
 
 ## 6. Fuera de alcance
 
@@ -110,8 +111,8 @@ pantallera.
 - `_bg_alpha` por urgency: código muerto (se asigna, `_draw` no lo lee) — deuda
   documentada, fuera de este ciclo.
 - PyGObject 3.58 (solo sdist; el venv vive de la .so de girepository del sistema).
-- X11 como target primario: el fallback es GTK3 (`x11_popup`, sin layer-shell); no hay
-  Qt en el proyecto.
+- X11 como target primario: el fallback es GTK4 (`x11_popup`, sin layer-shell,
+  anclaje reposicionado con Xlib/EWMH); no hay Qt en el proyecto.
 - Replay por bus (re-emitir `Notify`): se vería el stack real pero re-archivaría el
   historial y la dedup se tragaría los repetidos.
 
@@ -120,16 +121,18 @@ pantallera.
 | Requisito | Cómo se comprueba |
 |---|---|
 | R1, R4 | `tests/test_contrato_dbus.py` (razones de cierre, replaces/dedup sin emisión, caps, `spec_version`) + `tests/test_auditoria_fixes.py` (tope de cola, hueco liberado, margins) |
-| R3 | spec `toast-texto-nitido` + reporte visual del usuario |
+| R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
-| R7 | reporte visual del usuario (spec `verificacion-visual`) |
+| R7 | verificación visual del agente (spec `verificacion-visual`) |
 | Regresión global | suite completa verde (52 tests, <2 s) |
 
 ## 8. Dependencias y plataforma
 
 - Python 3.13 en `.venv/` (venv clásico; la migración a uv está bloqueada).
-- apt: `libgtk-layer-shell` 0.9, GTK3 3.24, `python3-gi` 3.50 (girepository).
-- pip (`requirements.txt`): PyGObject, pycairo, pytest. Sin Qt ni Flask.
+- apt: GTK 4.18.6 (`libgtk-4-1` / dev), `gtk4-layer-shell` 1.0.4
+  (`libgtk4-layer-shell-dev`), `python3-gi` (girepository).
+- pip (`requirements.txt`): PyGObject, pycairo (solo para el font map de Pango), pytest.
+  Sin Qt ni Flask; cairo NO participa en el pipeline de dibujo (render GSK puro).
 - systemd: `verdantis.service` (Type=dbus, dueño del nombre del bus).
 
 ## 9. Estado y pendientes del ciclo
@@ -137,7 +140,7 @@ pantallera.
 - Hecho (0.13.0): historial en disco restaurado (`history_store`) + replay/lista/borrado
   por CLI (`replay`, subcomandos de `verdantis.py`), rama de backend unificada con el
   one-shot (`replay.mostrar_toast`), bump 0.12.1 → 0.13.0, metatests de sensibilidad.
-- Pendiente: verificación visual del replay por el usuario, commits del ciclo.
+- Pendiente: verificación visual del replay por el agente, commits del ciclo.
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.
 - Riesgo abierto: el usuario vio una vez un "toast de más" en la transición de

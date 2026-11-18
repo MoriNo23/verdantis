@@ -2,7 +2,7 @@
  * Anatomía del toast con cotas px — el redline del tablero, en código.
  * Los valores salen de lib/toast-tokens.ts (trazabilidad a wayland_popup).
  */
-import { COLORS, METRICS } from "@/lib/toast-tokens";
+import { COLORS, METRICS, VIBRANCY } from "@/lib/toast-tokens";
 
 const pad = METRICS.pad;
 
@@ -84,8 +84,11 @@ export default function Anatomia() {
           style={{
             position: "absolute",
             inset: 0,
+            boxSizing: "border-box",
             borderRadius: METRICS.cardRadius,
-            background: COLORS.cardBg,
+            background: `linear-gradient(180deg, ${VIBRANCY.cardGradientFrom}, ${VIBRANCY.cardGradientTo})`,
+            border: `${METRICS.hairline}px solid ${VIBRANCY.cardBorder}`,
+            boxShadow: `0 ${VIBRANCY.shadowDy}px ${VIBRANCY.shadowBlur}px ${VIBRANCY.shadowSpread}px ${VIBRANCY.shadow}`,
           }}
         />
         {/* Imagen izquierda */}
@@ -158,7 +161,7 @@ export default function Anatomia() {
         <Cota label="columna de texto 240 (196 con franja en hover)" top={pad + METRICS.imageLeftW + 4} left={pad + METRICS.imageLeftW + METRICS.imageLeftGap} width={METRICS.textColW} height={1} />
         <Cota label="fila app 20" top={pad} left={pad + METRICS.imageLeftW + METRICS.imageLeftGap - 6} width={1} height={METRICS.appRowH} />
         <Cota label="fila título 22" top={pad + METRICS.appRowH} left={pad + METRICS.imageLeftW + METRICS.imageLeftGap - 6} width={1} height={METRICS.titleRowH} />
-        <Cota label="card 360 × radio 12" top={0} left={0} width={METRICS.cardW} height={1} />
+        <Cota label="card 360 × radio 14" top={0} left={0} width={METRICS.cardW} height={1} />
       </div>
 
       {/* Nota de medidas globales (equivale a la nota del tablero viejo) */}
@@ -181,7 +184,8 @@ export default function Anatomia() {
         </div>
         columnas 240 / 196 (franja en hover de persistente) · franja de
         descarte 44 · barra "Ver más" 28 · fila de botones 28 ·
-        radios card/barra 12 / 8 · avatar → imagen izquierda 80 · X stroke
+        radios card/barra 14 / 8 · hairline 1 · sombra dy 8 / blur 18 ·
+        alpha mínimo 0.90 · avatar → imagen izquierda 80 · X stroke
         2.5 · cap de body 3 líneas
       </div>
     </main>

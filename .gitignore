@@ -21,6 +21,7 @@ htmlcov/
 #  que cita AGENTS.md)
 openspec/changes/
 .opencode/
+.superpowers/
 
 # QA / artifacts generados
 render_out/

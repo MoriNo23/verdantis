@@ -68,7 +68,7 @@ La fila de botones SHALL sumar su altura a la card en la misma fuente de métric
 
 ### Requirement: Los botones muestran estados interactivos
 
-Cada botón de acción SHALL mostrar estado hover — el fill de su segmento se intensifica con el puntero encima — y estado pressed: durante la presión del botón el fill SHALL intensificarse aún más que en hover. La acción SHALL ejecutarse al soltar el botón dentro de su rect; soltar fuera del rect SHALL cancelar sin emitir `ActionInvoked`.
+Cada botón de acción SHALL mostrar estado hover — el fill de su segmento se intensifica con el puntero encima — y estado pressed: durante la presión del botón el fill SHALL intensificarse aún más que en hover y el botón SHALL hundirse con una sombra interior, según los tokens de `toast-vibrancia` (acento al 18 % en reposo, 30 % en hover, 40 % en pressed, radio 8 px, brillo interior de 1 px al 6 % en reposo/hover). El hundimiento SHALL NOT mover la fila ni cambiar las métricas de la card. La acción SHALL ejecutarse al soltar el botón dentro de su rect; soltar fuera del rect SHALL cancelar sin emitir `ActionInvoked`.
 
 #### Scenario: Hover sobre un botón
 
@@ -78,7 +78,12 @@ Cada botón de acción SHALL mostrar estado hover — el fill de su segmento se 
 #### Scenario: Pressed visible durante la presión
 
 - **WHEN** un botón está presionado sin soltar
-- **THEN** el fill del segmento se intensifica aún más que en hover
+- **THEN** el fill del segmento pasa al 40 % de acento (más intenso que el 30 % de hover) y aparece la sombra interior que hunde el botón, sin mover la fila ni la card
+
+#### Scenario: Reposo y hover usan los tokens de vibrancia
+
+- **WHEN** un botón está en reposo o con el puntero encima
+- **THEN** su fill es acento al 18 % o al 30 % respectivamente, con radio 8 px y brillo interior de 1 px al 6 %
 
 #### Scenario: Soltar dentro ejecuta la acción
 

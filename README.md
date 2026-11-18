@@ -6,15 +6,19 @@
 
 Desktop notification daemon for **Wayland (KDE Plasma 6)**. It owns
 `org.freedesktop.Notifications` on the session bus and draws its own toasts
-with GTK3 + gtk-layer-shell (cairo/Pango) — no Plasma dependency. A
-replacement for mako/deadd. The stack is a queue, not a parade:
+with GTK4 + GSK + gtk4-layer-shell — no cairo in the render pipeline, no Plasma
+dependency. A replacement for mako/deadd. The stack is a queue, not a parade:
 notifications show in arrival order and nothing covers anything.
 
 - **Strict FIFO stack** — max 2 toasts on screen, a queue of up to 20
   behind; `urgency` changes duration and style, never position.
-- **Crisp text on any machine** — gray antialiasing pinned by code, not
-  inherited from fontconfig (subpixel AA tints text over translucent
-  surfaces).
+- **Crisp text on any machine** — antialiasing resolved by GSK, not inherited
+  from fontconfig (subpixel AA tints text over translucent surfaces).
+- **Dark vibrancy / physical depth** — gradient card, 1 px hairline, cascading
+  shadow between the two stacked toasts, and action buttons that sink when
+  pressed. Simulated with alpha + gradient (≥ 0.90): GSK does not expose a real
+  backdrop blur on a layer-shell, so no pixel match with Notification Center is
+  promised.
 - **Own look** — accent color, an 80 px image slot on every toast, a time
   wipe, and hover pauses expiry.
 - **History + replay** — every notification is archived to disk and can be
@@ -47,7 +51,7 @@ strip + X on hover for ANY toast (persistent or timed).
 - **KDE Plasma 6 on Wayland** — the tested daily driver. Other compositors
   with wlr-layer-shell support (Sway, Hyprland) should work; GNOME/Mutter is
   not supported (no layer-shell protocol).
-- GTK3 3.24+, `libgtk-layer-shell` (dev package) and `python3-gi` from your
+- GTK 4.18.6, `gtk4-layer-shell` 1.0.4 (dev package) and `python3-gi` from your
   distro — the venv uses the system GObject-introspection libraries.
 - Python 3.13 with `venv` + pip, and a systemd user session.
 - Debian/Ubuntu are the tested target (`install.sh` runs `apt`); on other
@@ -76,7 +80,7 @@ Apps send notifications over DBus and Verdantis draws them:
 systemctl --user status verdantis.service
 busctl --user call org.freedesktop.Notifications \
   /org/freedesktop/Notifications org.freedesktop.Notifications GetServerInformation
-# => ssss "Verdantis" "MoriNo23" "0.14.0" "1.2"
+# => ssss "Verdantis" "MoriNo23" "0.15.0" "1.2"
 ```
 
 ### Stack rules
@@ -92,8 +96,8 @@ busctl --user call org.freedesktop.Notifications \
   first in line enters at that moment.
 - An incoming toast **never covers** an existing one: its first frame
   already sits in its slot (below the one above, with the 12 px gap).
-- Text is rasterized with gray antialiasing pinned by code: crisp on any
-  machine, without inheriting fontconfig subpixel rendering.
+- Text is rasterized by GSK: crisp on any machine, without inheriting fontconfig
+  subpixel rendering.
 
 ## History & replay (CLI)
 
@@ -146,16 +150,16 @@ no action to run.
 | `--margin` | `16` | Screen edge margin, px |
 | `--corner` | `top-right` | `top-right`, `top-left`, `bottom-right`, `bottom-left` |
 | `--accent` | `#80cbc4` | Accent color, hex (identity default, `app_info.DEFAULT_ACCENT`) |
-| `--force-wayland` | | Force the GTK3 + layer-shell backend |
+| `--force-wayland` | | Force the GTK4 + gtk4-layer-shell backend |
 | `--force-fallback` | | Force the X11 fallback branch |
 | `--daemon` | | Start as the DBus daemon |
 
 ## Backends
 
-- **Wayland**: GTK3 + gtk-layer-shell (precise corner anchoring).
-- **X11/fallback**: GTK3 (`Gtk.Window` positioned via `move()`); on Wayland
-  without layer-shell the one-shot fails cleanly (stderr + non-zero exit),
-  no fallback.
+- **Wayland**: GTK4 + GSK + gtk4-layer-shell (precise corner anchoring).
+- **X11/fallback**: GTK4 (`Gtk.Window` positioned via `move()`, no layer-shell);
+  on Wayland without layer-shell the one-shot fails cleanly (stderr + non-zero
+  exit), no fallback.
 
 ## Project structure
 
@@ -163,7 +167,7 @@ no action to run.
 src/
   verdantis.py         entry point: --daemon, CLI (list/replay/clear), one-shot
   verdantis_daemon.py  DBus name owner: Notify/CloseNotification/signals, queue
-  wayland_popup.py     toast render: GTK3 + gtk-layer-shell, cairo/Pango
+  wayland_popup.py     toast render: GTK4 + GSK + gtk4-layer-shell
   x11_popup.py         X11 fallback (positionable window), reuses the widget
   replay.py            history CLI + the shared render branch
   history_store.py     JSONL store + icon byte copies (best-effort)

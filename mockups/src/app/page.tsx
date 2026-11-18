@@ -72,9 +72,10 @@ export default function Home() {
         Verdantis — mockups del toast
       </h1>
       <p style={{ color: "#a6adc8", fontSize: 13, marginTop: 6 }}>
-        Documentación visual post-0.9.0. La verdad del comportamiento son los
-        specs de <code>openspec/specs/</code> y el código; este mockup puede
-        divergir (ver README).
+        Documentación visual post-0.9.0, con vibrancia oscura: gradiente,
+        hairline, sombra en cascada y pressed que hunde (GTK4 + GSK). La verdad
+        del comportamiento son los specs de <code>openspec/specs/</code> y el
+        código; este mockup puede divergir (ver README).
       </p>
 
       <div
@@ -143,6 +144,37 @@ export default function Home() {
 
         <Card titulo="08 · Expandido" spec="toast-body-colapso (Ver menos)">
           <ToastMock variant="largo" state="expandido" body={LONG_BODY} />
+        </Card>
+
+        <Card titulo="09 · Botón pressed (hunde)" spec="toast-acciones / toast-vibrancia">
+          <ToastMock
+            variant="botones"
+            state="pressed"
+            appName="Telegram Desktop"
+            titulo="Mori"
+            body="El primer botón está presionado: fill al 40% y sombra interior que lo hunde."
+            buttons={[
+              ["mail-mark-read", "Marcar como leída"],
+              ["default", "Abrir"],
+            ]}
+          />
+        </Card>
+
+        <Card titulo="10 · Pila con sombra en cascada" spec="toast-stack / toast-vibrancia">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <ToastMock
+              variant="estandar"
+              appName="Brave"
+              titulo="Pinterest"
+              body="Alguien guardó tu pin."
+            />
+            <ToastMock
+              variant="estandar"
+              appName="Telegram Desktop"
+              titulo="Mori"
+              body="La sombra de la card superior cae sobre esta, sin taparla."
+            />
+          </div>
         </Card>
       </div>
     </main>

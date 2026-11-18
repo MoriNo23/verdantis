@@ -7,7 +7,7 @@ Cubre las tres capas con lógica propia:
 - wiring de los subcomandos por subprocess (headless: `list` y `clear` no
   tocan display).
 
-El render del replay no se testea acá: lo verifica el usuario (spec
+El render del replay no se testea acá: lo verifica el agente (spec
 `verificacion-visual`).
 """
 import argparse

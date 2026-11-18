@@ -1,13 +1,18 @@
+import ctypes
 import json
 import os
 import subprocess
 import time
 os.environ.setdefault('GDK_BACKEND', 'wayland')
 
+# libgtk4-layer-shell ANTES de gi: sin RTLD_GLOBAL, is_supported() da False
+# por el orden de linking con libwayland. Verificado en este equipo.
+ctypes.CDLL('libgtk4-layer-shell.so.0', mode=ctypes.RTLD_GLOBAL)
+
 import gi
-gi.require_version('Gtk', '3.0')
-gi.require_version('GtkLayerShell', '0.1')
-from gi.repository import Gtk, GtkLayerShell, GLib, Gio
+gi.require_version('Gtk', '4.0')
+gi.require_version('Gtk4LayerShell', '1.0')
+from gi.repository import Gtk, Gtk4LayerShell, GLib, Gio
 
 from app_info import APP_NAME, DEFAULT_ACCENT, VENDOR
 from wayland_popup import (
@@ -16,7 +21,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.14.0"
+VERSION = "0.15.0"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.

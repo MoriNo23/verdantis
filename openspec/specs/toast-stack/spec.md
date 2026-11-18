@@ -34,6 +34,24 @@ Las cards consecutivas de la pila SHALL mantener siempre el gap de separación (
 - **WHEN** un toast nuevo entra debajo de los que ya están
 - **THEN** los toasts de arriba conservan su posición (solo cambia el que entra)
 
+### Requirement: La sombra cae en cascada entre los dos toasts
+
+Con dos toasts visibles, la sombra exterior definida en `toast-vibrancia`
+(`rgba(0, 0, 0, 0.52)`, dy 8, blur 18, spread 0) SHALL proyectarse desde la card
+superior hacia la inferior a través del gap de 12 px, dando profundidad a la
+pila. La sombra SHALL NOT reducir el gap, solapar las cards ni alterar el orden
+de llegada; SHALL moverse con su card en cada reflow.
+
+#### Scenario: Cascada en la pila llena
+
+- **WHEN** dos toasts están visibles con el gap de 12 px
+- **THEN** la sombra de la card superior se ve sobre el borde de la inferior, sin que las cards se toquen
+
+#### Scenario: Cascada tras un reflow
+
+- **WHEN** un toast de la pila cambia de altura o entra un tercero desde la cola
+- **THEN** la sombra sigue a su card y el gap de 12 px se conserva
+
 ### Requirement: La pila muestra dos toasts a la vez
 
 El sistema SHALL presentar como máximo DOS toasts simultáneos. Toda notificación que llegue con la pila llena SHALL quedar pendiente y SHALL NOT presentarse hasta que se libere un hueco; al liberarse, SHALL entrar la primera de las pendientes sin que las demás pierdan su lugar en la cola (spec `toast-orden-llegada`). La capacidad SHALL ser la misma para cualquier `urgency`: ningún tipo de notificación SHALL ganar un hueco extra.

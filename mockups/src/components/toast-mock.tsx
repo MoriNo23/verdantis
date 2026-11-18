@@ -6,7 +6,7 @@
  * (ver lib/toast-tokens.ts para la procedencia de cada valor y la advertencia
  * de que el spec + código son la verdad).
  */
-import { COLORS, FONTS, METRICS } from "@/lib/toast-tokens";
+import { COLORS, FONTS, METRICS, VIBRANCY } from "@/lib/toast-tokens";
 import type { ToastState, ToastVariant } from "@/lib/toast-tokens";
 
 type Props = {
@@ -33,6 +33,7 @@ export function ToastMock({
   const isPersistent = variant === "persistente";
   const showButtons = variant === "botones";
   const hovered = state === "hover" && isPersistent;
+  const pressed = state === "pressed";
   const expanded = state === "expandido";
   const wipe = state === "wipe";
   const overflow = variant === "largo" || expanded;
@@ -49,8 +50,11 @@ export function ToastMock({
         position: "relative",
         width: METRICS.cardW,
         borderRadius: METRICS.cardRadius,
-        background: COLORS.cardBg,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+        // Vibrancia oscura: gradiente vertical + hairline de 1 px (card inset)
+        // + sombra en cascada (dy 8, blur 18) — spec toast-vibrancia.
+        background: `linear-gradient(180deg, ${VIBRANCY.cardGradientFrom}, ${VIBRANCY.cardGradientTo})`,
+        border: `${METRICS.hairline}px solid ${VIBRANCY.cardBorder}`,
+        boxShadow: `0 ${VIBRANCY.shadowDy}px ${VIBRANCY.shadowBlur}px ${VIBRANCY.shadowSpread}px ${VIBRANCY.shadow}`,
         overflow: "hidden",
         flex: "0 0 auto",
         padding: METRICS.pad,
@@ -156,7 +160,8 @@ export function ToastMock({
         </div>
       </div>
 
-      {/* Fila de botones de acción (spec toast-acciones: ≤3, banda accent 22%) */}
+      {/* Fila de botones de acción (spec toast-acciones: ≤3; fill acento
+          18% reposo / 30% hover / 40% pressed que hunde) */}
       {showButtons && (
         <div
           style={{
@@ -172,9 +177,17 @@ export function ToastMock({
               style={{
                 flex: 1,
                 borderRadius: METRICS.barRadius,
-                background: `rgba(128, 203, 196, ${
-                  i === 0 && state === "hover" ? 0.38 : 0.22
-                })`,
+                background:
+                  pressed && i === 0
+                    ? VIBRANCY.btnPressed
+                    : state === "hover" && i === 0
+                      ? VIBRANCY.btnHover
+                      : VIBRANCY.btnFill,
+                boxShadow:
+                  pressed && i === 0
+                    ? `inset 0 2px 4px ${VIBRANCY.btnPressedShadow}`
+                    : `inset 0 1px 0 ${VIBRANCY.btnInnerHighlight}`,
+                transform: pressed && i === 0 ? "translateY(1px)" : "none",
                 color: COLORS.title,
                 fontFamily: FONTS.barLabel.family,
                 fontSize: FONTS.barLabel.size,
@@ -189,14 +202,14 @@ export function ToastMock({
         </div>
       )}
 
-      {/* Barra "Ver más": full-width, accent 22%, radio 8 (anti-misclick) */}
+      {/* Barra "Ver más": full-width, acento 18%, radio 8 (anti-misclick) */}
       {overflow && (
         <div
           style={{
             height: METRICS.btnH,
             marginTop: METRICS.btnGap,
             borderRadius: METRICS.barRadius,
-            background: "rgba(128, 203, 196, 0.22)",
+            background: VIBRANCY.btnFill,
             color: COLORS.title,
             fontFamily: FONTS.barLabel.family,
             fontSize: FONTS.barLabel.size,

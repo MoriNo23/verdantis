@@ -1,10 +1,19 @@
 /**
  * Tokens del toast — la paleta como swatches, con el hex del render real.
  */
-import { COLORS, FONTS, METRICS } from "@/lib/toast-tokens";
+import { COLORS, FONTS, METRICS, VIBRANCY } from "@/lib/toast-tokens";
 
 const PALETTE: [string, string, string][] = [
-  ["cardBg", "#1e1e2e", "fondo del card (_card_bg)"],
+  ["cardBg", "#1e1e2e", "referencia opaca (mezcla AA / stop inferior)"],
+  ["cardGradientFrom", VIBRANCY.cardGradientFrom, "gradiente stop superior (alpha 0.90)"],
+  ["cardGradientTo", VIBRANCY.cardGradientTo, "gradiente stop inferior (alpha 0.94)"],
+  ["cardBorder", VIBRANCY.cardBorder, "hairline 1 px (card inset)"],
+  ["shadow", VIBRANCY.shadow, "sombra en cascada (dy 8 / blur 18)"],
+  ["btnFill", VIBRANCY.btnFill, "botón reposo: acento 18%"],
+  ["btnHover", VIBRANCY.btnHover, "botón hover: acento 30%"],
+  ["btnPressed", VIBRANCY.btnPressed, "botón pressed: acento 40% + hunde"],
+  ["btnInnerHighlight", VIBRANCY.btnInnerHighlight, "brillo interior 1 px"],
+  ["btnPressedShadow", VIBRANCY.btnPressedShadow, "sombra interior pressed"],
   ["title", "#e6e9f2", "título (_left_title)"],
   ["body", "#cdd6f4", "body (_left_body)"],
   ["app", "#a6adc8", "fila de app (_left_app / _PLACEHOLDER_FG)"],
@@ -88,6 +97,36 @@ export default function Tokens() {
             </div>
           </div>
         ))}
+      </div>
+
+      <h2 style={{ color: "#cdd6f4", fontSize: 15, marginTop: 40 }}>
+        Vibrancia (GTK4 + GSK)
+      </h2>
+      <div
+        style={{
+          marginTop: 12,
+          padding: 16,
+          borderRadius: 12,
+          background: `linear-gradient(180deg, ${VIBRANCY.cardGradientFrom}, ${VIBRANCY.cardGradientTo})`,
+          border: `${METRICS.hairline}px solid ${VIBRANCY.cardBorder}`,
+          boxShadow: `0 ${VIBRANCY.shadowDy}px ${VIBRANCY.shadowBlur}px ${VIBRANCY.shadowSpread}px ${VIBRANCY.shadow}`,
+          color: "#cdd6f4",
+          fontFamily: "monospace",
+          fontSize: 12,
+          lineHeight: 2,
+        }}
+      >
+        <div style={{ color: "#80cbc4", fontWeight: 700 }}>
+          profundidad física — diseño 2026-11-18 / spec toast-vibrancia
+        </div>
+        gradiente vertical · hairline {METRICS.hairline} px · sombra dy{" "}
+        {VIBRANCY.shadowDy} / blur {VIBRANCY.shadowBlur} / spread{" "}
+        {VIBRANCY.shadowSpread} · radio card {METRICS.cardRadius} / botón{" "}
+        {METRICS.barRadius} · alpha mínimo {VIBRANCY.minAlpha} · pressed hunde
+        <div style={{ color: "#a6adc8" }}>
+          simulada con alpha + gradiente: GSK no expone backdrop blur real en
+          layer-shell (sin equivalencia pixel con Notification Center)
+        </div>
       </div>
 
       <h2 style={{ color: "#cdd6f4", fontSize: 15, marginTop: 40 }}>Medidas</h2>

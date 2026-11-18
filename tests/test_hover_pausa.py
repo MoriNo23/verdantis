@@ -8,7 +8,7 @@ el timer que el usuario siempre pierde.
 Headless: WaylandPopup sin window ni card real (prepare()/_build_ui nunca se
 llaman, igual que en test_contrato_dbus). El card es un stub con la interfaz
 que _update_progress toca (_hover + set_fraction) y el reloj un stub inyectado
-SOLO en el `time` del módulo — el render lo verifica el usuario (spec
+SOLO en el `time` del módulo — el render lo verifica el agente (spec
 `verificacion-visual`).
 """
 import types

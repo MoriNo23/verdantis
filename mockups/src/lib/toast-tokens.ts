@@ -6,11 +6,16 @@
  * archivo NO se deriva automáticamente: los mockups son documentación visual
  * y PUEDEN divergir — la verdad del comportamiento son los specs de main
  * (openspec/specs/) y el código.
+ *
+ * La sección VIBRANCY sigue el diseño aprobado
+ * `docs/superpowers/specs/2026-11-18-gtk4-gsk-vibrancia-diseno.md` y el spec
+ * `openspec/specs/toast-vibrancia/`: cada token lleva el nombre del valor del
+ * diseño para trazabilidad manual.
  */
 
 // ── Colores (wayland_popup: _hex_rgb / literales del _draw) ────────────────
 export const COLORS = {
-  cardBg: "#1e1e2e",        // _card_bg
+  cardBg: "#1e1e2e",        // referencia opaca (stop inferior del gradiente / mezcla AA)
   title: "#e6e9f2",         // _left_title
   body: "#cdd6f4",          // _left_body
   app: "#a6adc8",           // _left_app
@@ -25,6 +30,23 @@ export const COLORS = {
   pageBg: "#11111b",        // fondo de la página de mockups (Catppuccin base)
 } as const;
 
+// ── Vibrancia oscura (diseño 2026-11-18 / spec toast-vibrancia) ────────────
+export const VIBRANCY = {
+  cardGradientFrom: "rgba(58, 60, 74, 0.90)", // fondo stop superior (gradiente vertical)
+  cardGradientTo: "rgba(30, 30, 44, 0.94)",   // fondo stop inferior (gradiente vertical)
+  cardBorder: "rgba(255, 255, 255, 0.13)",    // hairline 1 px; card inset 1 px
+  shadow: "rgba(0, 0, 0, 0.52)",              // sombra exterior (cascada entre los 2 toasts)
+  shadowDy: 8,                                // dy de la sombra
+  shadowBlur: 18,                             // blur de la sombra
+  shadowSpread: 0,                            // spread de la sombra
+  minAlpha: 0.90,                             // piso de alpha (spec toast-contraste)
+  btnFill: "rgba(128, 203, 196, 0.18)",       // botón en reposo: acento 18%
+  btnHover: "rgba(128, 203, 196, 0.30)",      // botón en hover: acento 30%
+  btnPressed: "rgba(128, 203, 196, 0.40)",    // botón en pressed: acento 40% + sombra interior
+  btnInnerHighlight: "rgba(255, 255, 255, 0.06)", // brillo interior 1 px (reposo/hover)
+  btnPressedShadow: "rgba(0, 0, 0, 0.45)",    // sombra interior pressed (hunde)
+} as const;
+
 // ── Medidas (wayland_popup: constantes de módulo) ──────────────────────────
 export const METRICS = {
   cardW: 360,      // _CARD_WIDTH
@@ -37,8 +59,9 @@ export const METRICS = {
   btnGap: 8,       // _BTN_GAP
   actionsRowH: 28, // _ACTIONS_ROW_H (fila de botones de acción)
   actionsGap: 8,   // _ACTIONS_GAP
-  cardRadius: 12,  // _CARD_RADIUS
-  barRadius: 8,    // radio de la barra "Ver más" y los botones
+  cardRadius: 14,  // radio card (diseño vibrancia; antes 12)
+  barRadius: 8,    // radio de la barra "Ver más" y los botones (diseño: 8)
+  hairline: 1,     // grosor del borde hairline (rgba(255,255,255,.13))
   appIcon: 16,     // _APP_ICON_BOX (logo de la fila de app)
   appRowH: 20,     // _APP_ROW_H
   titleRowH: 22,   // _TITLE_ROW_H
@@ -63,4 +86,4 @@ export type ToastVariant =
   | "botones"      // con actions (p. ej. Telegram: Marcar como leída)
   | "placeholder"; // app sin icono resuelvable → inicial
 
-export type ToastState = "normal" | "hover" | "wipe" | "expandido";
+export type ToastState = "normal" | "hover" | "pressed" | "wipe" | "expandido";

@@ -7,7 +7,7 @@ fuera cancela y restaura. La barra "Ver más" queda press-based (PRODUCT.md
 no la nombra).
 
 Headless: `NotificationWidget.__new__` + attrs inyectados — el routing es
-lógica propia, el render lo verifica el usuario (spec `verificacion-visual`).
+lógica propia, el render lo verifica el agente (spec `verificacion-visual`).
 """
 from unittest.mock import Mock
 

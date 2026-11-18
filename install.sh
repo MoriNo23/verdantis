@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "==> Dependencias del sistema..."
-sudo apt install -y libgtk-layer-shell-dev 2>&1 | tail -1
+sudo apt install -y libgtk4-layer-shell0 gir1.2-gtk4layershell-1.0 2>&1 | tail -1
 
 echo "==> Entorno virtual (PyGObject/pycairo/pytest via pip)..."
 python3 -m venv "$SCRIPT_DIR/.venv"

@@ -1,8 +1,8 @@
 # Verdantis
 
 Daemon de notificaciones de escritorio para Wayland (KDE Plasma 6). Es el owner de
-`org.freedesktop.Notifications` en el bus de sesión y dibuja toasts con GTK3 +
-gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
+`org.freedesktop.Notifications` en el bus de sesión y dibuja toasts con GTK4 +
+GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
 
 ## Skill — input (fuera del stack de render)
 
@@ -16,9 +16,12 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
 
 - Python 3.13 en `.venv/` (venv aislado). Deps pip declaradas en
   `requirements.txt` (PyGObject, pycairo, pytest — gi SÍ compila desde pip en
-  3.13): `./install.sh` (apt: libgtk-layer-shell-dev; venv + pip install) y
-  genera `~/.config/systemd/user/verdantis.service` desde `service.template`
-  con el path real (`@DIR@`).
+  3.13): `./install.sh` (apt: libgtk4-layer-shell0 + gir1.2-gtk4layershell-1.0;
+  venv + pip install) y genera `~/.config/systemd/user/verdantis.service`
+  desde `service.template` con el path real (`@DIR@`).
+- GTK4: cargar `libgtk4-layer-shell` con `ctypes.CDLL(..., RTLD_GLOBAL)` ANTES
+  de `import gi` (en `wayland_popup.py` y `verdantis_daemon.py`): si libwayland
+  se carga primero, `is_supported()` da False. No hace falta `LD_PRELOAD`.
 - 7 módulos en `src/`:
   - `verdantis.py` — entry point; `--daemon` delega al daemon; subcomandos
     `list`/`replay`/`clear` (historial) delegan a `replay`; el one-shot delega la rama
@@ -26,8 +29,9 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   - `verdantis_daemon.py` — dueño del bus DBus (`Notify`, `CloseNotification`,
     `GetCapabilities`, `GetServerInformation`, signals), cola de toasts, click→action,
     archivo al historial (`_persist_to_disk`, salvo hints `transient`).
-  - `wayland_popup.py` — render del toast: `NotificationWidget` (Gtk.DrawingArea con
-    cairo), layout (imagen izquierda de 80px siempre / columna de texto única), wrap Pango,
+  - `wayland_popup.py` — render del toast: `NotificationWidget` (Gtk.Widget con
+    `do_snapshot` GSK puro: gradiente/sombra/hairline/botones físicos), layout
+    (imagen izquierda de 80px siempre / columna de texto única), wrap Pango,
     franja vertical de descarte + barra expandir full-width, wipe de tiempo.
   - `app_info.py` — fuente única de `APP_NAME`/`APP_ID`/`VENDOR` (nada de literales
     "Verdantis" inline; el vendor de GetServerInformation es MoriNo23, no el nombre).
@@ -62,8 +66,8 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   si hay `WAYLAND_DISPLAY`, offscreen si no) y del path hacia `src/` — corre antes que
   cualquier módulo de test, así que los archivos no repiten ese preámbulo.
   `wayland_popup` forza `GDK_BACKEND=wayland` al importarse, por eso el env debe
-  fijarse antes de importarlo. El orden "wayland_popup
-  primero entre los imports gi" se mantiene DENTRO de cada módulo (fija Gdk 3.0).
+  fijarse antes de importarlo. `wayland_popup` carga libgtk4-layer-shell con
+  RTLD_GLOBAL antes de gi: importarlo primero es obligatorio en cada módulo.
 - Convención de tests: unit + metatests de sensibilidad (test_tests_*.py que inyectan
   la versión bugueada y verifican que la suite la detecta).
 - Sin linter/type-check configurado. No correr `mypy`/`ruff` de memoria.
@@ -112,10 +116,10 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   en hover de CUALQUIER toast), y el texto arranca al top del slot (`ty = pad`, sin centrado
   del bloque). El hover pausa el vencimiento (crédito por tick en `_update_progress`).
   `_eff_text_width` y `_rows_above_body` no tienen ramas por variante.
-- Verificación visual de los toasts: la da el USUARIO. El agente no saca capturas ni
-  inspecciona la pantalla por su cuenta (nada de `spectacle`/`grim`/`import` ni leer
-  imágenes de la pila): manda notificaciones de prueba y espera el reporte visual del
-  usuario, que es la fuente de verdad. Spec: `openspec/specs/verificacion-visual/spec.md`.
+- Verificación visual de los toasts: la hace el AGENTE. Puede sacar capturas
+  (`spectacle`/`grim`/`import`) y leer imágenes de la pila, y da el veredicto visual
+  sin esperar reporte humano. El usuario igual puede aportar observaciones, pero ya
+  no es la fuente exclusiva. Spec: `openspec/specs/verificacion-visual/spec.md`.
 - Antialiasing del texto: se fija por CÓDIGO (helper `_create_layout` con `_FONT_OPTIONS`
   = `ANTIALIAS_GRAY`), NO se hereda del fontconfig del usuario. El subpixel del fontconfig
   destiñe el texto sobre las superficies transparentes del toast (issue conocido de
@@ -130,8 +134,11 @@ gtk-layer-shell (cairo/Pango), sin depender de Plasma. Reemplaza a mako/deadd.
   de Plasma. Si plasmashell lo reclama, verdantis pierde el nombre y queda idle
   (NameLost). Verificar owner con `busctl --user list | grep Notifications`.
 - Reinicio: `systemctl --user restart verdantis.service` (Type=dbus, BusName=...).
-- Import de gi: `import wayland_popup` PRIMERO fija Gdk 3.0; importar `gi.repository.Gdk`
-  suelto carga Gdk 4.0 y crashea (`Requiring namespace 'Gdk' version '3.0', but '4.0'...`).
+- Import de gi: `import wayland_popup` PRIMERO carga libgtk4-layer-shell con
+  RTLD_GLOBAL antes que libwayland. Si otro módulo importa Gtk/Gdk antes,
+  `Gtk4LayerShell.is_supported()` da False y el toast no se mapea (falla limpio).
+  `Gtk.Window.set_size_request` NO funciona en GTK4: usar `set_default_size`.
+  `Gtk4LayerShell.set_exclusive_zone(-1)` deja la surface invisible en KWin: no usar.
 - Página de test de notificaciones: servida por `python3 -m http.server 8766 --directory ~/Descargas`
   (puerto 8765 lo ocupa un server stale). Vive mientras la sesión que la lanzó esté viva.
 - `read_file` trunca outputs grandes en este repo a ~5.5K chars por llamada; usar
