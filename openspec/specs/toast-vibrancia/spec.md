@@ -58,16 +58,19 @@ modificar el gap ni el orden (`toast-stack`).
 
 ### Requirement: Los botones se hunden al presionarse
 
-El fill de los botones de acción SHALL usar el acento del toast al 18 % en
-reposo, 30 % en hover y 40 % en pressed, con radio de 8 px y un brillo interior
-de 1 px al 6 % en reposo/hover. En pressed SHALL añadirse una sombra interior que
-hunda el botón, además del fill al 40 %, sin desplazar la fila ni cambiar sus
-métricas. La ejecución de la acción SHALL seguir las reglas de `toast-acciones`.
+El fill de los botones de acción SHALL ser una superficie blanca translúcida
+neutra —7 % en reposo, 11 % en hover y 4 % en pressed— con radio de 8 px y un
+brillo interior de 1 px al 6 % en reposo/hover. El acento `#80cbc4` SHALL NOT
+usarse como fill de botón: al 18 % sobre el gradiente producía un gris verdoso
+(`#41575F`) que choca con el gris azulado de la card. En pressed SHALL añadirse
+una sombra interior de 2 px arriba (negro al 28 %) que hunda el botón, sin
+desplazar la fila ni cambiar sus métricas. La ejecución de la acción SHALL seguir
+las reglas de `toast-acciones`.
 
 #### Scenario: Reposo, hover y pressed
 
 - **WHEN** un botón pasa de reposo a hover y luego a pressed sin soltar
-- **THEN** su fill pasa de 18 % a 30 % a 40 % de acento, y en pressed aparece la sombra interior que lo hunde
+- **THEN** su fill pasa de 7 % a 11 % a 4 % de blanco, y en pressed aparece la sombra interior de 2 px que lo hunde
 
 #### Scenario: El hundimiento no mueve el layout
 

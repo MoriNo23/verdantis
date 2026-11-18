@@ -105,3 +105,16 @@ def test_render_gsk_sin_ventana_no_lanza():
     snap = Gtk.Snapshot.new()
     w.do_snapshot(snap)          # no debe lanzar
     assert snap.to_node() is not None
+
+
+def test_alto_del_card_reserva_la_fila_de_copiar():
+    """REGRESIÓN (v0.15.5): la fila del botón Copiar se dibujaba fuera del card
+    (alto 112 vs copy_rect y=134) y quedaba recortada: invisible en el desktop.
+    `desired_height` debe reservar la banda de acciones también para Copiar."""
+    w = _widget("Tu código de verificación es 482193")
+    snap = Gtk.Snapshot.new()
+    w.do_snapshot(snap)
+    assert w._copy_rect is not None
+    assert w.desired_height() >= w._copy_rect[3], (
+        "el botón Copiar queda fuera del card (alto %s < %s)"
+        % (w.desired_height(), w._copy_rect[3]))

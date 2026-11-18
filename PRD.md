@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (98 tests, <2 s), en local y en CI (`.github/workflows/ci.yml`) |
+| Regresión global | suite completa verde (101 tests, <2 s), en local y en CI (`.github/workflows/ci.yml`) |
 
 ## 8. Dependencias y plataforma
 
@@ -143,8 +143,17 @@ aportar su percepción pero no es la fuente exclusiva.
   Historial/replay por CLI, rama de backend unificada y metatests de sensibilidad.
 - Hecho: verificación visual del replay por el agente (captura real de un registro
   con actions, imagen circular y app-label compuesto, v0.15.4).
-- Pendiente: push a `origin/main` (6 commits locales: 17c589e, df6c6f1, 2208f53,
-  d36051d, 946bb9f + este).
+- Hecho (0.15.6): tests de funcionamiento y visuales en vivo
+  (`scripts/dbus_check.py`, `scripts/visual_check.sh` + golden). Dos bugs
+  encontrados y corregidos: `CloseNotification` de una notificación todavía en
+  cola no emitía `NotificationClosed` (la app quedaba esperando), y el alto del
+  card no reservaba la fila del botón Copiar (se dibujaba fuera del card y era
+  invisible en el desktop).
+- Hecho (0.15.7): botones neutros (blanco 7 % / 11 % / 4 %): el acento como fill
+  salía gris verdoso (`#41575F`) sobre la card. Etiquetas semibold y sombra
+  interior de 2 px al presionar (cierra el hueco con `toast-vibrancia`).
+  Specs y tokens del mockup actualizados.
+- Pendiente: push a `origin/main`.
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.
 - Riesgo abierto: el usuario vio una vez un "toast de más" en la transición de

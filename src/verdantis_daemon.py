@@ -21,7 +21,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.15.5"
+VERSION = "0.15.7"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -596,9 +596,11 @@ class NotificationManager:
     def _close_id(self, nid, source="dbus-close"):
         """Cierre explícito por id. `source` es la fuente simbólica del
         contrato ("dbus-close" desde el bus; None = silencio para
-        replaces/dedup): la emisión la hace `_on_closed` vía el callback del
-        popup, así hay UN solo trazado y los ids sin popup en pantalla
-        (desconocidos o en cola) no emiten nada (spec `contrato-dbus`)."""
+        replaces/dedup). Un toast visible emite por el callback de su popup
+        (_on_closed); uno todavía EN COLA no tiene popup, así que emite acá
+        o la app que lo cerró se queda esperando la señal (spec
+        `contrato-dbus`)."""
+        en_cola = any(qid == nid for qid, _, _ in self._pending)
         for i, (aid, popup) in enumerate(self._active):
             if aid == nid:
                 popup._close(source)
@@ -615,6 +617,8 @@ class NotificationManager:
         self._dedup = {k: v for k, v in self._dedup.items() if v[0] != nid}
         self._reflow_stack()
         self._drenar_cola()
+        if en_cola:
+            self._emit_closed(nid, source)
 
     def _on_action_invoked(self, nid, action_key=None):
         info = self._notifications.get(nid, {})
@@ -685,6 +689,10 @@ class NotificationManager:
         self._dedup = {k: v for k, v in self._dedup.items() if v[0] != nid}
         self._reflow_stack()
         self._drenar_cola()
+        self._emit_closed(nid, source)
+
+    def _emit_closed(self, nid, source):
+        """Emite NotificationClosed según la fuente simbólica (None = silencio)."""
         reason = _reason_for(source)
         if reason is not None and self._dbus_bus:
             self._dbus_bus.emit_signal(

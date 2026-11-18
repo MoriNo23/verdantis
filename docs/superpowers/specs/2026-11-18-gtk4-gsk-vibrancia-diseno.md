@@ -52,7 +52,7 @@ no para un daemon layer-shell, y su look choca con "carácter propio" de PRODUCT
 - Borde hairline: `rgba(255,255,255,0.13)`, 1 px; card inset 1 px.
 - Sombra: `rgba(0,0,0,0.52)`, dy 8, blur 18, spread 0.
 - Radio card: 14; radio botones: 8.
-- Botón: fill acento 18% + brillo interior 1 px al 6%; hover 30%; pressed 40% con
+- Botón: fill blanco 7% + brillo interior 1 px al 6%; hover 11%; pressed 4% con
   sombra interior (se "hunde"). Etiqueta centrada por caja de tinta.
 - Pila de 2 toasts: sombra en cascada entre cards (detalle "Mac" + refuerzo R1/R2).
 - Se conservan acento `#80cbc4`, franja de wipe y slot circular de 80 px.

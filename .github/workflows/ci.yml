@@ -29,7 +29,7 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -r requirements.txt
 
-      - name: Suite de tests (98 tests, headless broadway)
+      - name: Suite de tests (101 tests, headless broadway)
         # conftest.py elige GDK_BACKEND=broadway cuando no hay WAYLAND_DISPLAY.
         # Gtk.Snapshot no necesita display: los tests de render GSK corren igual.
         env:

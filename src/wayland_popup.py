@@ -318,9 +318,12 @@ _VIB_BORDER = (1.0, 1.0, 1.0, 0.13)                 # hairline
 _VIB_SHADOW = (0.0, 0.0, 0.0, 0.52)
 _VIB_SHADOW_DY = 8
 _VIB_SHADOW_BLUR = 18
-_VIB_BTN_ALPHA = 0.18
-_VIB_BTN_HOVER = 0.30
-_VIB_BTN_PRESSED = 0.40
+# Botones: superficie blanca translúcida (neutra). El acento tiñe el wipe y la
+# X de descarte, no los botones: al 18 % sobre la card salía un gris verdoso
+# (#41575F) que chocaba con el gris azulado del fondo.
+_VIB_BTN_ALPHA = 0.07
+_VIB_BTN_HOVER = 0.11
+_VIB_BTN_PRESSED = 0.04
 _VIB_INSET = (1.0, 1.0, 1.0, 0.06)
 _MIN_ALPHA = 0.90   # spec toast-contraste: AA sobre el fondo real
 
@@ -584,6 +587,11 @@ def _append_text(snapshot, layout, x, y, color):
     snapshot.translate(Graphene.Point().init(float(x), float(y)))
     snapshot.append_layout(layout, _rgba(color))
     snapshot.restore()
+
+
+def _append_sink(snapshot, x, y, w):
+    """Sombra interior que hunde el botón al presionarlo (2 px arriba)."""
+    snapshot.append_color(_rgba((0.0, 0.0, 0.0, 0.28)), _rect(x, y, w, 2))
 
 
 def _texture(pixbuf):
@@ -993,6 +1001,7 @@ class NotificationWidget(Gtk.Widget):
             text_width=self._eff_text_width(), expanded=self._expanded,
             hide_title=self._hide_title, font_scale=self._font_scale,
             actions_count=len(self._actions),
+            has_copy=bool(self._copy_text),
         )
         if self._image_pb is not None:
             h += 8 + 140
@@ -1075,7 +1084,6 @@ class NotificationWidget(Gtk.Widget):
             sx0 = x0 + i * (seg_w + gap)
             self._action_rects.append((sx0, actions_y, sx0 + seg_w,
                                        actions_y + _ACTIONS_ROW_H, key))
-        acc = self._accent_rgb
         for i, (key, label) in enumerate(self._actions):
             sx0, sy0, sx1, sy1, _ = self._action_rects[i]
             if self._pressed_action_idx == i:
@@ -1085,19 +1093,23 @@ class NotificationWidget(Gtk.Widget):
             else:
                 alpha = _VIB_BTN_ALPHA
             _round_fill(s, sx0, sy0, sx1 - sx0, _ACTIONS_ROW_H, 8,
-                        (acc[0], acc[1], acc[2], alpha))
-            # Brillo interior (affordance "física").
+                        (1.0, 1.0, 1.0, alpha))
+            # Brillo interior (affordance "física") y sombra que hunde.
             s.save()
             s.push_rounded_clip(_rounded(sx0, sy0, sx1 - sx0,
                                          _ACTIONS_ROW_H, 8))
             s.append_color(_rgba(_VIB_INSET),
                            _rect(sx0, sy0, sx1 - sx0, 1))
+            if self._pressed_action_idx == i:
+                _append_sink(s, sx0, sy0, sx1 - sx0)
             s.pop()
             s.restore()
             icono = self._action_icon_pbs.get(key)
-            btn_fs = max(9, round(11 * fr.fs))
+            btn_fs = max(10, round(11 * fr.fs))
+            fdesc = Pango.FontDescription("Manrope " + str(btn_fs))
+            fdesc.set_weight(Pango.Weight.SEMIBOLD)
             lay_txt = _layout_for(
-                label, Pango.FontDescription("Manrope " + str(btn_fs)),
+                label, fdesc,
                 width=(sx1 - sx0) - 16 - (22 if icono else 0),
                 ellipsize=True)
             ink, _ = lay_txt.get_pixel_extents()
@@ -1143,21 +1155,32 @@ class NotificationWidget(Gtk.Widget):
             row_y = fr.pad + lay.piso + _ACTIONS_GAP
         self._copy_rect = (x0, row_y, x1, row_y + _ACTIONS_ROW_H)
         ax0, ay0, ax1, ay1 = self._copy_rect
-        acc = self._accent_rgb
-        alpha = (0.40 if getattr(self, "_pressed_copy", False)
-                 else 0.30 if getattr(self, "_hover_copy", False) else 0.22)
+        # Botón neutro: superficie blanca translúcida (sin tinte del acento,
+        # que sobre la card sale verde) + hairline. El acento queda para el
+        # wipe y la X de descarte.
+        alpha = (_VIB_BTN_PRESSED if getattr(self, "_pressed_copy", False)
+                 else _VIB_BTN_HOVER if getattr(self, "_hover_copy", False)
+                 else _VIB_BTN_ALPHA)
         _round_fill(s, ax0, ay0, ax1 - ax0, _ACTIONS_ROW_H, 8,
-                    (acc[0], acc[1], acc[2], alpha))
+                    (1.0, 1.0, 1.0, alpha))
         s.save()
         s.push_rounded_clip(_rounded(ax0, ay0, ax1 - ax0, _ACTIONS_ROW_H, 8))
         s.append_color(_rgba(_VIB_INSET), _rect(ax0, ay0, ax1 - ax0, 1))
         s.pop()
         s.restore()
+        s.save()
+        s.push_rounded_clip(_rounded(ax0, ay0, ax1 - ax0, _ACTIONS_ROW_H, 8))
+        s.append_color(_rgba(_VIB_INSET), _rect(ax0, ay0, ax1 - ax0, 1))
+        if getattr(self, "_pressed_copy", False):
+            _append_sink(s, ax0, ay0, ax1 - ax0)
+        s.pop()
+        s.restore()
         label = _copy_label(self._cuerpo)
-        fs = max(9, round(11 * fr.fs))
+        fs = max(10, round(12 * fr.fs))
+        fdesc = Pango.FontDescription("Manrope " + str(fs))
+        fdesc.set_weight(Pango.Weight.SEMIBOLD)
         lt = _layout_for(
-            label, Pango.FontDescription("Manrope " + str(fs)),
-            width=(ax1 - ax0) - 16, ellipsize=True)
+            label, fdesc, width=(ax1 - ax0) - 16, ellipsize=True)
         ink, _ = lt.get_pixel_extents()
         tx = ax0 + ((ax1 - ax0) - ink.width) / 2
         centro = ay0 + _ACTIONS_ROW_H / 2
@@ -1175,9 +1198,8 @@ class NotificationWidget(Gtk.Widget):
         bar_x0, bar_x1 = fr.pad, fr.W - fr.pad - fr.strip_w
         bar_w = bar_x1 - bar_x0
         self._expand_rect = (bar_x0, btn_y, bar_x1, btn_y + self._BTN_H)
-        acc = self._accent_rgb
         _round_fill(s, bar_x0, btn_y, bar_w, self._BTN_H, 8,
-                    (acc[0], acc[1], acc[2], _VIB_BTN_ALPHA))
+                    (1.0, 1.0, 1.0, _VIB_BTN_ALPHA))
         s.save()
         s.push_rounded_clip(_rounded(bar_x0, btn_y, bar_w, self._BTN_H, 8))
         s.append_color(_rgba(_VIB_INSET), _rect(bar_x0, btn_y, bar_w, 1))
@@ -1428,7 +1450,8 @@ class WaylandPopup:
             return self._card.desired_height()
         return WaylandPopup.calc_card_height(
             self.app_name, self.cuerpo, self.image_path,
-            text_width=_CARD_WIDTH - _PAD * 2)
+            text_width=_CARD_WIDTH - _PAD * 2,
+            has_copy=bool(getattr(self._card, "_copy_text", None)))
 
     def _resize_card(self, new_h):
         if not self.window or not self._card:
@@ -1457,12 +1480,15 @@ class WaylandPopup:
     @staticmethod
     def calc_card_height(app_name, cuerpo, image_path, text_width=_TEXT_COL_W,
                          expanded=False, hide_title=False, font_scale=1.0,
-                         actions_count=0):
-        """Altura de la card — DELEGA en `_layout_metrics` (fuente única)."""
+                         actions_count=0, has_copy=False):
+        """Altura de la card — DELEGA en `_layout_metrics` (fuente única).
+
+        `has_copy` reserva la misma banda que los botones D-Bus: sin ella el
+        botón Copiar se dibuja fuera del card y queda recortado."""
         _body_fs = max(9, round(_BODY_FS * font_scale))
         lay = _layout_metrics(
             cuerpo, text_width, _body_fs, app_name, hide_title, expanded,
-            actions_count > 0, _IMAGE_LEFT_W,
+            actions_count > 0 or has_copy, _IMAGE_LEFT_W,
             NotificationWidget._MAX_VISIBLE_LINES, NotificationWidget._BTN_H,
         )
         h = _PAD + lay.row_h + _PAD

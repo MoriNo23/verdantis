@@ -149,6 +149,54 @@ def test_close_notification_dbus_razon_3():
     assert _closes(m._dbus_bus) == [(nid, 3)]
 
 
+def test_close_notification_de_una_en_cola_emite_razon_3():
+    """REGRESIÓN (v0.15.5): cerrar por D-Bus una notificación que todavía
+    está en la cola (no llegó a mostrarse por el stagger) también debe emitir
+    NotificationClosed/3. Antes el id se sacaba de _pending en silencio y la
+    app que esperaba la señal se quedaba colgada."""
+    m = _manager_headless()
+    nid = m.notify(app_name="t", app_icon="", summary="s", body="b",
+                   actions=[], hints={"transient": True}, expire_timeout=5000)
+    assert [q[0] for q in m._pending] == [nid], "debió quedar en cola"
+    m._close_id(nid)          # sin _pump(): nunca se mostró
+    assert _closes(m._dbus_bus) == [(nid, 3)]
+
+
+def test_close_notification_handler_emite_razon_3():
+    """REGRESIÓN: el handler D-Bus CloseNotification (no solo _close_id
+    directo) debe emitir NotificationClosed(razón 3) al caller del bus.
+
+    El popup real dispara el callback on_close de forma asíncrona (destroy),
+    así que el handler no puede depender de que _close_id ya haya emitido.
+    """
+    d = NotificationDaemon()
+    m = d._manager
+    m._scheduler = lambda ms, cb: 0
+    m.set_dbus(FakeBus())
+
+    def headless_show(nid, kwargs):
+        popup = WaylandPopup(**kwargs)
+        m._active.append((nid, popup))
+
+    m._show_popup = headless_show
+    invocation = Mock()
+
+    nid = m.notify(app_name="t", app_icon="", summary="s", body="b",
+                   actions=[], hints={"transient": True},
+                   expire_timeout=5000)
+    m._pump()
+
+    # Invocar el handler igual que Gio.DBusConnection lo haría.
+    d._handle_method_call(None, ":1.99", "/org/freedesktop/Notifications",
+                          "org.freedesktop.Notifications",
+                          "CloseNotification",
+                          verdantis_daemon.GLib.Variant("(u)", (nid,)),
+                          invocation)
+    assert _closes(m._dbus_bus) == [(nid, 3)], (
+        "CloseNotification por D-Bus no emitió razón 3"
+    )
+
+
 # --- No-cierres: replaces_id, dedup, replay ---
 
 def test_replaces_id_no_emite():

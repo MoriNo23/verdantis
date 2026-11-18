@@ -40,9 +40,11 @@ export const VIBRANCY = {
   shadowBlur: 18,                             // blur de la sombra
   shadowSpread: 0,                            // spread de la sombra
   minAlpha: 0.90,                             // piso de alpha (spec toast-contraste)
-  btnFill: "rgba(128, 203, 196, 0.18)",       // botón en reposo: acento 18%
-  btnHover: "rgba(128, 203, 196, 0.30)",      // botón en hover: acento 30%
-  btnPressed: "rgba(128, 203, 196, 0.40)",    // botón en pressed: acento 40% + sombra interior
+  // Botones neutros: el acento como fill salía gris verdoso (#41575F) sobre la
+  // card. El acento queda para el wipe y la X de descarte.
+  btnFill: "rgba(255, 255, 255, 0.07)",       // botón en reposo: blanco 7%
+  btnHover: "rgba(255, 255, 255, 0.11)",      // botón en hover: blanco 11%
+  btnPressed: "rgba(255, 255, 255, 0.04)",    // botón en pressed: blanco 4% + sombra interior
   btnInnerHighlight: "rgba(255, 255, 255, 0.06)", // brillo interior 1 px (reposo/hover)
   btnPressedShadow: "rgba(0, 0, 0, 0.45)",    // sombra interior pressed (hunde)
 } as const;

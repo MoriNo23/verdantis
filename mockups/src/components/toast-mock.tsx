@@ -202,7 +202,7 @@ export function ToastMock({
         </div>
       )}
 
-      {/* Barra "Ver más": full-width, acento 18%, radio 8 (anti-misclick) */}
+      {/* Barra "Ver más": full-width, blanco 7%, radio 8 (anti-misclick) */}
       {overflow && (
         <div
           style={{
