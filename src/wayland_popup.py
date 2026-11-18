@@ -2,6 +2,7 @@ import math
 import os
 import re
 import sys
+import subprocess
 import ctypes
 import configparser
 import cairo
@@ -193,6 +194,76 @@ def _icon_from_theme(icon_name, size=16):
         except Exception:
             pass
     return None
+
+
+# Patrones para copiar códigos de verificación SIN falsos positivos.
+# Un número suelto no es un código: en el historial real hay años (1991),
+# versiones (b200148) y menciones (@usuario4161). Solo contamos un número
+# cuando una palabra de verificación aparece CERCA (misma frase, ±40 chars).
+_CODE_WORDS = (
+    r"c[oó]digo|verificaci[oó]n|confirmaci[oó]n|validaci[oó]n|"
+    r"clave|pin|otp|c[oó]digo de acceso|codigo"
+)
+_CODE_RE = re.compile(
+    r"(?<![\d/])(?P<code>\d{4,8})(?![\d/-])", re.UNICODE)
+_CODE_CONTEXT_RE = re.compile(_CODE_WORDS, re.IGNORECASE | re.UNICODE)
+
+
+def _find_code(text):
+    """Devuelve el código de verificación del body, o None si no hay.
+
+    Exige que una palabra clave de verificación esté a ±40 caracteres del
+    número. Así un año ("Wyeth, 1991") o una versión ("b200148") no se
+    confunden con un código.
+    """
+    if not text:
+        return None
+    for m in _CODE_RE.finditer(text):
+        lo = max(0, m.start() - 40)
+        hi = min(len(text), m.end() + 40)
+        if _CODE_CONTEXT_RE.search(text[lo:hi]):
+            return m.group("code")
+    return None
+
+
+def _copy_label(text):
+    """Etiqueta del botón Copiar: código específico si lo hay, texto si no."""
+    return "Copiar código" if _find_code(text) else "Copiar texto"
+
+
+def _copy_to_clipboard(text):
+    """Copia al portapapeles sin robar foco (wl-copy en Wayland, xclip/xsel en X11).
+
+    A diferencia de KDE (que necesita takeFocus para QClipboard), wl-copy
+    habla con el compositor directamente: compatible con keyboard_mode=NONE.
+    """
+    if not text:
+        return False
+    if os.environ.get("WAYLAND_DISPLAY"):
+        cmd = ["wl-copy", text]
+    elif _tiene_comando("xclip"):
+        cmd = ["xclip", "-selection", "clipboard"]
+    else:
+        cmd = ["xsel", "--clipboard", "--input"]
+    try:
+        if cmd[0] in ("xclip", "xsel"):
+            subprocess.run(cmd, input=text, text=True, check=False,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.run(cmd, check=False, input=text, text=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _tiene_comando(nombre):
+    """True si `nombre` está en PATH (sin lanzar nada)."""
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        if os.path.isfile(os.path.join(d, nombre)) and os.access(
+                os.path.join(d, nombre), os.X_OK):
+            return True
+    return False
 
 
 def _extract_markup_url(text):
@@ -603,6 +674,11 @@ class NotificationWidget(Gtk.Widget):
         self._close_rect = None
         self._pressed_close = False
         self._pressed_action_idx = None
+        # Botón local "Copiar" (no es action D-Bus: no emite ActionInvoked).
+        self._copy_rect = None
+        self._pressed_copy = False
+        self._hover_copy = False
+        self._copy_text = None          # se fija después de sanitizar _cuerpo
         self._cursor_hand = False
         self._last_pointer = None       # (x, y) local del último motion/enter
 
@@ -611,6 +687,7 @@ class NotificationWidget(Gtk.Widget):
         self._app_name = _get_app_display_name(app_name)
         self._titulo = (titulo or "").replace("\n", " ").replace("\t", " ").strip()
         self._cuerpo = _strip_urls(cuerpo)
+        self._copy_text = _find_code(self._cuerpo) or self._cuerpo or None
         self._accent_rgb = _hex_rgb(accent)
         self._card_bg = _hex_rgb(_CARD_BG_HEX)
 
@@ -714,6 +791,7 @@ class NotificationWidget(Gtk.Widget):
         self._snapshot_background(snapshot, fr)
         self._snapshot_image_left(snapshot, fr, lay)
         self._snapshot_actions(snapshot, fr, lay)
+        self._snapshot_copy(snapshot, fr, lay)
         self._snapshot_expand_bar(snapshot, fr, lay)
         self._snapshot_text_passes(snapshot, fr, lay)
         self._snapshot_banner(snapshot, fr, lay)
@@ -798,6 +876,10 @@ class NotificationWidget(Gtk.Widget):
         if over_close != self._hover_close:
             self._hover_close = over_close
             self.queue_draw()
+        over_copy = self._in_copy_rect(x, y)
+        if over_copy != getattr(self, "_hover_copy", False):
+            self._hover_copy = over_copy
+            self.queue_draw()
         self._aplicar_cursor(x, y)
 
     def _set_cursor(self, hand):
@@ -815,9 +897,17 @@ class NotificationWidget(Gtk.Widget):
         x0, y0, x1, y1 = self._close_rect
         return x0 <= x <= x1 and y0 <= y <= y1
 
+    def _in_copy_rect(self, x, y):
+        if not getattr(self, "_copy_rect", None):
+            return False
+        x0, y0, x1, y1 = self._copy_rect
+        return x0 <= x <= x1 and y0 <= y <= y1
+
     def _cursor_por_posicion(self, x, y):
         if self._in_close_rect(x, y):
             return True
+        if self._in_copy_rect(x, y):
+            return False   # acción local, siempre habilitada (no depende del sender)
         en_boton = any(r[0] <= x <= r[2] and r[1] <= y <= r[3]
                        for r in self._action_rects)
         if en_boton:
@@ -833,6 +923,11 @@ class NotificationWidget(Gtk.Widget):
     def _on_press_xy(self, x, y):
         if self._in_close_rect(x, y):
             self._pressed_close = True
+            self.queue_draw()
+            return True
+        # Botón Copiar: se ejecuta al SOLTAR (release-based), como la X.
+        if self._in_copy_rect(x, y):
+            self._pressed_copy = True
             self.queue_draw()
             return True
         if self._expand_rect:
@@ -852,6 +947,13 @@ class NotificationWidget(Gtk.Widget):
         return True
 
     def _on_release_xy(self, x, y):
+        if getattr(self, "_pressed_copy", False):
+            dentro = self._in_copy_rect(x, y)
+            self._pressed_copy = False
+            self.queue_draw()
+            if dentro and self._copy_text:
+                _copy_to_clipboard(self._copy_text)
+            return True
         if self._pressed_close:
             dentro = self._in_close_rect(x, y)
             self._pressed_close = False
@@ -1017,6 +1119,50 @@ class NotificationWidget(Gtk.Widget):
                           _APP_ICON_BOX, _APP_ICON_BOX))
                 s.pop()
                 s.restore()
+
+    def _snapshot_copy(self, s, fr, lay):
+        """Botón local 'Copiar código/texto' anclado bajo el body.
+
+        Reutiliza la banda de acciones (_ACTIONS_ROW_H): cuando ya hay botones
+        D-Bus, se dibuja en la misma fila como un segmento adicional; cuando
+        no los hay, ocupa la fila entera. No cambia ninguna métrica de layout.
+        """
+        self._copy_rect = None
+        if not self._copy_text:
+            return
+        x0 = fr.pad
+        x1 = fr.W - fr.pad - fr.strip_w
+        row_y = fr.pad + lay.piso + _ACTIONS_GAP
+        if self._actions:
+            # Comparte renglón: a la derecha de los botones D-Bus.
+            x0 = (self._action_rects[-1][2] + 8) if self._action_rects else x0
+            if x1 - x0 < 60:
+                return
+        else:
+            row_y = fr.pad + lay.piso + _ACTIONS_GAP
+        self._copy_rect = (x0, row_y, x1, row_y + _ACTIONS_ROW_H)
+        ax0, ay0, ax1, ay1 = self._copy_rect
+        acc = self._accent_rgb
+        alpha = (0.40 if getattr(self, "_pressed_copy", False)
+                 else 0.30 if getattr(self, "_hover_copy", False) else 0.22)
+        _round_fill(s, ax0, ay0, ax1 - ax0, _ACTIONS_ROW_H, 8,
+                    (acc[0], acc[1], acc[2], alpha))
+        s.save()
+        s.push_rounded_clip(_rounded(ax0, ay0, ax1 - ax0, _ACTIONS_ROW_H, 8))
+        s.append_color(_rgba(_VIB_INSET), _rect(ax0, ay0, ax1 - ax0, 1))
+        s.pop()
+        s.restore()
+        label = _copy_label(self._cuerpo)
+        fs = max(9, round(11 * fr.fs))
+        lt = _layout_for(
+            label, Pango.FontDescription("Manrope " + str(fs)),
+            width=(ax1 - ax0) - 16, ellipsize=True)
+        ink, _ = lt.get_pixel_extents()
+        tx = ax0 + ((ax1 - ax0) - ink.width) / 2
+        centro = ay0 + _ACTIONS_ROW_H / 2
+        self._snapshot_text_clipped(
+            s, fr, lt, tx, centro - (ink.y + ink.height / 2),
+            self._left_title, _TXT_BANDA_R)
 
     def _snapshot_expand_bar(self, s, fr, lay):
         self._expand_rect = None
