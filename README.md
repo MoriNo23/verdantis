@@ -80,7 +80,7 @@ Apps send notifications over DBus and Verdantis draws them:
 systemctl --user status verdantis.service
 busctl --user call org.freedesktop.Notifications \
   /org/freedesktop/Notifications org.freedesktop.Notifications GetServerInformation
-# => ssss "Verdantis" "MoriNo23" "0.15.4" "1.2"
+# => ssss "Verdantis" "MoriNo23" "0.15.5" "1.2"
 ```
 
 ### Stack rules

@@ -141,8 +141,10 @@ aportar su percepción pero no es la fuente exclusiva.
   sombra, botones con pressed que hunde), botón Copiar código de verificación,
   contraste AA corregido sobre wallpaper claro, dependencias auditadas (pip 26.3).
   Historial/replay por CLI, rama de backend unificada y metatests de sensibilidad.
-- Pendiente: verificación visual del replay por el agente, push a `origin/main`
-  (5 commits locales: 17c589e, df6c6f1, 2208f53, d36051d, +este).
+- Hecho: verificación visual del replay por el agente (captura real de un registro
+  con actions, imagen circular y app-label compuesto, v0.15.4).
+- Pendiente: push a `origin/main` (6 commits locales: 17c589e, df6c6f1, 2208f53,
+  d36051d, 946bb9f + este).
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.
 - Riesgo abierto: el usuario vio una vez un "toast de más" en la transición de
