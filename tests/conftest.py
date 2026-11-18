@@ -18,4 +18,7 @@ sys.path.insert(
 if os.environ.get("WAYLAND_DISPLAY"):
     os.environ["GDK_BACKEND"] = "wayland"
 else:
-    os.environ["GDK_BACKEND"] = "offscreen"
+    # GTK4 no tiene backend 'offscreen' (era GTK3): el headless real es
+    # 'broadway'. Sin display los tests de Snapshot igual pasan, pero con
+    # 'offscreen' Gdk emitía "No such backend" en cada corrida de CI.
+    os.environ["GDK_BACKEND"] = "broadway"

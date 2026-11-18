@@ -23,6 +23,9 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
 - Tests de render GSK (`tests/test_render_gsk.py`): serializan el `Gsk.RenderNode`
   de `do_snapshot` sin ventana. Si falta un nodo (gradiente, sombra, texto,
   clip), la suite falla — es la red de seguridad que faltaba antes de v0.15.2.
+- CI en `.github/workflows/ci.yml`: corre los 98 tests + `pip-audit` + `pip check`
+  en Ubuntu con GTK4/gtk4-layer-shell. Sin `WAYLAND_DISPLAY`, conftest usa
+  `GDK_BACKEND=broadway` (GTK4 no tiene `offscreen`).
 - GTK4: cargar `libgtk4-layer-shell` con `ctypes.CDLL(..., RTLD_GLOBAL)` ANTES
   de `import gi` (en `wayland_popup.py` y `verdantis_daemon.py`): si libwayland
   se carga primero, `is_supported()` da False. No hace falta `LD_PRELOAD`.

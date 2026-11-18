@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencias del sistema (GTK4 + layer shell)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-gi gir1.2-gtk-4.0 gir1.2-gtk4layershell-1.0 \
+            libgtk4-layer-shell0 libgtk-4-1 libgirepository-2.0-0
+
+      - name: Python 3.13 + venv
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Instalar dependencias fijadas
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+
+      - name: Suite de tests (98 tests, headless broadway)
+        # conftest.py elige GDK_BACKEND=broadway cuando no hay WAYLAND_DISPLAY.
+        # Gtk.Snapshot no necesita display: los tests de render GSK corren igual.
+        env:
+          GDK_BACKEND: broadway
+        run: .venv/bin/python -m pytest tests/ -q
+
+      - name: Auditoría de dependencias
+        run: |
+          .venv/bin/pip install -r requirements-audit.txt
+          .venv/bin/pip-audit
+          .venv/bin/pip check
