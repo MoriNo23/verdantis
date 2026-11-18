@@ -18,7 +18,7 @@ export const COLORS = {
   cardBg: "#1e1e2e",        // referencia opaca (stop inferior del gradiente / mezcla AA)
   title: "#e6e9f2",         // _left_title
   body: "#cdd6f4",          // _left_body
-  app: "#a6adc8",           // _left_app
+  app: "#b8bfd0",           // _left_app (subido: AA sobre gradiente claro)
   accent: "#80cbc4",        // accent default del daemon (hints "accent")
   xStroke: "#f38ba8",       // color de la X en la franja de descarte
   franjaTint: "rgba(219, 38, 38, 0.18)",   // tinte franja hover (hover_close: 0.32)

@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (52 tests, <2 s) |
+| Regresión global | suite completa verde (91 tests, <2 s) |
 
 ## 8. Dependencias y plataforma
 
@@ -137,10 +137,12 @@ aportar su percepción pero no es la fuente exclusiva.
 
 ## 9. Estado y pendientes del ciclo
 
-- Hecho (0.13.0): historial en disco restaurado (`history_store`) + replay/lista/borrado
-  por CLI (`replay`, subcomandos de `verdantis.py`), rama de backend unificada con el
-  one-shot (`replay.mostrar_toast`), bump 0.12.1 → 0.13.0, metatests de sensibilidad.
-- Pendiente: verificación visual del replay por el agente, commits del ciclo.
+- Hecho (0.15.1): migración GTK4 + GSK con vibrancia oscura (gradiente, hairline,
+  sombra, botones con pressed que hunde), botón Copiar código de verificación,
+  contraste AA corregido sobre wallpaper claro, dependencias auditadas (pip 26.3).
+  Historial/replay por CLI, rama de backend unificada y metatests de sensibilidad.
+- Pendiente: verificación visual del replay por el agente, push a `origin/main`
+  (3 commits locales: 17c589e, df6c6f1, 650a5a8).
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.
 - Riesgo abierto: el usuario vio una vez un "toast de más" en la transición de

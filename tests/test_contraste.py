@@ -62,6 +62,18 @@ def test_zona_clara_contraste_aa():
     _assert_aa("app label (claro)", wp._hex_rgb(wp._TXT_APP_L), _BG)
 
 
+def test_gradiente_vibrancia_contraste_aa_sobre_wallpaper_claro():
+    """REGRESIÓN: el gradiente real (VIB_TOP al 90%) sobre un wallpaper claro
+    es MÁS CLARO que #1e1e2e. El app-label caía a 3.89:1 y el test viejo no
+    lo veía porque medía solo el hex fijo. Exige 4.5:1 en el peor caso."""
+    wallpaper_claro = (0.816, 0.816, 0.816)   # #d0d0d0
+    fondo_arriba = _mezcla(wallpaper_claro, wp._VIB_TOP[:3], 0.90)
+    _assert_aa("app label (gradiente arriba, claro)",
+               wp._hex_rgb(wp._TXT_APP_L), fondo_arriba)
+    _assert_aa("body (gradiente arriba, claro)",
+               wp._hex_rgb(wp._TXT_BODY_L), fondo_arriba)
+
+
 def test_zona_wipe_contraste_aa():
     """La paleta 'right' sobre el blend opaco del 15% hacia el acento."""
     _assert_aa("título (wipe)", wp._hex_rgb(wp._TXT_TITLE_R), _BG_WIPE)

@@ -304,7 +304,8 @@ _PLACEHOLDER_FG = "#a6adc8"
 _CARD_BG_HEX = "#1e1e2e"
 _TXT_TITLE_L = "#e6e9f2"
 _TXT_BODY_L = "#cdd6f4"
-_TXT_APP_L = "#a6adc8"
+_TXT_APP_L = "#b8bfd0"   # subido de #a6adc8: el gradiente vibrancia al 90%
+                         # sobre wallpaper claro bajaba el app-label a 3.89:1
 _TXT_TITLE_R = "#d4edd4"
 _TXT_BODY_R = "#c8e6c8"
 _TXT_APP_R = "#8cb88c"

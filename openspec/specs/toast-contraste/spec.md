@@ -8,7 +8,7 @@ Contraste del texto del card: la legibilidad sobre el fondo translúcido del toa
 
 ### Requirement: El texto del card mantiene contraste AA
 
-El texto del card SHALL mantener contraste AA de WCAG contra el fondo efectivo del toast: ratio ≥ 4.5:1 para el texto de cuerpo, títulos y labels de acciones, y ≥ 3:1 para el texto grande. El fondo del card es un gradiente vertical de `rgba(58, 60, 74, 0.90)` a `rgba(30, 30, 44, 0.94)`; el fondo efectivo SHALL calcularse compositando CADA stop del gradiente con su alpha real (piso mínimo 0.90, spec `toast-vibrancia`) sobre el fondo de referencia `#1e1e2e` (no negro puro). La verificación SHALL ser un test automatizado que lee los colores del código y recalcula los ratios en ambos extremos del gradiente: cualquier cambio de color que rompa un ratio SHALL fallar la suite.
+El texto del card SHALL mantener contraste AA de WCAG contra el fondo efectivo del toast: ratio ≥ 4.5:1 para el texto de cuerpo, títulos y labels de acciones, y ≥ 3:1 para el texto grande. El fondo del card es un gradiente vertical de `rgba(58, 60, 74, 0.90)` a `rgba(30, 30, 44, 0.94)`; el fondo efectivo SHALL calcularse compositando CADA stop del gradiente con su alpha real (piso mínimo 0.90, spec `toast-vibrancia`) sobre el **peor caso de wallpaper claro `#d0d0d0`** — no sobre `#1e1e2e`, porque un wallpaper claro produce el fondo más claro y por tanto el menor contraste. La verificación SHALL ser un test automatizado que lee los colores del código y recalcula los ratios en ambos extremos del gradiente sobre ese peor caso: cualquier cambio de color que rompa un ratio SHALL fallar la suite.
 
 #### Scenario: Texto del card sobre el fondo efectivo del gradiente
 
@@ -23,7 +23,7 @@ El texto del card SHALL mantener contraste AA de WCAG contra el fondo efectivo d
 #### Scenario: La medición no usa negro puro
 
 - **WHEN** el test calcula el ratio de un bloque
-- **THEN** lo mide contra cada stop del gradiente compositado con su alpha sobre `#1e1e2e`, no contra negro puro
+- **THEN** lo mide contra cada stop del gradiente compositado con su alpha sobre el peor caso `#d0d0d0`, no contra negro puro ni contra `#1e1e2e`
 
 #### Scenario: Bajar el alpha por debajo del piso rompe el contraste
 
