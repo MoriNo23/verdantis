@@ -272,6 +272,11 @@ aportar su percepción pero no es la fuente exclusiva.
   (`_icon_tint`), con piso de luminancia 0,25 para no romper AA. Sin icono
   cae al color base. Golden regenerada (el reftest ahora incluye el icono que
   antes no resolvía). Spec `toast-iconos-app` + 3 tests TDD.
+- Hecho (0.18.12): CI encontró dos fallos que el entorno local escondía.
+  Los tests de icono dependían de Thunderbird instalado (no está en el runner
+  Ubuntu) y `toast_helpers` llamaba `_resample` sin importarlo desde que se
+  dividió el módulo — un NameError silencioso tras un `except`. Tests
+  autocontenidos con un `.desktop` temporal + import explícito. 190 tests.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Hecho (0.18.2): `image-data` sin path de archivo ya se archiva como PNG en el
   directorio de iconos (`history_store.write_icon`), con el mismo `avatar_file`

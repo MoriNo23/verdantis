@@ -13,6 +13,11 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf
 
+# `_resample` vivía en el mismo módulo antes del split; sin este import el
+# `except` de _get_app_icon_from_desktop escondía un NameError y el icono de
+# archivo nunca se escalaba.
+from toast_core import _resample
+
 # ── Bundled font: Manrope (OFL) ──────────────────────────────────────────
 _FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 
