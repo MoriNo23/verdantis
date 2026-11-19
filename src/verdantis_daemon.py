@@ -23,7 +23,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.18.2"
+VERSION = "0.18.3"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -152,6 +152,12 @@ class _PendingBadge:
         self.window = Gtk.Window()
         self.window.set_decorated(False)
         self.window.set_focusable(False)
+        self.window.add_css_class("verdantis-badge-window")
+        try:
+            from wayland_popup import _add_window_css
+            _add_window_css()
+        except Exception:
+            pass
         Gtk4LayerShell.init_for_window(self.window)
         Gtk4LayerShell.set_layer(self.window, Gtk4LayerShell.Layer.TOP)
         Gtk4LayerShell.set_namespace(self.window, APP_ID)

@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (153 tests, ~9 s; 151 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
+| Regresión global | suite completa verde (154 tests, ~9 s; 152 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
 
 ## 8. Dependencias y plataforma
 
@@ -220,6 +220,11 @@ aportar su percepción pero no es la fuente exclusiva.
   de la card (píxeles ~20 vs ~31 de fondo), sin moverla. `wayland_popup.py` pasó
   de 1598 a 990 líneas: salieron `toast_icons.py` y `toast_metrics.py`, con
   re-exports para no romper ningún import existente. Suite 151 tests.
+- Hecho (0.18.3): el fondo de la surface agrandada era el background opaco
+  del tema GTK y se veía como un bloque negro rectangular detrás del toast,
+  tapando la sombra. `_add_window_css()` registra `background: transparent`
+  para la ventana del toast y del badge. Verificado en vivo: se lee el
+  contenido detrás del card y no hay bloque; la sombra queda sobre el fondo real.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Hecho (0.18.2): `image-data` sin path de archivo ya se archiva como PNG en el
   directorio de iconos (`history_store.write_icon`), con el mismo `avatar_file`

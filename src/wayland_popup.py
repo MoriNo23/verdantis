@@ -767,6 +767,30 @@ class NotificationWidget(Gtk.Widget):
                         _rgba(_hex_rgb("#f38ba8") + (alpha,)))
 
 
+# La surface crece 12/28 px para darle sitio a la sombra. El fondo de la
+# ventana GTK es opaco por defecto: sin esto se ve un bloque negro rectangular
+# alrededor de la card en vez del degradado de sombra.
+_WINDOW_CSS = (
+    ".verdantis-toast-window { background: transparent; }"
+    ".verdantis-badge-window { background: transparent; }")
+_CSS_YA_PUESTO = False
+
+
+def _add_window_css():
+    """Registra el CSS de transparencia una sola vez por proceso."""
+    global _CSS_YA_PUESTO
+    if _CSS_YA_PUESTO:
+        return
+    display = Gdk.Display.get_default()
+    if display is None:
+        return
+    provider = Gtk.CssProvider()
+    provider.load_from_string(_WINDOW_CSS)
+    Gtk.StyleContext.add_provider_for_display(
+        display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    _CSS_YA_PUESTO = True
+
+
 class WaylandPopup:
     """Popup layer-shell GTK4. La cola/FIFO la maneja el daemon."""
 
@@ -834,6 +858,8 @@ class WaylandPopup:
         self.window = Gtk.Window()
         self.window.set_title(APP_NAME)
         self.window.set_name("notify-card")
+        _add_window_css()
+        self.window.add_css_class("verdantis-toast-window")
         self.window.set_decorated(False)
         self.window.set_focusable(False)   # no roba el tipeo (layer shell)
 

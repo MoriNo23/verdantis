@@ -64,7 +64,10 @@ modificar el gap ni el orden (`toast-stack`).
 ### Requirement: La surface layer-shell deja sitio a la sombra
 
 La surface SHALL ser mayor que la card: 12 px de pad arriba, izquierda y
-derecha, y 28 px abajo (el desplazamiento de 8 px más el blur de 18). La card
+derecha, y 28 px abajo (el desplazamiento de 8 px más el blur de 18). El fondo
+de esa surface FUERA de la card SHALL ser transparente (`background: transparent`):
+un fondo opaco del tema tapa el degradado de sombra y se ve como un bloque
+negro rectangular. La card
 SHALL colocarse dentro con márgenes iguales al pad, y los márgenes del
 layer-shell SHALL restar ese pad para que la card siga a la misma distancia del
 borde de la pantalla, incluso al apilar (`offset` de pila). El tamaño de la
