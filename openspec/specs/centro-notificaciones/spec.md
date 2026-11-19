@@ -73,6 +73,24 @@ exclusivo del CLI (`verdantis replay`), que decide duración y filtros.
 - **WHEN** el usuario activa una fila del centro
 - **THEN** no aparece ningún toast y no se abre ninguna URL
 
+### Requirement: Foco y encabezado van por la identidad de marca
+
+El centro SHALL conservar el anillo de foco de los botones (accesibilidad) pero
+teñirlo con el acento `#80cbc4`, no con el azul de Adwaita por defecto. El
+encabezado SHALL usar la misma escala visual del toast: título en negrita y
+más grande que el resto de la ventana. El fondo de la ventana SHALL ser opaco
+y distinto del de las filas para que la card se lea apoyada.
+
+#### Scenario: Foco del botón Limpiar
+
+- **WHEN** el botón "Limpiar" recibe el foco por teclado
+- **THEN** su anillo es de 2 px en `#80cbc4` y el foco sigue siendo visible
+
+#### Scenario: Jerarquía del encabezado
+
+- **WHEN** se abre el centro
+- **THEN** "Notificaciones" se lee en negrita y mayor tamaño que las etiquetas de las tarjetas
+
 ### Requirement: La ventana no retiene al daemon
 
 Cerrar la ventana SHALL ocultarla, no destruirla ni terminar el daemon, y

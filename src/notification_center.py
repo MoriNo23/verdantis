@@ -80,6 +80,22 @@ def _records_recientes(limit):
         return []
 
 
+def _css():
+    """CSS del centro: mismo lenguaje de card que el toast, foco con acento."""
+    from app_info import DEFAULT_ACCENT
+    from wayland_popup import _CARD_BG_HEX, _CARD_RADIUS
+    return (
+        ".center-list row { background: %s; border-radius: %dpx;"
+        " margin: 6px 10px; }"
+        ".center-list row:hover { background: shade(%s, 1.12); }"
+        ".center-window { background: #14151c; }"
+        ".center-title { font-weight: 700; font-size: 15px; }"
+        # El anillo de foco por defecto es el azul de Adwaita: fuera del
+        # acento de identidad. El foco se conserva (accesibilidad).
+        "button:focus { outline: 2px solid %s; outline-offset: -2px; }"
+        % (_CARD_BG_HEX, _CARD_RADIUS, _CARD_BG_HEX, DEFAULT_ACCENT))
+
+
 class CenterWindow:
     """Ventana con la lista de las últimas notificaciones archivadas.
 
@@ -91,21 +107,17 @@ class CenterWindow:
         import gi
         gi.require_version("Gtk", "4.0")
         from gi.repository import Gtk, Gdk
-        from wayland_popup import _CARD_BG_HEX, _CARD_RADIUS
         self._Gtk = Gtk
         self._limit = limit
         # Mismo lenguaje de card que el toast (radio + fondo), sin heredar el
         # render GSK: acá las filas son widgets GTK con hover propio.
         css = Gtk.CssProvider()
-        css.load_from_string(
-            ".center-list row { background: %s; border-radius: %dpx;"
-            " margin: 6px 10px; }"
-            ".center-list row:hover { background: shade(%s, 1.12); }"
-            % (_CARD_BG_HEX, _CARD_RADIUS, _CARD_BG_HEX))
+        css.load_from_string(_css())
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), css,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         self._win = Gtk.Window(title="Notificaciones")
+        self._win.add_css_class("center-window")
         self._win.set_default_size(420, 620)
         self._win.set_resizable(True)
         self._win.connect("close-request", self._on_close)
@@ -121,7 +133,7 @@ class CenterWindow:
         cab.set_margin_end(8)
         titulo = Gtk.Label(label="Notificaciones")
         titulo.set_xalign(0)
-        titulo.add_css_class("title-4")
+        titulo.add_css_class("center-title")
         cab.append(titulo)
         self._conteo = Gtk.Label(label="")
         self._conteo.set_xalign(0)

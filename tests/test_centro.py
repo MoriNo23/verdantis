@@ -109,3 +109,11 @@ def test_ventana_no_expone_replay(monkeypatch):
     import inspect
     assert "on_replay" not in inspect.signature(nc2.CenterWindow).parameters
     assert not hasattr(nc2.CenterWindow(), "_on_replay")
+
+
+def test_foco_usa_el_acento_no_el_azul_adwaita():
+    """El anillo de foco conserva accesibilidad pero va al acento de marca."""
+    from app_info import DEFAULT_ACCENT
+    css = nc._css()
+    assert "button:focus" in css
+    assert DEFAULT_ACCENT.lower() in css.lower()

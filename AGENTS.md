@@ -61,7 +61,10 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
     eliminado junto al dashboard, que sigue muerto y recuperable por git).
 - Métricas de layout: fuente única en `wayland_popup` (`_PAD`/`_rows_above_body`/...),
   consumidas por `_draw`, `calc_card_height` y `_eff_text_width`. No recomputar el
-  stack a mano o divergen.
+  stack a mano o divergen. Escala tipográfica: `_TITLE_FS`/`_BODY_FS`/`_APP_FS`
+  = 13/12/11; `calc_card_height` deriva el alto del body de `_BODY_FS`, no de una
+  constante propia (`toast-tipografia`). El CSS del centro vive en
+  `notification_center._css()` (foco con `DEFAULT_ACCENT`, no azul Adwaita).
 
 ## Build & test
 

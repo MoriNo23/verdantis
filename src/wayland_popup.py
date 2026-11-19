@@ -293,9 +293,9 @@ _BTN_GAP = 8
 _ACTIONS_ROW_H = 28
 _ACTIONS_GAP = 8
 _CARD_RADIUS = 14          # 12 → 14: radio "card física" (estilo Mac)
-_TITLE_FS = 11
-_BODY_FS = 11
-_APP_FS = 10
+_TITLE_FS = 13
+_BODY_FS = 12
+_APP_FS = 11
 
 _PLACEHOLDER_BG = "#313244"
 _PLACEHOLDER_FG = "#a6adc8"
@@ -653,10 +653,6 @@ class NotificationWidget(Gtk.Widget):
     # 240 a 160, el botón Copiar se corría y la card cambiaba de alto con el
     # mouse encima. Ahora el rail es fijo y el hover solo lo tiñe.
     _CLOSE_RAIL_W = _CLOSE_RAIL_W
-
-    _BODY_FONT = "Manrope 11"
-    _TITLE_FONT = "Manrope Bold 11"
-    _APP_FONT = "Manrope 10"
 
     def __init__(self, app_name, app_icon, titulo, cuerpo, icon_path, image_path,
                  accent, image_data_raw=None, on_click=None, on_resize=None,

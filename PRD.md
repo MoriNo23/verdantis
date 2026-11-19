@@ -180,6 +180,13 @@ aportar su percepción pero no es la fuente exclusiva.
   responde `ScreenShot2.Error.NoAuthorized`). La captura del desktop queda como
   smoke opcional (`--live`) y ya no se compara píxel a píxel: el panel mueve la
   card y la golden vieja (`toast-vibrancia.png`) era no determinista.
+- Hecho (0.17.0): escala tipográfica y pulido del centro. Toast con jerarquía
+  real título 13 / body 12 / app 11 (antes 11/11/10: solo el peso marcaba el
+  nivel); `calc_card_height` deriva del mismo `_BODY_FS` y el cap de 3 líneas
+  sigue acotando el card a ≤220 px. Centro con fondo opaco propio, encabezado
+  en negrita y anillo de foco del botón "Limpiar" en `#80cbc4` (antes azul
+  Adwaita), conservando accesibilidad. La golden offscreen se regeneró con la
+  nueva escala.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.
