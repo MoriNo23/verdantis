@@ -39,7 +39,8 @@ _PROP_REPLACE = 0     # X.h
 
 # `toast_window` PRIMERO: carga libgtk4-layer-shell y fija Gtk/Gdk 4.0 y aporta
 # el render — la ventana de acá es solo el contenedor.
-from toast_window import ToastCard, _CARD_WIDTH
+from toast_window import (ToastCard, _CARD_WIDTH, _SHADOW_PAD,
+                          _add_window_css, surface_size, x11_geometry)
 from app_info import APP_ID, DEFAULT_ACCENT
 import gi
 gi.require_version('Gtk', '4.0')
@@ -81,6 +82,8 @@ class X11Toast:
     def _build_ui(self):
         self.window = Gtk.Window()
         self.window.set_decorated(False)
+        _add_window_css()
+        self.window.add_css_class("verdantis-toast-window")
         # GTK4 ya no tiene set_size_request en toplevel: default_size manda.
         self.window.connect("close-request", lambda *a: self._close())
         self.window.connect("destroy", lambda *a: self._loop.quit())
@@ -96,8 +99,15 @@ class X11Toast:
         )
         self._h = self._card.desired_height()
         self._card.set_size_request(_CARD_WIDTH, self._h)
-        self.window.set_default_size(_CARD_WIDTH, self._h)
+        # Misma surface agrandada que en Wayland: sin esto el compositor
+        # recorta la sombra y el fallback se ve "plano" (design parity).
+        self._card.set_margin_top(_SHADOW_PAD["top"])
+        self._card.set_margin_bottom(_SHADOW_PAD["bottom"])
+        self._card.set_margin_start(_SHADOW_PAD["left"])
+        self._card.set_margin_end(_SHADOW_PAD["right"])
         self.window.set_child(self._card)
+        sw, sh = surface_size(_CARD_WIDTH, self._h)
+        self.window.set_default_size(sw, sh)
         # Solo Escape cierra por teclado (antes: cualquier tecla).
         controller = Gtk.EventControllerKey()
         controller.connect("key-pressed", self._on_key)
@@ -115,7 +125,8 @@ class X11Toast:
             return
         self._h = new_h
         self._card.set_size_request(_CARD_WIDTH, new_h)
-        self.window.set_default_size(_CARD_WIDTH, new_h)
+        sw, sh = surface_size(_CARD_WIDTH, new_h)
+        self.window.set_default_size(sw, sh)
         self.window.queue_resize()
         self._posicionar()
 
@@ -150,10 +161,8 @@ class X11Toast:
             g = mon.get_geometry() if mon else None
             sw = g.width if g else 1920
             sh = g.height if g else 1080
-            x = sw - _CARD_WIDTH - self.margin if "right" in self.corner \
-                else self.margin
-            y = sh - self._h - self.margin if "bottom" in self.corner \
-                else self.margin
+            _, _, x, y = x11_geometry(
+                self.corner, self._h, self.margin, sw, sh, _CARD_WIDTH)
             _X.XMoveWindow(display, xid, x, y)
             state = _X.XInternAtom(display, b"_NET_WM_STATE", False)
             above = _X.XInternAtom(display, b"_NET_WM_STATE_ABOVE", False)

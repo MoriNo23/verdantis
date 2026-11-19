@@ -93,6 +93,21 @@ def surface_size(card_w, card_h):
             card_h + _SHADOW_PAD["top"] + _SHADOW_PAD["bottom"])
 
 
+def x11_geometry(corner, card_h, margin, screen_w, screen_h, card_w=360):
+    """(ancho, alto, x, y) de la ventana X11 con sitio para la sombra.
+
+    Igual critério que `layer_margins`: la card sigue a `margin` px del borde
+    aunque la ventana crezca con el padding del shadow.
+    """
+    w, h = surface_size(card_w, card_h)
+    pad = _SHADOW_PAD
+    x = (screen_w - margin + pad["right"] - w if "right" in corner
+         else margin - pad["left"])
+    y = (screen_h - margin + pad["bottom"] - h if "bottom" in corner
+         else margin - pad["top"])
+    return w, h, x, y
+
+
 def layer_margins(corner, margin, offset=0):
     """Márgenes del layer-shell: la card queda donde estaba, sin el pad."""
     top = right = bottom = left = 0
@@ -467,4 +482,4 @@ def _layout_for(text, font_desc, width=None, ellipsize=False, wrap=False,
     return lay
 
 
-__all__ = ['_SHADOW_PAD', '_cover_pixbuf', 'close_style', 'layer_margins', 'surface_size', '_ACTIONS_GAP', '_ACTIONS_ROW_H', '_APP_FS', '_APP_ICON_BOX', '_APP_ROW_H', '_BODY_FS', '_BTN_GAP', '_CARD_BG_HEX', '_CARD_RADIUS', '_CARD_WIDTH', '_CLOSE_RAIL_W', '_FONT_OPTIONS', '_Frame', '_IMAGE_LEFT_GAP', '_IMAGE_LEFT_W', '_Layout', '_MIN_ALPHA', '_PAD', '_PANGO_TAGS', '_PLACEHOLDER_BG', '_PLACEHOLDER_FG', '_ROW_MIN_H', '_TEXT_COL_W', '_TITLE_FS', '_TITLE_ROW_H', '_TXT_APP_L', '_TXT_APP_R', '_TXT_BANDA_R', '_TXT_BODY_L', '_TXT_BODY_R', '_TXT_TITLE_L', '_TXT_TITLE_R', '_VIB_BORDER', '_VIB_BOTTOM', '_VIB_BTN_ALPHA', '_VIB_BTN_HOVER', '_VIB_BTN_PRESSED', '_VIB_INSET', '_VIB_SHADOW', '_VIB_SHADOW_BLUR', '_VIB_SHADOW_DY', '_VIB_TOP', '_append_sink', '_append_text', '_body_layout', '_body_metrics', '_count_body_lines', '_create_layout', '_has_pango_markup', '_hex_rgb', '_layout_for', '_layout_metrics', '_make_circular', '_make_placeholder_icon', '_parse_actions', '_rect', '_resample', '_rgba', '_round_fill', '_rounded', '_rows_above_body', '_sanitize_pango_markup', '_stop', '_texture', 'rrect']
+__all__ = ['_SHADOW_PAD', '_cover_pixbuf', 'close_style', 'layer_margins', 'surface_size', 'x11_geometry', '_ACTIONS_GAP', '_ACTIONS_ROW_H', '_APP_FS', '_APP_ICON_BOX', '_APP_ROW_H', '_BODY_FS', '_BTN_GAP', '_CARD_BG_HEX', '_CARD_RADIUS', '_CARD_WIDTH', '_CLOSE_RAIL_W', '_FONT_OPTIONS', '_Frame', '_IMAGE_LEFT_GAP', '_IMAGE_LEFT_W', '_Layout', '_MIN_ALPHA', '_PAD', '_PANGO_TAGS', '_PLACEHOLDER_BG', '_PLACEHOLDER_FG', '_ROW_MIN_H', '_TEXT_COL_W', '_TITLE_FS', '_TITLE_ROW_H', '_TXT_APP_L', '_TXT_APP_R', '_TXT_BANDA_R', '_TXT_BODY_L', '_TXT_BODY_R', '_TXT_TITLE_L', '_TXT_TITLE_R', '_VIB_BORDER', '_VIB_BOTTOM', '_VIB_BTN_ALPHA', '_VIB_BTN_HOVER', '_VIB_BTN_PRESSED', '_VIB_INSET', '_VIB_SHADOW', '_VIB_SHADOW_BLUR', '_VIB_SHADOW_DY', '_VIB_TOP', '_append_sink', '_append_text', '_body_layout', '_body_metrics', '_count_body_lines', '_create_layout', '_has_pango_markup', '_hex_rgb', '_layout_for', '_layout_metrics', '_make_circular', '_make_placeholder_icon', '_parse_actions', '_rect', '_resample', '_rgba', '_round_fill', '_rounded', '_rows_above_body', '_sanitize_pango_markup', '_stop', '_texture', 'rrect']

@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (170 tests, ~9 s; 168 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
+| Regresión global | suite completa verde (172 tests, ~9 s; 170 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
 
 ## 8. Dependencias y plataforma
 
@@ -244,6 +244,11 @@ aportar su percepción pero no es la fuente exclusiva.
   recorria cada pixel en Python: una imagen de 2000x2000 tardaba ~0.8 s y
   congelaba el daemon. Tope de 512x512: por encima se usa la imagen tal cual
   (las fotos grandes no traen padding que centrar). Test + golden intacta.
+- Hecho (0.18.7): fallback X11 probado de punta a punta bajo XWayland real
+  (4 esquinas, cierre por X y por Escape, vencimiento por timer). Encontrado y
+  corregido el desajuste de diseño: la ventana X11 medía exactamente la card
+  y recortaba la sombra. Ahora usa `surface_size` + márgenes compensatorios
+  (`x11_geometry`) y CSS transparente, igual que la surface layer-shell.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Hecho (0.18.2): `image-data` sin path de archivo ya se archiva como PNG en el
   directorio de iconos (`history_store.write_icon`), con el mismo `avatar_file`

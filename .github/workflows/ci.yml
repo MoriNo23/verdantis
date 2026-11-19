@@ -33,7 +33,7 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -r requirements.txt
 
-      - name: Suite de tests (170 tests, headless broadway; 2 skips sin display)
+      - name: Suite de tests (172 tests, headless broadway; 2 skips sin display)
         # conftest.py elige GDK_BACKEND=broadway cuando no hay WAYLAND_DISPLAY.
         # Sin un servidor broadwayd, GTK no inicializa y los tests de widget
         # (centro, copiar código) crashean: hay que levantar gtk4-broadwayd.
