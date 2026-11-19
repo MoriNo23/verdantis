@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (151 tests, ~9 s; 149 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
+| Regresión global | suite completa verde (153 tests, ~9 s; 151 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
 
 ## 8. Dependencias y plataforma
 
@@ -219,10 +219,11 @@ aportar su percepción pero no es la fuente exclusiva.
   pila siga sumando. Verificado en vivo: la sombra se ve sobre el contenido debajo
   de la card (píxeles ~20 vs ~31 de fondo), sin moverla. `wayland_popup.py` pasó
   de 1598 a 990 líneas: salieron `toast_icons.py` y `toast_metrics.py`, con
-  re-exports para no romper ningún import existente. Suite 150 tests.
+  re-exports para no romper ningún import existente. Suite 151 tests.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
-- Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
-  guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.
+- Hecho (0.18.2): `image-data` sin path de archivo ya se archiva como PNG en el
+  directorio de iconos (`history_store.write_icon`), con el mismo `avatar_file`
+  que un favicon copiado de `/tmp`. Antes el replay caía al icono de la app.
 - Riesgo abierto: el usuario vio una vez un "toast de más" en la transición de
   cierre→entrada. Por código no puede existir un tercero (la creación está guardada
   en los dos únicos call sites de `_show_popup`); hipótesis restante: la superficie

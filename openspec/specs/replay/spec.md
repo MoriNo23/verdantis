@@ -6,6 +6,24 @@ Interacción del toast reproducido desde el historial (`verdantis replay`): como
 
 ## Requirements
 
+### Requirement: `image-data` sin path también se archiva
+
+Cuando un `Notify` trae `image-data` en `hints` pero no hay `image-path` ni
+`app_icon` en disco, el daemon SHALL convertir esos bytes a PNG y guardarlos en
+el directorio de iconos como `avatar_file`. El replay SHALL mostrar esa imagen
+archivada igual que muestra un favicon copiado de `/tmp`. El archivo SHALL
+respetar `MAX_ICON_BYTES` y un fallo de conversión NO SHALL romper el `Notify`.
+
+#### Scenario: Replay de image-data sin path
+
+- **WHEN** llega un `Notify` con `image-data` de 2x2 RGBA y sin path de archivo
+- **THEN** el registro archivado tiene `avatar_file` apuntando a un PNG y el replay lo usa como imagen izquierda
+
+#### Scenario: image-data inválido
+
+- **WHEN** los bytes de `image-data` no forman una imagen válida
+- **THEN** `Notify` responde normalmente y `avatar_file` queda vacío
+
 ### Requirement: El click abre la URL archivada
 
 El toast reproducido cuyo registro archiva una URL SHALL abrirla con `xdg-open` al hacer click en el cuerpo, y cerrarse por ese click. Si el registro no archiva URL, el click del cuerpo no tiene efecto. Los botones de acción renderizados por fidelidad al registro no ejecutan la acción del sender original (no hay sender): su click no tiene efecto y no muestran affordance de click (spec `toast-acciones`).

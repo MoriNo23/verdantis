@@ -12,8 +12,9 @@ ctypes.CDLL('libgtk4-layer-shell.so.0', mode=ctypes.RTLD_GLOBAL)
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gdk', '4.0')
+gi.require_version('GdkPixbuf', '2.0')
 gi.require_version('Gtk4LayerShell', '1.0')
-from gi.repository import Gtk, Gdk, Gtk4LayerShell, GLib, Gio
+from gi.repository import Gtk, Gdk, GdkPixbuf, Gtk4LayerShell, GLib, Gio
 
 from app_info import APP_ID, APP_NAME, DEFAULT_ACCENT, VENDOR, accent_for
 from wayland_popup import (
@@ -22,7 +23,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.18.1"
+VERSION = "0.18.2"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -101,6 +102,23 @@ def _pick_action_key(actions):
         if actions[i] == "default":
             return "default"
     return None
+
+
+def _image_data_to_png(image_data):
+    """Tupla/GVariant de `image-data` → bytes PNG para el historial."""
+    try:
+        w, h, rowstride, has_alpha, bps, n_channels, data = image_data
+        if isinstance(data, GLib.Variant):
+            data = bytes(data.unpack())
+        else:
+            data = bytes(data)
+        pixbuf = GdkPixbuf.Pixbuf.new_from_bytes(
+            GLib.Bytes.new(data), GdkPixbuf.Colorspace.RGB,
+            bool(has_alpha), int(bps), int(w), int(h), int(rowstride))
+        ok, buf = pixbuf.save_to_bufferv("png", [], [])
+        return bytes(buf) if ok else None
+    except Exception:
+        return None
 
 
 def _badge_text(n):
@@ -543,13 +561,13 @@ class NotificationManager:
             self._persist_to_disk(nid, app_name, app_icon, summary, body,
                                   actions, hints, expire_timeout, sender, url,
                                   image_left_path, app_icon_file, banner_path,
-                                  kwargs["duration"])
+                                  kwargs["duration"], image_data=image_data)
 
         return nid
 
     def _persist_to_disk(self, nid, app_name, app_icon, summary, body, actions,
                          hints, expire_timeout, sender, url, image_left_path,
-                         app_icon_file, banner_path, duration):
+                         app_icon_file, banner_path, duration, image_data=None):
         """Archiva la notificación en `history_store` (JSONL en el XDG data home).
 
         Los favicons de los navegadores viven en /tmp y mueren con la sesión que
@@ -565,6 +583,10 @@ class NotificationManager:
                 image_left_file = history_store.copy_icon(nid, image_left_path, "avatar")
             elif app_icon_file:
                 image_left_file = history_store.copy_icon(nid, app_icon_file, "avatar")
+            if not image_left_file and image_data:
+                png = _image_data_to_png(image_data)
+                if png:
+                    image_left_file = history_store.write_icon(nid, png, "avatar")
             banner_file = None
             if banner_path:
                 banner_file = history_store.copy_icon(nid, banner_path, "banner")

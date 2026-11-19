@@ -100,6 +100,20 @@ def copy_icon(nid, src, kind):
         return None
 
 
+def write_icon(nid, data, kind):
+    """Guarda bytes ya en memoria (image-data sin path) como PNG del historial."""
+    try:
+        if not data or len(data) > MAX_ICON_BYTES:
+            return None
+        os.makedirs(_icon_dir(), exist_ok=True)
+        fname = "n%d_%s.png" % (nid, kind)
+        with open(os.path.join(_icon_dir(), fname), "wb") as fh:
+            fh.write(data)
+        return fname
+    except Exception:
+        return None
+
+
 def icon_path(fname):
     """Ruta absoluta de un archivo de icono guardado."""
     return os.path.join(_icon_dir(), fname)
