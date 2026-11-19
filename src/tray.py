@@ -110,11 +110,10 @@ def _pixmap_verdantis(size=48):
 class TrayIcon:
     """Exporta el ítem y el menú; `start()` es idempotente."""
 
-    def __init__(self, conn=None, on_open=None, on_clear=None, on_quit=None):
+    def __init__(self, conn=None, on_open=None, on_clear=None):
         self._conn = conn
         self._on_open = on_open or (lambda: None)
         self._on_clear = on_clear or (lambda: None)
-        self._on_quit = on_quit or (lambda: None)
         self._registrado = False
         self._pixmap = None
         self._nombre = "org.kde.StatusNotifierItem-%d-1" % os.getpid()

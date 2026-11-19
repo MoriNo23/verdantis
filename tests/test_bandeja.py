@@ -105,7 +105,6 @@ def _tray(conn, abierto=None, limpiado=None):
         conn=conn,
         on_open=lambda: abierto.append(1),
         on_clear=lambda: limpiado.append(1),
-        on_quit=lambda: None,
     )
     t.start(register_watcher=False)
     return t

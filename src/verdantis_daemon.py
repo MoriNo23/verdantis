@@ -810,7 +810,6 @@ class NotificationDaemon:
         self._tray = TrayIcon(
             on_open=self._open_center,
             on_clear=self._clear_history,
-            on_quit=self.stop,
         )
         self._tray.start()       # best-effort: sin systray sigue sin bandeja
         self._loop.run()
