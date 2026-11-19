@@ -284,6 +284,10 @@ def _recortar_transparente(pixbuf):
     if not pixbuf.get_has_alpha():
         return pixbuf
     w, h = pixbuf.get_width(), pixbuf.get_height()
+    # Tope: recorrer millones de píxeles en Python congela el daemon. Las
+    # fotos grandes no traen padding que centrar; los iconos sí y son chicos.
+    if w * h > 512 * 512:
+        return pixbuf
     px, canales, fila = pixbuf.get_pixels(), pixbuf.get_n_channels(), pixbuf.get_rowstride()
     minx, miny, maxx, maxy = w, h, -1, -1
     for y in range(h):
