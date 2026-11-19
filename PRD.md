@@ -164,6 +164,12 @@ aportar su percepción pero no es la fuente exclusiva.
   el rail (la X pasa de 30 % a 95 %). Antes el hover reservaba 80 px, el texto
   re-wrapeaba y la pila se reacomodaba con el mouse encima. Body sin justificar
   (ríos a 212 px). Copiar confirma con "Copiado" 1.4 s sin mover el layout.
+- Hecho (0.16.0): centro de notificaciones propio. Ícono `StatusNotifierItem`
+  en el systray de KDE (click izquierdo abre el centro; derecho: abrir/limpiar)
+  y ventana GTK4 con las últimas 50 del historial como tarjetas (misma card:
+  radio 14 y fondo del toast), click para replay por la ruta del CLI sin
+  re-archivar. No reutiliza el applet de Plasma: solo lee el modelo de SU daemon
+  (inválido mientras seamos dueños del nombre) y es GPL frente a MIT.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.

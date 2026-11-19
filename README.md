@@ -132,6 +132,21 @@ a click opens the archived URL with `xdg-open` and does not emit
 nothing promised). Reproduced buttons do not fire: without a sender there is
 no action to run.
 
+## Tray icon & notification center
+
+The daemon exports its own `org.kde.StatusNotifierItem`, so it sits in the KDE
+systray next to the others. Left click opens the notification center (the
+archived history as cards, newest first); right click lists "Abrir historial"
+and "Limpiar historial". Clicking a card replays that toast through the CLI
+replay path (buttons are drawn, not fired) and does not re-archive it.
+
+No Qt and no Plasma applet reuse: the Plasma notification applet only reads the
+model of *its* daemon — invalid while Verdantis owns
+`org.freedesktop.Notifications` — and is GPL, while this repo is MIT. The tray
+item is plain D-Bus on the same `Gio` connection, and the center is a GTK4
+window built from `history_store`. Without a StatusNotifierWatcher the item is
+still exported and the daemon works as before.
+
 ## One-shot (no daemon)
 
 ```bash
@@ -170,6 +185,8 @@ src/
   wayland_popup.py     toast render: GTK4 + GSK + gtk4-layer-shell
   x11_popup.py         X11 fallback (positionable window), reuses the widget
   replay.py            history CLI + the shared render branch
+  tray.py              StatusNotifierItem + DBusMenu (KDE systray)
+  notification_center.py  history center window (cards, replay, clear)
   history_store.py     JSONL store + icon byte copies (best-effort)
   app_info.py          single source of identity (name, id, vendor, accent)
 tests/                 D-Bus contract, audit, history/replay + sensitivity metatests

@@ -21,7 +21,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.15.10"
+VERSION = "0.16.0"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -708,6 +708,8 @@ class NotificationDaemon:
         self._bus = None
         self._loop = None
         self._owned = False
+        self._tray = None
+        self._center = None
 
     def _on_bus_acquired(self, conn, name):
         node = Gio.DBusNodeInfo.new_for_xml(NOTIFICATIONS_XML)
@@ -762,6 +764,38 @@ class NotificationDaemon:
     def _on_name_lost(self, conn, name):
         self._owned = False
 
+    # ── bandeja (StatusNotifierItem) y centro de historial ──────────────
+
+    def _show_center(self):
+        if self._center is None:
+            from notification_center import CenterWindow
+            self._center = CenterWindow(on_replay=self._replay_record)
+        self._center.show()
+        return False              # GLib.idle_add: correr una sola vez
+
+    def _open_center(self):
+        # El click de la bandeja llega en medio de una llamada D-Bus: crear la
+        # ventana ahí adentro deja el mensaje sin responder. Se difiere al loop.
+        GLib.idle_add(self._show_center)
+
+    def _replay_record(self, record):
+        # Misma ruta que `verdantis replay`: los botones se dibujan pero no
+        # ejecutan (fidelidad visual, no re-disparo de la app original).
+        from replay import mostrar_toast, record_a_kwargs
+        mostrar_toast(record_a_kwargs(record, duration=6000))
+
+    def _clear_history(self):
+        try:
+            history_store.clear()
+        except Exception:
+            pass
+        if self._center is not None:
+            GLib.idle_add(self._refresh_center)
+
+    def _refresh_center(self):
+        self._center.refresh()
+        return False
+
     def run(self):
         Gio.bus_own_name(
             Gio.BusType.SESSION,
@@ -772,6 +806,13 @@ class NotificationDaemon:
             self._on_name_lost,
         )
         self._loop = GLib.MainLoop()
+        from tray import TrayIcon
+        self._tray = TrayIcon(
+            on_open=self._open_center,
+            on_clear=self._clear_history,
+            on_quit=self.stop,
+        )
+        self._tray.start()       # best-effort: sin systray sigue sin bandeja
         self._loop.run()
 
     def stop(self):

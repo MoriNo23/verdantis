@@ -1,0 +1,85 @@
+# centro-notificaciones Specification
+
+## Purpose
+
+Dar acceso al historial archivado desde la bandeja del sistema: un ícono
+StatusNotifierItem propio en el systray de KDE y una ventana GTK4 con las
+últimas notificaciones como tarjetas, que reemplaza lo único que el applet de
+Plasma no puede dar (su lista solo lee el modelo de SU daemon, inválido mientras
+Verdantis es dueño de `org.freedesktop.Notifications`).
+
+## Requirements
+
+### Requirement: El ícono se registra en el systray del sistema
+
+El daemon SHALL exportar `org.kde.StatusNotifierItem` en `/StatusNotifierItem`
+y registrarse en `org.kde.StatusNotifierWatcher`. Las propiedades SHALL incluir
+`Id`, `Category`, `Status`, `IconName`, `IconPixmap`, `Menu` y `ItemIsMenu`.
+Sin watcher (o sin systray) el daemon SHALL seguir sirviendo notificaciones: la
+bandeja es aditiva, nunca un requisito de arranque.
+
+#### Scenario: Systray presente
+- **WHEN** el daemon arranca en una sesión Plasma
+- **THEN** el watcher lista el ítem y el ícono aparece junto al resto
+
+#### Scenario: Systray ausente
+- **WHEN** `StatusNotifierWatcher` no existe (sesión sin bandeja)
+- **THEN** el ítem queda exportado, el daemon no falla y los toasts siguen
+
+### Requirement: Click izquierdo abre el centro
+
+`Activate` y `SecondaryActivate` SHALL abrir (o traer al frente) la ventana del
+centro. La ventana SHALL crearse en el primer uso, no al arrancar: el daemon no
+tiene ventanas visibles hasta que se pide el historial.
+
+#### Scenario: Activar el ícono
+- **WHEN** el usuario hace click izquierdo en el ícono
+- **THEN** la ventana "Notificaciones" se muestra con el historial cargado
+
+### Requirement: El menú del ícono ofrece abrir y limpiar
+
+El ítem SHALL exponer un `com.canonical.dbusmenu` en `/MenuBar` con, como
+mínimo, "Abrir historial" y "Limpiar historial". Los ids SHALL ser estables
+entre llamadas (el host cachea el layout) y `Event("clicked")` SHALL ejecutar la
+acción del ítem.
+
+#### Scenario: Limpiar desde la bandeja
+- **WHEN** se activa "Limpiar historial"
+- **THEN** `history_store.clear()` borra registros e iconos, y el centro
+  abierto se refresca
+
+### Requirement: El centro lista el historial propio
+
+La ventana SHALL leer `history_store.read()` y mostrar las últimas N (50)
+notificaciones, la más reciente primero. Cada tarjeta SHALL mostrar app y
+antigüedad relativa, título (o la app si no hay summary), body sin URLs y
+acotado a 200 caracteres. Sin registros SHALL decir "sin notificaciones".
+
+#### Scenario: Tarjeta desde un registro
+- **WHEN** el registro dice app "Brave", summary "Código de verificación"
+- **THEN** la tarjeta muestra esas dos líneas y "hace 5 min" si tiene 5 minutos
+
+#### Scenario: Historial vacío
+- **WHEN** no hay registros
+- **THEN** la lista queda vacía y el encabezado dice "sin notificaciones"
+
+### Requirement: Click en una tarjeta reproduce el toast
+
+Activar una fila SHALL mostrar el toast archivado por la misma ruta del replay
+del CLI (`replay.record_a_kwargs` + `mostrar_toast`): los botones se dibujan
+por fidelidad pero no re-disparan la app original. La reproducción NO SHALL
+volver a archivar el registro.
+
+#### Scenario: Reproducir una tarjeta
+- **WHEN** el usuario activa una fila del centro
+- **THEN** aparece el toast correspondiente y el historial no suma entradas
+
+### Requirement: La ventana no retiene al daemon
+
+Cerrar la ventana SHALL ocultarla, no destruirla ni terminar el daemon, y
+Escape SHALL hacer lo mismo. El daemon SHALL seguir atendiendo Notify con la
+ventana oculta.
+
+#### Scenario: Cerrar el centro
+- **WHEN** el usuario cierra la ventana o pulsa Escape
+- **THEN** la ventana se oculta y el daemon sigue vivo en D-Bus
