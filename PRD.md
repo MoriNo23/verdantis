@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (101 tests, <2 s), en local y en CI (`.github/workflows/ci.yml`) |
+| Regresión global | suite completa verde (113 tests, <2 s), en local y en CI (`.github/workflows/ci.yml`) |
 
 ## 8. Dependencias y plataforma
 
@@ -159,6 +159,11 @@ aportar su percepción pero no es la fuente exclusiva.
 - Hecho (0.15.9): `_parse_actions` partía la lista PLANA de D-Bus (`[key,label,...]`)
   en los dos primeros caracteres de cada string: los botones del desktop mostraban
   "a" y "e" en vez de "Marcar como leída"/"Responder". Acepta lista plana y pares.
+- Hecho (0.15.10): el hover ya no reacomoda la card. El rail de descarte (28 px)
+  queda reservado siempre: columna de texto 212 px constante, el hover solo tiñe
+  el rail (la X pasa de 30 % a 95 %). Antes el hover reservaba 80 px, el texto
+  re-wrapeaba y la pila se reacomodaba con el mouse encima. Body sin justificar
+  (ríos a 212 px). Copiar confirma con "Copiado" 1.4 s sin mover el layout.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.

@@ -21,7 +21,7 @@ export const COLORS = {
   app: "#b8bfd0",           // _left_app (subido: AA sobre gradiente claro)
   accent: "#80cbc4",        // accent default del daemon (hints "accent")
   xStroke: "#f38ba8",       // color de la X en la franja de descarte
-  franjaTint: "rgba(219, 38, 38, 0.18)",   // tinte franja hover (hover_close: 0.32)
+  franjaTint: "rgba(219, 38, 38, 0.18)",   // tinte franja; solo con el puntero en el rail
   franjaTintHover: "rgba(219, 38, 38, 0.32)",
   placeholderBg: "#313244", // _PLACEHOLDER_BG (icono de app sin resolución)
   placeholderFg: "#a6adc8", // _PLACEHOLDER_FG
@@ -55,8 +55,8 @@ export const METRICS = {
   pad: 14,         // _PAD
   imageLeftW: 80,  // _IMAGE_LEFT_W (slot izquierdo, clip circular)
   imageLeftGap: 12,// _IMAGE_LEFT_GAP
-  textColW: 240,   // _TEXT_COL_W (360 − 14 − 80 − 12 − 14)
-  closeStripW: 44, // _CLOSE_STRIP_W (franja de descarte, solo hover persistente)
+  textColW: 212,   // _TEXT_COL_W − _CLOSE_RAIL_W (360 − 14 − 80 − 12 − 28 − 14)
+  closeRailW: 28,  // _CLOSE_RAIL_W (rail de descarte, reservado siempre)
   btnH: 28,        // _BTN_H (barra "Ver más")
   btnGap: 8,       // _BTN_GAP
   actionsRowH: 28, // _ACTIONS_ROW_H (fila de botones de acción)

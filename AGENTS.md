@@ -28,7 +28,7 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
   `scripts/dbus_check.py` (contrato D-Bus end-to-end: `Notify` →
   `NotificationClosed` razón 3, incluida una notificación todavía en cola).
   OJO al parsear ids: `grep -o '[0-9]*'` sobre `(uint32 1,)` devuelve `32`.
-- CI en `.github/workflows/ci.yml`: corre los 101 tests + `pip-audit` + `pip check`
+- CI en `.github/workflows/ci.yml`: corre los 113 tests + `pip-audit` + `pip check`
   en Ubuntu con GTK4/gtk4-layer-shell. Sin `WAYLAND_DISPLAY`, conftest usa
   `GDK_BACKEND=broadway` (GTK4 no tiene `offscreen`).
 - GTK4: cargar `libgtk4-layer-shell` con `ctypes.CDLL(..., RTLD_GLOBAL)` ANTES
@@ -124,9 +124,10 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
   imagen de la notificación (image-path / image-data del tab) → icono de la app (`.desktop`
   exacto → tema) → placeholder con la inicial (`_make_placeholder_icon` + clip circular).
   Nunca queda `None`: no existe la variante sin imagen (columna ancha, fuentes 12/13, gap
-  del HR). La columna de texto es una sola, 240 px (160 con la franja de descarte de 80 px
-  en hover de CUALQUIER toast), y el texto arranca al top del slot (`ty = pad`, sin centrado
-  del bloque). El hover pausa el vencimiento (crédito por tick en `_update_progress`).
+  del HR). La columna de texto es una sola, 212 px, constante en reposo y hover (los 28 px
+  del rail de descarte `_CLOSE_RAIL_W` están descontados y reservados siempre: el hover
+  solo tiñe el rail, nunca reacomoda la card), y el texto arranca al top del slot
+  (`ty = pad`, sin centrado del bloque). El hover pausa el vencimiento (crédito por tick en `_update_progress`).
   `_eff_text_width` y `_rows_above_body` no tienen ramas por variante.
 - Verificación visual de los toasts: la hace el AGENTE. Puede sacar capturas
   (`spectacle`/`grim`/`import`) y leer imágenes de la pila, y da el veredicto visual

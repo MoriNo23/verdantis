@@ -38,8 +38,9 @@ export function ToastMock({
   const wipe = state === "wipe";
   const overflow = variant === "largo" || expanded;
 
-  // Columna de texto: 240; persistente CON hover le cede la franja (196)
-  const colW = METRICS.textColW - (hovered ? METRICS.closeStripW : 0);
+  // Columna de texto fija: el rail de descarte ya está descontado y el hover
+  // NO la reduce (spec toast-franja-descarte).
+  const colW = METRICS.textColW;
   const label = isBrowser ? `${appName} - ${titulo}` : appName;
   const appInicial = (appName || "?").trim().charAt(0).toUpperCase() || "?";
   const visButtons = buttons.slice(0, 3);
@@ -58,7 +59,7 @@ export function ToastMock({
         overflow: "hidden",
         flex: "0 0 auto",
         padding: METRICS.pad,
-        paddingRight: hovered ? METRICS.closeStripW + METRICS.pad : METRICS.pad,
+        paddingRight: METRICS.closeRailW + METRICS.pad,
         boxSizing: "border-box",
       }}
     >
@@ -226,16 +227,18 @@ export function ToastMock({
         </div>
       )}
 
-      {/* Franja de descarte: SOLO persistente + hover (spec toast-franja-descarte) */}
-      {hovered && (
+      {/* Rail de descarte: reservado siempre; el tinte solo con el puntero en
+          el rail y la X tenue en reposo (spec toast-franja-descarte). */}
+      {isPersistent && (
         <div
           style={{
             position: "absolute",
             right: 0,
             top: 0,
             bottom: 0,
-            width: METRICS.closeStripW,
-            background: COLORS.franjaTint,
+            width: METRICS.closeRailW,
+            background: hovered ? COLORS.franjaTint : "transparent",
+            opacity: hovered ? 1 : 0.55,
           }}
         >
           {/* X: stroke 2.5px, #f38ba8, centrada en la franja */}

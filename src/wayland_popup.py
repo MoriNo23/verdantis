@@ -277,7 +277,9 @@ def _extract_markup_url(text):
 
 
 _CARD_WIDTH = 360
+# 240 = columna de texto completa; el rail de cierre (28) vive dentro de ella.
 _TEXT_COL_W = _CARD_WIDTH - 14 - 80 - 12 - 14  # 240
+_CLOSE_RAIL_W = 28      # rail de descarte reservado siempre (WCAG 2.5.8 ≥ 24)
 
 # ── Métricas de layout — FUENTE ÚNICA ────────────────────────────────────
 _PAD = 14
@@ -600,6 +602,18 @@ def _append_sink(snapshot, x, y, w):
     snapshot.append_color(_rgba((0.0, 0.0, 0.0, 0.28)), _rect(x, y, w, 2))
 
 
+def _body_layout(cuerpo, fs, width, max_lines=0):
+    """Layout del body: bandera derecha, nunca justificado.
+
+    A 212 px el justificado abre ríos entre palabras y el texto deja de
+    escanearse; el cap de líneas se aplica con ellipsize en `_layout_for`.
+    """
+    return _layout_for(
+        cuerpo, Pango.FontDescription("Manrope " + str(fs)),
+        width=width, wrap=True, justify=False, markup=True,
+        max_lines=max_lines)
+
+
 def _texture(pixbuf):
     return Gdk.Texture.new_for_pixbuf(pixbuf)
 
@@ -635,7 +649,10 @@ class NotificationWidget(Gtk.Widget):
 
     _MAX_VISIBLE_LINES = 3
     _BTN_H = 28
-    _CLOSE_STRIP_W = 80
+    # Antes el hover reservaba 80 px de franja: la columna de texto pasaba de
+    # 240 a 160, el botón Copiar se corría y la card cambiaba de alto con el
+    # mouse encima. Ahora el rail es fijo y el hover solo lo tiñe.
+    _CLOSE_RAIL_W = _CLOSE_RAIL_W
 
     _BODY_FONT = "Manrope 11"
     _TITLE_FONT = "Manrope Bold 11"
@@ -694,6 +711,7 @@ class NotificationWidget(Gtk.Widget):
         self._pressed_copy = False
         self._hover_copy = False
         self._copy_text = None          # se fija después de sanitizar _cuerpo
+        self._copy_done = False         # confirmación "Copiado" transitoria
         self._cursor_hand = False
         self._last_pointer = None       # (x, y) local del último motion/enter
 
@@ -834,6 +852,7 @@ class NotificationWidget(Gtk.Widget):
 
     def _on_enter_xy(self, x, y):
         self._hover = True
+        self._hover_close = self._in_close_rect(x, y)
         self._last_pointer = (x, y)
         self._aplicar_cursor(x, y)
         self.queue_draw()
@@ -968,8 +987,8 @@ class NotificationWidget(Gtk.Widget):
             dentro = self._in_copy_rect(x, y)
             self._pressed_copy = False
             self.queue_draw()
-            if dentro and self._copy_text:
-                _copy_to_clipboard(self._copy_text)
+            if dentro and self._copy_text and _copy_to_clipboard(self._copy_text):
+                self._marcar_copiado()
             return True
         if self._pressed_close:
             dentro = self._in_close_rect(x, y)
@@ -998,7 +1017,7 @@ class NotificationWidget(Gtk.Widget):
             self._on_resize(self.desired_height())
 
     def _strip_w(self):
-        return self._CLOSE_STRIP_W if self._hover else 0
+        return self._CLOSE_RAIL_W
 
     def _eff_text_width(self):
         return _TEXT_COL_W - self._strip_w()
@@ -1141,6 +1160,22 @@ class NotificationWidget(Gtk.Widget):
                 s.pop()
                 s.restore()
 
+    _COPY_CONFIRM_MS = 1400
+
+    def _copy_label(self):
+        return "Copiado" if self._copy_done else "Copiar código"
+
+    def _marcar_copiado(self):
+        """Confirmación visual breve: el botón dice 'Copiado' 1.4 s."""
+        self._copy_done = True
+        self.queue_draw()
+        GLib.timeout_add(self._COPY_CONFIRM_MS, self._fin_copiado)
+
+    def _fin_copiado(self):
+        self._copy_done = False
+        self.queue_draw()
+        return False
+
     def _snapshot_copy(self, s, fr, lay):
         """Botón local 'Copiar código/texto' anclado bajo el body.
 
@@ -1174,16 +1209,11 @@ class NotificationWidget(Gtk.Widget):
         s.save()
         s.push_rounded_clip(_rounded(ax0, ay0, ax1 - ax0, _ACTIONS_ROW_H, 8))
         s.append_color(_rgba(_VIB_INSET), _rect(ax0, ay0, ax1 - ax0, 1))
-        s.pop()
-        s.restore()
-        s.save()
-        s.push_rounded_clip(_rounded(ax0, ay0, ax1 - ax0, _ACTIONS_ROW_H, 8))
-        s.append_color(_rgba(_VIB_INSET), _rect(ax0, ay0, ax1 - ax0, 1))
         if getattr(self, "_pressed_copy", False):
             _append_sink(s, ax0, ay0, ax1 - ax0)
         s.pop()
         s.restore()
-        label = "Copiar código"
+        label = self._copy_label()
         fs = max(10, round(12 * fr.fs))
         fdesc = Pango.FontDescription("Manrope " + str(fs))
         fdesc.set_weight(Pango.Weight.SEMIBOLD)
@@ -1286,9 +1316,8 @@ class NotificationWidget(Gtk.Widget):
                     width=fr.text_col_w, ellipsize=True)
                 _append_text(s, lay_title, fr.text_col_x, yy + 2, tcol)
                 yy += _TITLE_ROW_H
-            lay_body = _layout_for(
-                self._cuerpo, Pango.FontDescription("Manrope " + str(fr.body_fs)),
-                width=fr.text_col_w, wrap=True, justify=True, markup=True,
+            lay_body = _body_layout(
+                self._cuerpo, fr.body_fs, fr.text_col_w,
                 max_lines=(0 if lay.expanded else lay.cap))
             # Con max_lines>0 el ellipsize lo aplica _layout_for.
             _append_text(s, lay_body, fr.text_col_x, yy, bcol)
@@ -1320,31 +1349,27 @@ class NotificationWidget(Gtk.Widget):
         s.restore()
 
     def _snapshot_close_strip(self, s, fr):
-        self._close_rect = None
-        if not fr.strip_w:
-            return
-        sw = self._CLOSE_STRIP_W
+        sw = self._CLOSE_RAIL_W
         sx0 = fr.W - sw
         self._close_rect = (sx0, 0, fr.W, fr.H)
-        if self._pressed_close:
-            tint = (0.86, 0.15, 0.15, 0.45)
-        elif self._hover_close:
-            tint = (0.86, 0.15, 0.15, 0.32)
-        else:
-            tint = (0.86, 0.15, 0.15, 0.18)
-        s.save()
-        s.push_rounded_clip(_rounded(0, 0, fr.W, fr.H, fr.r))
-        s.append_color(_rgba(tint), _rect(sx0, 0, sw, fr.H))
-        s.pop()
-        s.restore()
+        if self._hover_close or self._pressed_close:
+            tint = ((0.86, 0.15, 0.15, 0.45) if self._pressed_close
+                    else (0.86, 0.15, 0.15, 0.32))
+            s.save()
+            s.push_rounded_clip(_rounded(0, 0, fr.W, fr.H, fr.r))
+            s.append_color(_rgba(tint), _rect(sx0, 0, sw, fr.H))
+            s.pop()
+            s.restore()
         mx, my = sx0 + sw / 2, fr.H / 2
-        inset = 12
+        inset = 9   # 18 px: con 12 la X rozaba la esquina redondeada
         path = Gsk.Path.parse(
             "M %d %d L %d %d M %d %d L %d %d" % (
                 mx - inset, my - inset, mx + inset, my + inset,
                 mx + inset, my - inset, mx - inset, my + inset))
+        alpha = (0.45 if self._pressed_close
+                 else 0.95 if self._hover_close else 0.30)
         s.append_stroke(path, Gsk.Stroke.new(2.5),
-                        _rgba(_hex_rgb("#f38ba8") + (0.95,)))
+                        _rgba(_hex_rgb("#f38ba8") + (alpha,)))
 
 
 class WaylandPopup:
@@ -1486,7 +1511,8 @@ class WaylandPopup:
         return True
 
     @staticmethod
-    def calc_card_height(app_name, cuerpo, image_path, text_width=_TEXT_COL_W,
+    def calc_card_height(app_name, cuerpo, image_path,
+                         text_width=_TEXT_COL_W - _CLOSE_RAIL_W,
                          expanded=False, hide_title=False, font_scale=1.0,
                          actions_count=0, has_copy=False):
         """Altura de la card — DELEGA en `_layout_metrics` (fuente única).

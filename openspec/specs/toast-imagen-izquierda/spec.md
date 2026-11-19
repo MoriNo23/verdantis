@@ -64,11 +64,11 @@ El slot de imagen izquierda SHALL permanecer completamente visible: la barra "Ve
 
 ### Requirement: Columna de texto única
 
-Todos los toasts SHALL usar la misma columna de texto de 240 px (360 − 14 − 80 − 12 − 14). La variante de columna ancha sin imagen desaparece, y las fuentes de título y cuerpo son las mismas para todos los toasts.
+Todos los toasts SHALL usar la misma columna de texto de 212 px (360 − 14 − 80 − 12 − 28 − 14), constante en reposo y hover: los 28 px del rail de descarte quedan reservados siempre (`toast-franja-descarte`). La variante de columna ancha sin imagen desaparece, y las fuentes de título y cuerpo son las mismas para todos los toasts.
 
 #### Scenario: Body al mismo ancho con placeholder que con imagen
 - **WHEN** se comparan un toast con imagen del tab y un toast con placeholder (app sin icono)
-- **THEN** el cuerpo de ambos wrappea a 240 px con las mismas fuentes
+- **THEN** el cuerpo de ambos wrappea a 212 px con las mismas fuentes
 
 #### Scenario: La barra "Ver más" aterriza igual
 - **WHEN** dos toasts con body largo (uno con imagen real, otro con placeholder) muestran su barra "Ver más"

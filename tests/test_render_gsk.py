@@ -36,8 +36,8 @@ def _widget(cuerpo="Tu código de verificación es 482193",
         _image_left_pb=None, _image_pb=None, _app_icon_pb=None,
         _action_icon_pbs={}, _action_rects=[], _close_rect=None,
         _copy_rect=None,
-        _copy_text=wp._find_code(cuerpo),
-        _pressed_copy=False, _hover_copy=False,
+        _copy_text=wp._find_code(cuerpo), _copy_done=False,
+        _pressed_copy=False, _hover_copy=False, _hover_close=False,
         _pressed_action_idx=None, _pressed_close=False, _hover_action_idx=None,
     )
     w.get_width = lambda: ancho

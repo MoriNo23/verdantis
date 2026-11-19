@@ -33,6 +33,23 @@ es peso visual sin uso y cambia el alto de casi todos los toasts.
 - **WHEN** el body no contiene un código de verificación
 - **THEN** el toast no muestra ninguna banda de copiar y su alto no la reserva
 
+### Requirement: Copiar confirma sin mover el layout
+
+Tras copiar, el botón SHALL mostrar "Copiado" durante 1.4 s y volver a "Copiar
+código", sin cambiar el ancho de la banda, el alto del card ni el wrap del body.
+La confirmación SHALL ser transitoria: si el toast se cierra antes, no queda
+ningún estado pendiente.
+
+#### Scenario: Click en Copiar
+
+- **WHEN** el usuario hace click en "Copiar código"
+- **THEN** el portapapeles recibe el código, el botón dice "Copiado" 1.4 s y el toast no se cierra ni se reacomoda
+
+#### Scenario: Vuelta al estado normal
+
+- **WHEN** pasan los 1.4 s de la confirmación
+- **THEN** el botón vuelve a decir "Copiar código"
+
 ### Requirement: Copiar sin foco (compatibilidad con keyboard-mode=NONE)
 
 El toast SHALL copiar con `wl-copy` en Wayland y `xclip`/`xsel` en X11, sin
