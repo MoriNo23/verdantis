@@ -10,7 +10,7 @@ import { UserIcon } from '@heroicons/react/24/outline'
  * Props for the Avatar component.
  * An image element with a fallback for representing the user.
  */
-export interface AvatarProps extends React.ComponentProps<typeof AvatarPrimitive.Root> {}
+export type AvatarProps = React.ComponentProps<typeof AvatarPrimitive.Root>
 
 function Avatar({ className, ...props }: AvatarProps) {
   return (
@@ -54,8 +54,7 @@ function AvatarImage({ className, ...props }: AvatarImageProps) {
  * Props for the AvatarFallback component.
  * Fallback content displayed when the avatar image fails to load.
  */
-export interface AvatarFallbackProps
-  extends React.ComponentProps<typeof AvatarPrimitive.Fallback> {}
+export type AvatarFallbackProps = React.ComponentProps<typeof AvatarPrimitive.Fallback>
 
 function AvatarFallback({ className, ...props }: AvatarFallbackProps) {
   return (

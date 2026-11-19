@@ -183,7 +183,7 @@ export default function Anatomia() {
           medidas globales
         </div>
         columnas 240 / 196 (franja en hover de persistente) · franja de
-        descarte 44 · barra "Ver más" 28 · fila de botones 28 ·
+        descarte 44 · barra &ldquo;Ver más&rdquo; 28 · fila de botones 28 ·
         radios card/barra 14 / 8 · hairline 1 · sombra dy 8 / blur 18 ·
         alpha mínimo 0.90 · avatar → imagen izquierda 80 · X stroke
         2.5 · cap de body 3 líneas

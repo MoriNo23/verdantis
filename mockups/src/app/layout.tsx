@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,21 +28,21 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             fontSize: 13,
           }}
         >
-          <a href="/" style={{ color: "#80cbc4", textDecoration: "none" }}>
+          <Link href="/" style={{ color: "#80cbc4", textDecoration: "none" }}>
             Variantes
-          </a>
-          <a
+          </Link>
+          <Link
             href="/anatomia"
             style={{ color: "#a6adc8", textDecoration: "none" }}
           >
             Anatomía
-          </a>
-          <a
+          </Link>
+          <Link
             href="/tokens"
             style={{ color: "#a6adc8", textDecoration: "none" }}
           >
             Tokens
-          </a>
+          </Link>
           <span
             style={{
               marginLeft: "auto",
@@ -50,7 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               fontSize: 11,
             }}
           >
-            verdantis 0.9.0 · post-0.9.0 specs
+            verdantis 0.18.0 · specs vigentes
           </span>
         </nav>
         {children}

@@ -100,12 +100,12 @@ export interface ResponsiveWidthProps {
  * Responsive dimension props interface
  * Combines size and width props
  */
-export interface ResponsiveDimensionProps extends ResponsiveSizeProps, ResponsiveWidthProps {}
+export type ResponsiveDimensionProps = ResponsiveSizeProps & ResponsiveWidthProps
 
 /**
  * Extract variant props from CVA variant function
  */
-export type ExtractVariantProps<T> = T extends (...args: any[]) => any ? VariantProps<T> : never
+export type ExtractVariantProps<T> = T extends (...args: never[]) => unknown ? VariantProps<T> : never
 
 /**
  * Merge two prop types, with the second type taking precedence
@@ -126,7 +126,7 @@ export type WithRequired<T, K extends keyof T> = T & Required<Pick<T, K>>
  * Polymorphic component props
  * Allows components to render as different elements via the 'as' prop
  */
-export type PolymorphicProps<E extends React.ElementType, P = {}> = P &
+export type PolymorphicProps<E extends React.ElementType, P = object> = P &
   Omit<React.ComponentPropsWithoutRef<E>, keyof P> & {
     as?: E
   }

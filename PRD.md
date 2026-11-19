@@ -203,8 +203,10 @@ aportar su percepción pero no es la fuente exclusiva.
   quedaba vía `shadcn > ts-morph > @ts-morph/common` se forzó a `^11.0.1` con
   `overrides` en `pnpm-workspace.yaml` (pnpm 11 ya no lee `pnpm.overrides` de
   `package.json`). `pnpm build` genera las 6 rutas estáticas OK. `pnpm lint`
-  sigue con 14 errores de estilo preexistentes en los mockups: no son del cambio
-  y AGENTS los declara sin validador.
+  también quedó limpio (0 errores, 0 warnings): se corrigieron los 14 errores
+  preexistentes (interfaces vacías → type aliases, `any` → `never`/`unknown`,
+  `{}` → `object`, `<a>` interno → `<Link>`, comillas escapadas, import muerto)
+  y el texto de versión del nav (0.9.0 → 0.18.0).
   (b) **Verificación visual real**: con la sesión desbloqueada (`loginctl
   unlock-session`, captura con `spectacle`, re-bloqueo inmediato) se confirmó en
   pantalla el rail rojo del critical, la escala 13/12/11 y el badge "+N

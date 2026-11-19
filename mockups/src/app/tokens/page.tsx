@@ -1,7 +1,7 @@
 /**
  * Tokens del toast — la paleta como swatches, con el hex del render real.
  */
-import { COLORS, FONTS, METRICS, VIBRANCY } from "@/lib/toast-tokens";
+import { FONTS, METRICS, VIBRANCY } from "@/lib/toast-tokens";
 
 const PALETTE: [string, string, string][] = [
   ["cardBg", "#1e1e2e", "referencia opaca (mezcla AA / stop inferior)"],
