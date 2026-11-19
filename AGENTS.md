@@ -31,7 +31,13 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
   card). `scripts/dbus_check.py` cubre el contrato D-Bus end-to-end (`Notify` →
   `NotificationClosed` razón 3, incluida una notificación todavía en cola).
   OJO al parsear ids: `grep -o '[0-9]*'` sobre `(uint32 1,)` devuelve `32`.
-- CI en `.github/workflows/ci.yml`: corre los 113 tests + `pip-audit` + `pip check`
+- CI en `.github/workflows/ci.yml`: corre los 137 tests + `pip-audit` + `pip check`
+  (el self-check `test_gsk_shot.py` se saltea sin display, así que en CI pasan 136).
+  El headless usaba `GDK_BACKEND=broadway` SIN servidor:GTK no inicializaba y los
+  tests de widget crasheaban. Ahora el workflow levanta `gtk4-broadwayd` (paquete
+  `libgtk-4-bin`) en `:5`; para reproducirlo en local, exportar
+  `BROADWAY_DISPLAY=:9 GDK_BACKEND=broadway` y correr `gtk4-broadwayd :9` aparte
+  (`broadwayd` suelto es el de GTK3 y no sirve).
   en Ubuntu con GTK4/gtk4-layer-shell. Sin `WAYLAND_DISPLAY`, conftest usa
   `GDK_BACKEND=broadway` (GTK4 no tiene `offscreen`).
 - GTK4: cargar `libgtk4-layer-shell` con `ctypes.CDLL(..., RTLD_GLOBAL)` ANTES
