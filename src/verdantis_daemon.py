@@ -11,17 +11,18 @@ ctypes.CDLL('libgtk4-layer-shell.so.0', mode=ctypes.RTLD_GLOBAL)
 
 import gi
 gi.require_version('Gtk', '4.0')
+gi.require_version('Gdk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
-from gi.repository import Gtk, Gtk4LayerShell, GLib, Gio
+from gi.repository import Gtk, Gdk, Gtk4LayerShell, GLib, Gio
 
-from app_info import APP_NAME, DEFAULT_ACCENT, VENDOR
+from app_info import APP_ID, APP_NAME, DEFAULT_ACCENT, VENDOR, accent_for
 from wayland_popup import (
     WaylandPopup,
     _extract_markup_url,
 )
 import history_store
 
-VERSION = "0.17.0"
+VERSION = "0.18.0"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -100,6 +101,71 @@ def _pick_action_key(actions):
         if actions[i] == "default":
             return "default"
     return None
+
+
+def _badge_text(n):
+    """Texto del badge de pendientes; vacío si no hay cola."""
+    if n <= 0:
+        return ""
+    return ("+%d notificación en espera" % n if n == 1
+            else "+%d notificaciones en espera" % n)
+
+
+class _PendingBadge:
+    """Franja compacta debajo de la pila con el número de notis en espera.
+
+    Layer-shell TOP, sin teclado (no le roba el foco a la app activa). Se crea
+    bajo demanda: el daemon vive sin ventanas mientras no hay notificaciones.
+    """
+
+    def __init__(self, corner, margin=16):
+        self._corner = corner
+        self._margin = margin
+        css = Gtk.CssProvider()
+        css.load_from_string(
+            ".verdantis-badge { background: rgba(30,30,44,0.94);"
+            " color: %s; font-weight: 600; font-size: 12px;"
+            " border-radius: 8px; padding: 5px 10px; margin: 0 16px; }"
+            % DEFAULT_ACCENT)
+        display = Gdk.Display.get_default()
+        if display is not None:
+            Gtk.StyleContext.add_provider_for_display(
+                display, css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.window = Gtk.Window()
+        self.window.set_decorated(False)
+        self.window.set_focusable(False)
+        Gtk4LayerShell.init_for_window(self.window)
+        Gtk4LayerShell.set_layer(self.window, Gtk4LayerShell.Layer.TOP)
+        Gtk4LayerShell.set_namespace(self.window, APP_ID)
+        Gtk4LayerShell.set_keyboard_mode(
+            self.window, Gtk4LayerShell.KeyboardMode.NONE)
+        for edge in corner.split("-"):
+            Gtk4LayerShell.set_anchor(
+                self.window, getattr(Gtk4LayerShell.Edge, edge.upper()), True)
+        self.label = Gtk.Label()
+        self.label.add_css_class("verdantis-badge")
+        self.window.set_child(self.label)
+
+    def update(self, count, offset):
+        if count <= 0:
+            self.window.set_visible(False)
+            return
+        self.label.set_label(_badge_text(count))
+        if "top" in self._corner:
+            Gtk4LayerShell.set_margin(
+                self.window, Gtk4LayerShell.Edge.TOP, self._margin + offset)
+        else:
+            Gtk4LayerShell.set_margin(
+                self.window, Gtk4LayerShell.Edge.BOTTOM, self._margin + offset)
+        self.window.present()
+
+
+def _duration_for(expire_timeout, is_resident, urgency):
+    """Duración efectiva en ms. Critical nunca expira (spec 1.2, elección
+    de producto: una alerta crítica no desaparece mientras no se la cierre)."""
+    if urgency == 2 or expire_timeout == 0 or is_resident:
+        return 0
+    return expire_timeout if expire_timeout > 0 else 6000
 
 
 def _is_pwa(desktop_entry):
@@ -243,6 +309,8 @@ class NotificationManager:
         self._active = []
         # Cola de entrada pendiente de mostrar: lista de (nid, kwargs, urgency).
         self._pending = []
+        # Badge de pendientes: se crea bajo demanda (nunca en headless tests).
+        self._badge = None
         # scheduler inyectable (tests sin GLib): callable(ms, cb) -> id.
         # None => GLib.timeout_add sobre el MainLoop del daemon.
         self._scheduler = scheduler
@@ -282,6 +350,7 @@ class NotificationManager:
         if self._pending and len(self._active) < self.MAX_VISIBLE:
             self._pump_scheduled = True
             self._schedule(self.STAGGER_MS, self._pump)
+        self._sync_badge()
         return False
 
     def _extract_url(self, hints):
@@ -414,11 +483,9 @@ class NotificationManager:
             # Confirmado en mako/dunst/KDE: 0 = sticky, -1 = default.
             # resident (hint): la app gestiona el cierre; el daemon NO auto-expira.
             # Igual que expire_timeout=0 (KDE notification.cpp:423).
-            "duration": (0 if expire_timeout == 0 or is_resident
-                         else expire_timeout if expire_timeout > 0
-                         else 6000),
+            "duration": _duration_for(expire_timeout, is_resident, urgency),
             "corner": self._corner,
-            "accent": hints.get("accent", DEFAULT_ACCENT),
+            "accent": accent_for(urgency, hints.get("accent")),
             "urgency": urgency,
             "app_name": app_name,
             # Path normalizado si el icono es un archivo existente; si no, el
@@ -468,6 +535,7 @@ class NotificationManager:
             self._dedup = {k: v for k, v in self._dedup.items()
                            if v[0] != old_nid}
         self._ensure_pump()
+        self._sync_badge()
 
         # Historial en disco para `verdantis replay` (best-effort: nunca puede
         # tumbar una notificación; transient no se archiva).
@@ -535,6 +603,23 @@ class NotificationManager:
             offset += p.stack_height() + self.STACK_GAP
         return offsets
 
+    def _stack_bottom(self):
+        """Offset donde termina la pila (para ubicar el badge debajo)."""
+        if not self._active:
+            return 0
+        return (sum(p.stack_height() for _, p in self._active)
+                + self.STACK_GAP * len(self._active))
+
+    def _sync_badge(self):
+        """Muestra/oculta el badge de pendientes según el estado de la cola."""
+        if self._badge is None:
+            try:
+                self._badge = _PendingBadge(self._corner)
+            except Exception:
+                return   # headless / sin layer-shell: el badge es cosmético
+        self._badge.update(len(self._pending),
+                           self._stack_bottom() + self.STACK_GAP)
+
     def _reflow_stack(self):
         """Re-flowea TODA la pila con los offsets de `_stack_offsets`.
 
@@ -592,6 +677,7 @@ class NotificationManager:
             nid2, qk2, _ = self._pending.pop(0)
             self._show_popup(nid2, qk2)
             self._ensure_pump()
+            self._sync_badge()
 
     def _close_id(self, nid, source="dbus-close"):
         """Cierre explícito por id. `source` es la fuente simbólica del
@@ -617,6 +703,7 @@ class NotificationManager:
         self._dedup = {k: v for k, v in self._dedup.items() if v[0] != nid}
         self._reflow_stack()
         self._drenar_cola()
+        self._sync_badge()
         if en_cola:
             self._emit_closed(nid, source)
 
@@ -689,6 +776,7 @@ class NotificationManager:
         self._dedup = {k: v for k, v in self._dedup.items() if v[0] != nid}
         self._reflow_stack()
         self._drenar_cola()
+        self._sync_badge()
         self._emit_closed(nid, source)
 
     def _emit_closed(self, nid, source):

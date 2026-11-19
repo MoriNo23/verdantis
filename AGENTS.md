@@ -71,6 +71,10 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
   = 13/12/11; `calc_card_height` deriva el alto del body de `_BODY_FS`, no de una
   constante propia (`toast-tipografia`). El CSS del centro vive en
   `notification_center._css()` (foco con `DEFAULT_ACCENT`, no azul Adwaita).
+  Urgencia: `critical` (`urgency=2`) no expira — `_duration_for` en el daemon —
+  y su acento propio (`app_info.accent_for`, `#ef9a9a`) dibuja un rail GSK en
+  `NotificationWidget`. La cola pendiente se muestra en `_PendingBadge`
+  (layer-shell, sin foco), sincronizada por `_sync_badge` en el daemon.
 
 ## Build & test
 

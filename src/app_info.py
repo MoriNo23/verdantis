@@ -14,3 +14,12 @@ VENDOR = "MoriNo23"      # vendor del server (spec: quien lo hace, no el nombre)
 # one-shot y los defaults de ambos backends. Antes el CLI decía #89b4fa y el
 # producto real usaba #80cbc4 — un acento partido en dos.
 DEFAULT_ACCENT = "#80cbc4"
+
+# Urgency 2 (critical, spec 1.2): no expira y se diferencia en la pila con un
+# rail de este color. Rojo suave de la misma paleta que el acento de identidad.
+CRITICAL_ACCENT = "#ef9a9a"
+
+
+def accent_for(urgency, requested=None):
+    """El acento de un critical no lo puede sobrescribir la app que lo envía."""
+    return CRITICAL_ACCENT if urgency == 2 else (requested or DEFAULT_ACCENT)

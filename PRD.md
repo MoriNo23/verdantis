@@ -187,6 +187,14 @@ aportar su percepción pero no es la fuente exclusiva.
   en negrita y anillo de foco del botón "Limpiar" en `#80cbc4` (antes azul
   Adwaita), conservando accesibilidad. La golden offscreen se regeneró con la
   nueva escala.
+- Hecho (0.18.0): comportamiento que faltaba del applet de KDE. Un `critical`
+  (`urgency=2`) **no expira** aunque traiga `expire_timeout` (antes duraba 1.5x y
+  desaparecía) y lleva un rail de acento `#ef9a9a` en el borde izquierdo, que la
+  app no puede sobrescribir con `hints["accent"]`. Badge layer-shell debajo de la
+  pila con "+N notificaciones en espera": hace visible una cola que antes era
+  invisible, sin tocar el FIFO ni la capacidad de 2. El click del body quedó como
+  estaba (freedesktop 1.2: `default` si el sender lo proveyó, si no `xdg-open`):
+  no se cae a la primera acción para no disparar una acción destructiva invisible.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.

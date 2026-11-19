@@ -658,7 +658,7 @@ class NotificationWidget(Gtk.Widget):
                  accent, image_data_raw=None, on_click=None, on_resize=None,
                  on_close=None, app_label=None, hide_title=False,
                  persistent=False, actions=None, action_icons=False,
-                 buttons_actionable=True):
+                 buttons_actionable=True, urgency=1):
         super().__init__()
         self.set_name("verdantis-toast")
 
@@ -720,6 +720,7 @@ class NotificationWidget(Gtk.Widget):
         # la app, no un "copiar todo" que aparecería en casi todos los toasts.
         self._copy_text = _find_code(self._cuerpo)
         self._accent_rgb = _hex_rgb(accent)
+        self._urgency = urgency
         self._card_bg = _hex_rgb(_CARD_BG_HEX)
 
         self._left_title = _hex_rgb(_TXT_TITLE_L)
@@ -1064,6 +1065,12 @@ class NotificationWidget(Gtk.Widget):
             _rect(0, 0, fr.W, fr.H),
             Graphene.Point().init(0, 0), Graphene.Point().init(0, fr.H),
             [_stop(0.0, _VIB_TOP), _stop(1.0, _VIB_BOTTOM)])
+        # Critical: rail de acento a la izquierda. No depende del wipe, que en
+        # una notificación persistente (duration=0) no se dibuja.
+        if getattr(self, "_urgency", 1) == 2:
+            acc = self._accent_rgb
+            s.append_color(_rgba((acc[0], acc[1], acc[2], 0.95)),
+                           _rect(1, 1, 3, fr.H - 2))
         # Wipe: tinte sutil del acento en la parte ya transcurrida.
         if fr.wx < fr.W:
             bg = self._card_bg
@@ -1466,6 +1473,7 @@ class WaylandPopup:
             persistent=(self.duration == 0),
             actions=self.actions, action_icons=self.action_icons,
             buttons_actionable=self._buttons_actionable,
+            urgency=self.urgency,
         )
         h = self._card.desired_height()
         self._card.set_size_request(_CARD_WIDTH, h)

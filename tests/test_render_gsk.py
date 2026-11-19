@@ -18,13 +18,14 @@ import wayland_popup as wp
 
 
 def _widget(cuerpo="Tu código de verificación es 482193",
-            acciones=None, ancho=360, alto=200):
+            acciones=None, ancho=360, alto=200, urgencia=1,
+            acento="#80cbc4"):
     """Widget mínimo con los atributos que do_snapshot consulta."""
     w = wp.NotificationWidget.__new__(wp.NotificationWidget)
     w.__dict__.update(
         _cuerpo=cuerpo, _app_name="Brave", _hide_title=False, _expanded=False,
         _actions=acciones or [], _fraction=0.6, _hover=False,
-        _accent_rgb=wp._hex_rgb("#80cbc4"),
+        _accent_rgb=wp._hex_rgb(acento), _urgency=urgencia,
         _card_bg=wp._hex_rgb(wp._CARD_BG_HEX),
         _left_title=wp._hex_rgb(wp._TXT_TITLE_L),
         _left_body=wp._hex_rgb(wp._TXT_BODY_L),
@@ -45,9 +46,9 @@ def _widget(cuerpo="Tu código de verificación es 482193",
     return w
 
 
-def _nodos(cuerpo, acciones=None):
+def _nodos(cuerpo, acciones=None, urgencia=1, acento="#80cbc4"):
     """Serializa el render node del widget y devuelve el texto de los nodos."""
-    w = _widget(cuerpo, acciones)
+    w = _widget(cuerpo, acciones, urgencia=urgencia, acento=acento)
     snap = Gtk.Snapshot.new()
     w.do_snapshot(snap)
     node = snap.to_node()
