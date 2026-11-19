@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (190 tests, ~9 s; 188 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
+| Regresión global | suite completa verde (191 tests, ~9 s; 189 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
 
 ## 8. Dependencias y plataforma
 
@@ -277,6 +277,13 @@ aportar su percepción pero no es la fuente exclusiva.
   Ubuntu) y `toast_helpers` llamaba `_resample` sin importarlo desde que se
   dividió el módulo — un NameError silencioso tras un `except`. Tests
   autocontenidos con un `.desktop` temporal + import explícito. 190 tests.
+- Hecho (0.19.0): identidad visual propia. El estudio HTML del usuario se
+  exportó a PNG transparente (marca 512 px, squircle, escalas 16–128 y
+  wordmark 1600x520) y reemplaza la "V" dibujada a mano en la bandeja; el
+  icono entra al tema hicolor desde `install.sh`. README presentable con
+  banner, badges de CI/versión/Python/GTK/licencia, NOTE de plataforma,
+  sección de brand assets y enlaces a specs. PRODUCT describe el isotipo.
+  Corregido el primer export (dibujado al doble con setTransform y recortado).
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Hecho (0.18.2): `image-data` sin path de archivo ya se archiva como PNG en el
   directorio de iconos (`history_store.write_icon`), con el mismo `avatar_file`

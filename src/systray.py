@@ -13,7 +13,9 @@ import struct
 
 import gi
 gi.require_version("Gio", "2.0")
-from gi.repository import Gio, GLib
+gi.require_version("Gdk", "4.0")
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import Gio, Gdk, GdkPixbuf, GLib
 
 import notification_center as nc
 
@@ -77,35 +79,23 @@ _MENU_XML = """<node>
 
 
 def _pixmap_verdantis(size=48):
-    """Cuadrado redondeado con la "V" de Verdantis, ARGB32 (orden de KDE)."""
+    """El isotipo oficial (assets/verdantis-icon.png) en ARGB32 para SNI.
+
+    Antes se dibujaba a mano una "V" con cairo; hoy la marca es el pulpo
+    esmeralda con marco de notificación, campana y pistas de circuito.
+    """
     import cairo
+    ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "..", "assets", "verdantis-icon.png")
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
     cr = cairo.Context(surf)
-    radio = size * 0.22
-    x, y, w, h = 0.5, 0.5, size - 1, size - 1
-    cr.move_to(x + radio, y)
-    cr.arc(x + w - radio, y + radio, radio, -1.5708, 0)
-    cr.arc(x + w - radio, y + h - radio, radio, 0, 1.5708)
-    cr.arc(x + radio, y + h - radio, radio, 1.5708, 3.1416)
-    cr.arc(x + radio, y + radio, radio, 3.1416, 4.7124)
-    cr.close_path()
-    cr.set_source_rgba(0.235, 0.239, 0.290, 1.0)       # card
-    cr.fill_preserve()
-    cr.set_source_rgba(0.502, 0.796, 0.769, 1.0)       # acento
-    cr.set_line_width(max(1.0, size / 24))
-    cr.stroke()
-    cr.select_font_face("Manrope", 0, 1)
-    cr.set_font_size(size * 0.62)
-    ext = cr.text_extents("V")
-    cr.move_to((size - ext.width) / 2 - ext.x_bearing,
-               (size - ext.height) / 2 - ext.y_bearing)
-    cr.set_source_rgba(0.902, 0.914, 0.949, 1.0)
-    cr.show_text("V")
+    pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(ruta, size, size, True)
+    Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
+    cr.paint()
     surf.flush()
     datos = bytes(surf.get_data())
-    # El systray de KDE (KStatusNotifierItem) entrega ARGB32 nativo.
+    # KStatusNotifierItem espera ARGB32 nativo (cairo lo entrega en ese orden).
     return [(size, size, list(datos))]
-
 
 class TrayIcon:
     """Exporta el ítem y el menú; `start()` es idempotente."""

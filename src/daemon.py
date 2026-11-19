@@ -28,7 +28,7 @@ from toast_window import (
 )
 import history_store
 
-VERSION = "0.18.12"
+VERSION = "0.19.0"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.

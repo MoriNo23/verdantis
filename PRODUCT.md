@@ -19,6 +19,8 @@ Ser el dueño de `org.freedesktop.Notifications` en la sesión Wayland/KDE6 y di
 
 **Con carácter visible** (decisión explícita del usuario): los toasts deben reconocerse a primera vista como "de Verdantis" — acento propio, medidas y ritmo identificables — sin caer en decoración. Voz: directa, técnica, seca; sin humor ni relleno. La identidad vive en el detalle gráfico (acento, franja de tiempo, slot de imagen de 80 px, wipe), no en adornos.
 
+El isotipo oficial (marco de notificación + campana + píldoras de cola + pistas de circuito + silueta de pulpo) se exporta en esmeralda desde curvas Bézier a `assets/`; el ícono de bandeja y el hint del tema usan esa marca, no una letra. El esmeralda pertenece a la identidad gráfica; el acento del toast sigue siendo `#80cbc4` para no romper el contraste AA sobre la card translúcida.
+
 ## Anti-references
 
 - **El look de Plasma/KDE por defecto**: no clonar el toast de plasmashell — Verdantis existe justamente para escapar de ese look.

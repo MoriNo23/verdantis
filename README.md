@@ -1,6 +1,15 @@
-<p align="center">
-  <img src="assets/verdantis-logo.png" width="200" alt="Verdantis logo">
-</p>
+<div align="center">
+  <img src="assets/verdantis-banner-logo.png" alt="Verdantis — Wayland notification daemon" width="640" />
+  <p><strong>Own the notifications. Keep the desktop yours.</strong></p>
+  <p>
+    <a href="https://github.com/MoriNo23/verdantis/actions/workflows/ci.yml"><img src="https://github.com/MoriNo23/verdantis/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+    <img src="https://img.shields.io/badge/version-0.19.0-blue" alt="version 0.19.0" />
+    <img src="https://img.shields.io/badge/Python-3.13-blue" alt="Python 3.13" />
+    <img src="https://img.shields.io/badge/GTK-4%20%2B%20GSK-orange" alt="GTK4 + GSK" />
+    <img src="https://img.shields.io/badge/platform-Wayland%20%7C%20X11-lightgrey" alt="Wayland / X11" />
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license" /></a>
+  </p>
+</div>
 
 # Verdantis
 
@@ -9,6 +18,11 @@ Desktop notification daemon for **Wayland (KDE Plasma 6)**. It owns
 with GTK4 + GSK + gtk4-layer-shell — no cairo in the render pipeline, no Plasma
 dependency. A replacement for mako/deadd. The stack is a queue, not a parade:
 notifications show in arrival order and nothing covers anything.
+
+> [!NOTE]
+> Stable daily driver: KDE Plasma 6 on Wayland. Other `wlr-layer-shell`
+> compositors (Sway, Hyprland) work too; GNOME/Mutter is not supported.
+> Protocol contract: [freedesktop.org Notifications 1.2](https://specifications.freedesktop.org/notification-spec/1.2.0/).
 
 - **Strict FIFO stack** — max 2 toasts on screen, a queue of up to 20
   behind; `urgency` changes duration and style, never position.
@@ -19,8 +33,9 @@ notifications show in arrival order and nothing covers anything.
   pressed. Simulated with alpha + gradient (≥ 0.90): GSK does not expose a real
   backdrop blur on a layer-shell, so no pixel match with Notification Center is
   promised.
-- **Own look** — accent color, an 80 px image slot on every toast, a time
-  wipe, and hover pauses expiry.
+- **Own look** — emerald vector mark (notification frame, bell and circuit
+  traces), an 80 px image slot on every toast, a time wipe, and hover pauses
+  expiry. The app line takes its tint from the app icon.
 - **History + replay** — every notification is archived to disk and can be
   re-shown with the real render through the CLI (`list` / `replay` /
   `clear`).
@@ -83,7 +98,7 @@ Apps send notifications over DBus and Verdantis draws them:
 systemctl --user status verdantis.service
 busctl --user call org.freedesktop.Notifications \
   /org/freedesktop/Notifications org.freedesktop.Notifications GetServerInformation
-# => ssss "Verdantis" "MoriNo23" "0.18.12" "1.2"
+# => ssss "Verdantis" "MoriNo23" "0.19.0" "1.2"
 ```
 
 ### Stack rules
@@ -199,9 +214,28 @@ src/
   notification_center.py  notification center (read-only cards, clear)
   history_store.py        JSONL store + image byte copies (best-effort)
   app_info.py             single source of identity (name, id, vendor, accent)
+assets/                vector-born PNG brand: 16–512 px icon, squircle app icon, 1600x520 wordmark
 tests/                 D-Bus contract, audit, history/replay + sensitivity metatests
 mockups/               Next.js visual docs of the toast (may diverge)
 ```
+
+## Brand assets
+
+The identity is drawn from mathematical Bézier curves (notification frame,
+bell, D-Bus queue pills, circuit traces and the octopus silhouette), exported
+to transparent PNG at several sizes:
+
+| Asset | Use |
+|---|---|
+| `assets/verdantis-icon.png` | 512 px mark — README, systray source, hicolor installs |
+| `assets/verdantis-icon-squircle.png` | 512 px mark with GNOME-style squircle container |
+| `assets/verdantis-icon-{16,32,64,128}.png` | system tray / panel / dock / app grid scales |
+| `assets/verdantis-banner-logo.png` | 1600×520 wordmark used in the header above |
+
+The systray `StatusNotifierItem` ships the real mark as its `IconPixmap`
+(`systray._pixmap_verdantis`), so it no longer draws a placeholder letter.
+On install, the icon is also copied to `hicolor/*/apps/verdantis.png` so themed
+icon lookups can resolve `verdantis` by name.
 
 ## Mockups
 

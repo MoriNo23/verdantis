@@ -11,6 +11,14 @@ python3 -m venv "$SCRIPT_DIR/.venv"
 source "$SCRIPT_DIR/.venv/bin/activate"
 python -m pip install -r "$SCRIPT_DIR/requirements.txt"
 
+echo "==> Icono del tema (hicolor)..."
+for size in 16 32 64 128 256; do
+  sudo install -Dm644 "$SCRIPT_DIR/assets/verdantis-icon.png" \
+    "/usr/share/icons/hicolor/${size}x${size}/apps/verdantis.png"
+done
+sudo install -Dm644 "$SCRIPT_DIR/assets/verdantis-icon.png" \
+  /usr/share/icons/hicolor/scalable/apps/verdantis.png
+
 echo "==> Servicio systemd (user) para daemon DBus..."
 mkdir -p "$HOME/.config/systemd/user/"
 # El template lleva @DIR@: el servicio queda atado al path REAL del repo,
