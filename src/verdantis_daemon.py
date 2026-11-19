@@ -781,6 +781,8 @@ class NotificationDaemon:
     def _replay_record(self, record):
         # Misma ruta que `verdantis replay`: los botones se dibujan pero no
         # ejecutan (fidelidad visual, no re-disparo de la app original).
+        # shortcut: es un popup fuera de la pila del daemon, puede taparse con
+        # un toast activo; enhebrarlo en NotificationManager si molesta.
         from replay import mostrar_toast, record_a_kwargs
         mostrar_toast(record_a_kwargs(record, duration=6000))
 
