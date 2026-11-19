@@ -51,7 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               fontSize: 11,
             }}
           >
-            verdantis 0.18.4 · specs vigentes
+            verdantis 0.18.5 · specs vigentes
           </span>
         </nav>
         {children}

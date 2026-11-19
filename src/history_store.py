@@ -21,6 +21,7 @@ Reglas duras:
 import json
 import os
 import shutil
+import uuid
 
 MAX_ENTRIES = 1000
 MAX_ICON_BYTES = 256 * 1024  # 256KB por icono (tmpfs de /tmp es 1.9G)
@@ -93,7 +94,7 @@ def copy_icon(nid, src, kind):
             return None
         os.makedirs(_icon_dir(), exist_ok=True)
         ext = os.path.splitext(src)[1].lower() or ".png"
-        fname = "n{}_{}{}".format(nid, kind, ext)
+        fname = "n%d_%s_%s%s" % (nid, kind, uuid.uuid4().hex[:8], ext)
         shutil.copyfile(src, os.path.join(_icon_dir(), fname))
         return fname
     except Exception:
@@ -106,7 +107,7 @@ def write_icon(nid, data, kind):
         if not data or len(data) > MAX_ICON_BYTES:
             return None
         os.makedirs(_icon_dir(), exist_ok=True)
-        fname = "n%d_%s.png" % (nid, kind)
+        fname = "n%d_%s_%s.png" % (nid, kind, uuid.uuid4().hex[:8])
         with open(os.path.join(_icon_dir(), fname), "wb") as fh:
             fh.write(data)
         return fname
@@ -157,7 +158,7 @@ def _rotate():
             rec = json.loads(line)
         except ValueError:
             continue
-        for key in ("avatar_file", "banner_file", "image_file"):
+        for key in ("avatar_file", "banner_file"):
             fname = rec.get(key)
             if fname:
                 dropped.append(fname)

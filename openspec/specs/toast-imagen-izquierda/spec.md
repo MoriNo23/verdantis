@@ -62,6 +62,25 @@ El slot de imagen izquierda SHALL permanecer completamente visible: la barra "Ve
 - **WHEN** el texto es más corto que el slot de 80 px
 - **THEN** el slot se acota a la fila y no se desplaza hacia arriba ni hacia abajo
 
+### Requirement: El sujeto se centra y llena el círculo
+
+Antes de escalar con `cover`, el slot SHALL recortar el padding transparente
+de la imagen (`_recortar_transparente`). Así el sujeto —no el lienzo vacío—
+queda centrado y ocupa el círculo de 80 px, sin el espacio mal centrado que
+dejaban los iconos de tab con mucho borde transparente. El banner grande SHALL
+usar el mismo criterio con `_cover_pixbuf`: recortar padding, escalar con
+`cover` al rectángulo 260×140 y recortar por el centro, sin estirar.
+
+#### Scenario: Icono con padding transparente
+
+- **WHEN** una imagen de 100×100 tiene un sujeto de 20×20 desplazado a una esquina
+- **THEN** el círculo de 80 px muestra el sujeto centrado y ocupando el hueco
+
+#### Scenario: Banner no cuadrado
+
+- **WHEN** el banner mide 300×100 y el slot 260×140
+- **THEN** se recorta por el centro y se escala sin deformar, llenando el slot
+
 ### Requirement: Columna de texto única
 
 Todos los toasts SHALL usar la misma columna de texto de 212 px (360 − 14 − 80 − 12 − 28 − 14), constante en reposo y hover: los 28 px del rail de descarte quedan reservados siempre (`toast-franja-descarte`). La variante de columna ancha sin imagen desaparece, y las fuentes de título y cuerpo son las mismas para todos los toasts.

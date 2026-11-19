@@ -19,7 +19,7 @@ _IMG = (2, 2, 8, True, 8, 4, bytes([0x80, 0xCB, 0xC4, 0xFF] * 4))
 
 def test_write_icon_guarda_los_bytes(datos):
     fname = history_store.write_icon(7, b"\x89PNG\r\nfalso", "avatar")
-    assert fname == "n7_avatar.png"
+    assert fname.startswith("n7_avatar_")
     assert Path(history_store.icon_path(fname)).read_bytes() == b"\x89PNG\r\nfalso"
 
 

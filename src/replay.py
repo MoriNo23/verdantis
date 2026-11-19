@@ -98,6 +98,8 @@ def record_a_kwargs(record, duration=None):
         d = duration
     if not isinstance(d, int):
         d = _DURATION_DEFAULT
+    if urgency == 2 and duration is None:
+        d = 0
 
     url = record.get("url") or ""
     # Import perezoso: la detección de navegador y la defensa de URLs locales

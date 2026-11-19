@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (158 tests, ~9 s; 156 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
+| Regresión global | suite completa verde (169 tests, ~9 s; 167 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
 
 ## 8. Dependencias y plataforma
 
@@ -231,6 +231,15 @@ aportar su percepción pero no es la fuente exclusiva.
   flood rojo del rail (32/45 %) y el salto 30 %→95 % de la X. Hit-rect sigue
   siendo el rail completo de 28 px, cero reflow. Spec `toast-franja-descarte`
   reescrita + 4 tests TDD; golden offscreen regenerada.
+- Hecho (0.18.5): siete hallazgos cerrados. Los iconos del
+  historial llevan token único (antes dos reinicios con el mismo id
+  sobrescribían el PNG de un registro viejo); los hints binarios ya no se
+  guardan como texto en JSONL (16 KB de image-data generaban ~57 KB); URL
+  locales en decimal/hex se detectan antes de `xdg-open`; un `prepare()`
+  fallido emite `NotificationClosed`; el replay de un critical es persistente;
+  CI gatea `pnpm audit` + build de mockups; y las imágenes se recortan antes
+  de `cover` para centrar el sujeto, también en el banner. Fallback X11
+  ejecutado en vivo: se mapea y posiciona correctamente (360x108 en +990+16).
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Hecho (0.18.2): `image-data` sin path de archivo ya se archiva como PNG en el
   directorio de iconos (`history_store.write_icon`), con el mismo `avatar_file`

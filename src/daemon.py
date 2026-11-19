@@ -1,8 +1,10 @@
 """Dueño de `org.freedesktop.Notifications`: cola FIFO, señales, bandeja y centro."""
 
 import ctypes
+import ipaddress
 import json
 import os
+import socket
 import subprocess
 import time
 os.environ.setdefault('GDK_BACKEND', 'wayland')
@@ -25,7 +27,7 @@ from toast_window import (
 )
 import history_store
 
-VERSION = "0.18.4"
+VERSION = "0.18.5"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -267,6 +269,55 @@ NOTIFICATIONS_XML = '''
 '''
 
 
+def _ip_local(host):
+    """Detecta loopback/privada aunque venga en decimal, hex o IPv6 mapeada."""
+    h = host.lower().split("%", 1)[0]
+    if h in ("localhost", "") or h.endswith(".localhost"):
+        return True
+    candidatos = [h]
+    try:
+        candidatos.append(str(ipaddress.IPv4Address(int(h, 16)))) if h.startswith("0x") else None
+        if h.isdigit():
+            candidatos.append(str(ipaddress.IPv4Address(int(h))))
+    except (ValueError, OverflowError):
+        pass
+    for c in list(candidatos):
+        try:
+            candidatos.append(str(ipaddress.ip_address(c)))
+        except ValueError:
+            pass
+    # inet_aton acepta formas cortas (127.1) y octales (0177.0.0.1).
+    try:
+        candidatos.append(str(ipaddress.IPv4Address(socket.inet_aton(h))))
+    except (OSError, ValueError):
+        pass
+    for c in candidatos:
+        try:
+            ip = ipaddress.ip_address(c)
+        except ValueError:
+            continue
+        mapped = getattr(ip, "ipv4_mapped", None)
+        if (ip.is_loopback or ip.is_private or ip.is_link_local
+                or ip.is_unspecified
+                or (mapped and (mapped.is_loopback or mapped.is_private))):
+            return True
+    return False
+
+
+def _hint_para_historial(valor):
+    """Solo escalares: un GLib.Variant binario no se guarda como texto."""
+    if isinstance(valor, (str, int, float, bool)):
+        return valor
+    if isinstance(valor, GLib.Variant):
+        try:
+            plano = valor.unpack()
+            if isinstance(plano, (str, int, float, bool)):
+                return plano
+        except Exception:
+            pass
+    return None
+
+
 def _is_local_url(url):
     """True si la URL apunta a la maquina local o red privada (RFC1918).
 
@@ -283,6 +334,8 @@ def _is_local_url(url):
     else:
         host = hostport.split(":", 1)[0]
     host = host.lower()
+    if _ip_local(host):
+        return True
     if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
         return True
     if host.startswith("127."):
@@ -606,8 +659,8 @@ class NotificationManager:
                 "summary": summary,
                 "body": body,
                 "actions": list(actions) if actions else [],
-                "hints": {k: (v if isinstance(v, (str, int, float, bool)) else str(v))
-                          for k, v in hints.items()},
+                "hints": {k: plano for k, v in hints.items()
+                              if (plano := _hint_para_historial(v)) is not None},
                 "expire_timeout": expire_timeout,
                 "sender": sender,
                 "url": url or "",
@@ -695,6 +748,7 @@ class NotificationManager:
             self._active = [(aid, p) for aid, p in self._active if aid != nid]
             self._notifications.pop(nid, None)
             self._dedup = {k: v for k, v in self._dedup.items() if v[0] != nid}
+            self._emit_closed(nid, "dbus-close")
             return
         self._reflow_stack()
 

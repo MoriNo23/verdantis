@@ -275,10 +275,50 @@ def _count_body_lines(cuerpo, width, font_size=13):
     return _body_metrics(cuerpo, width, font_size)[0]
 
 
+def _recortar_transparente(pixbuf):
+    """Quita el padding transparente para que `cover` centre el SUJETO.
+
+    Los iconos de tab y los SVG suelen traer mucho espacio vacío: sin esto el
+    círculo de 80 px muestra la imagen chica y descentrada dentro del hueco.
+    """
+    if not pixbuf.get_has_alpha():
+        return pixbuf
+    w, h = pixbuf.get_width(), pixbuf.get_height()
+    px, canales, fila = pixbuf.get_pixels(), pixbuf.get_n_channels(), pixbuf.get_rowstride()
+    minx, miny, maxx, maxy = w, h, -1, -1
+    for y in range(h):
+        base = y * fila
+        for x in range(w):
+            if px[base + x * canales + canales - 1]:
+                minx, maxx = min(minx, x), max(maxx, x)
+                miny, maxy = min(miny, y), max(maxy, y)
+    if maxx < minx:
+        return None
+    if minx == 0 and miny == 0 and maxx == w - 1 and maxy == h - 1:
+        return pixbuf
+    return GdkPixbuf.Pixbuf.new_subpixbuf(
+        pixbuf, minx, miny, maxx - minx + 1, maxy - miny + 1)
+
+
+def _cover_pixbuf(pixbuf, w, h):
+    """Escala con `cover` al rectángulo w×h y recorta por el centro."""
+    util = _recortar_transparente(pixbuf)
+    src = util if util is not None else pixbuf
+    sw, sh = src.get_width(), src.get_height()
+    if sw <= 0 or sh <= 0:
+        return src
+    escala = max(w / sw, h / sh)
+    nw, nh = max(w, round(sw * escala)), max(h, round(sh * escala))
+    escalado = src.scale_simple(nw, nh, GdkPixbuf.InterpType.HYPER)
+    return GdkPixbuf.Pixbuf.new_subpixbuf(
+        escalado, (nw - w) // 2, (nh - h) // 2, w, h)
+
+
 def _make_circular(pixbuf, size):
     """Pixbuf circular (se dibuja luego como Gdk.Texture con clip redondeado)."""
     import cairo as _c
-    scaled = _resample(pixbuf, size)
+    util = _recortar_transparente(pixbuf)
+    scaled = _resample(util if util is not None else pixbuf, size)
     surface = _c.ImageSurface(_c.FORMAT_ARGB32, size, size)
     ctx = _c.Context(surface)
     ctx.arc(size / 2, size / 2, size / 2, 0, 2 * 3.14159)
@@ -423,4 +463,4 @@ def _layout_for(text, font_desc, width=None, ellipsize=False, wrap=False,
     return lay
 
 
-__all__ = ['_SHADOW_PAD', 'close_style', 'layer_margins', 'surface_size', '_ACTIONS_GAP', '_ACTIONS_ROW_H', '_APP_FS', '_APP_ICON_BOX', '_APP_ROW_H', '_BODY_FS', '_BTN_GAP', '_CARD_BG_HEX', '_CARD_RADIUS', '_CARD_WIDTH', '_CLOSE_RAIL_W', '_FONT_OPTIONS', '_Frame', '_IMAGE_LEFT_GAP', '_IMAGE_LEFT_W', '_Layout', '_MIN_ALPHA', '_PAD', '_PANGO_TAGS', '_PLACEHOLDER_BG', '_PLACEHOLDER_FG', '_ROW_MIN_H', '_TEXT_COL_W', '_TITLE_FS', '_TITLE_ROW_H', '_TXT_APP_L', '_TXT_APP_R', '_TXT_BANDA_R', '_TXT_BODY_L', '_TXT_BODY_R', '_TXT_TITLE_L', '_TXT_TITLE_R', '_VIB_BORDER', '_VIB_BOTTOM', '_VIB_BTN_ALPHA', '_VIB_BTN_HOVER', '_VIB_BTN_PRESSED', '_VIB_INSET', '_VIB_SHADOW', '_VIB_SHADOW_BLUR', '_VIB_SHADOW_DY', '_VIB_TOP', '_append_sink', '_append_text', '_body_layout', '_body_metrics', '_count_body_lines', '_create_layout', '_has_pango_markup', '_hex_rgb', '_layout_for', '_layout_metrics', '_make_circular', '_make_placeholder_icon', '_parse_actions', '_rect', '_resample', '_rgba', '_round_fill', '_rounded', '_rows_above_body', '_sanitize_pango_markup', '_stop', '_texture', 'rrect']
+__all__ = ['_SHADOW_PAD', '_cover_pixbuf', 'close_style', 'layer_margins', 'surface_size', '_ACTIONS_GAP', '_ACTIONS_ROW_H', '_APP_FS', '_APP_ICON_BOX', '_APP_ROW_H', '_BODY_FS', '_BTN_GAP', '_CARD_BG_HEX', '_CARD_RADIUS', '_CARD_WIDTH', '_CLOSE_RAIL_W', '_FONT_OPTIONS', '_Frame', '_IMAGE_LEFT_GAP', '_IMAGE_LEFT_W', '_Layout', '_MIN_ALPHA', '_PAD', '_PANGO_TAGS', '_PLACEHOLDER_BG', '_PLACEHOLDER_FG', '_ROW_MIN_H', '_TEXT_COL_W', '_TITLE_FS', '_TITLE_ROW_H', '_TXT_APP_L', '_TXT_APP_R', '_TXT_BANDA_R', '_TXT_BODY_L', '_TXT_BODY_R', '_TXT_TITLE_L', '_TXT_TITLE_R', '_VIB_BORDER', '_VIB_BOTTOM', '_VIB_BTN_ALPHA', '_VIB_BTN_HOVER', '_VIB_BTN_PRESSED', '_VIB_INSET', '_VIB_SHADOW', '_VIB_SHADOW_BLUR', '_VIB_SHADOW_DY', '_VIB_TOP', '_append_sink', '_append_text', '_body_layout', '_body_metrics', '_count_body_lines', '_create_layout', '_has_pango_markup', '_hex_rgb', '_layout_for', '_layout_metrics', '_make_circular', '_make_placeholder_icon', '_parse_actions', '_rect', '_resample', '_rgba', '_round_fill', '_rounded', '_rows_above_body', '_sanitize_pango_markup', '_stop', '_texture', 'rrect']

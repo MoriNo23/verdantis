@@ -76,16 +76,18 @@ def test_rotate_descarta_viejos_y_sus_iconos(datos, monkeypatch):
     monkeypatch.setattr(history_store, "MAX_ENTRIES", 3)
     src = datos / "origen.png"
     src.write_bytes(b"png")
+    nombres = []
     for i in range(4):
         fname = history_store.copy_icon(i, str(src), "avatar")
+        nombres.append(fname)
         history_store.append(_rec(id=i, avatar_file=fname))
     assert [r["id"] for r in history_store.read()] == [1, 2, 3], (
         "el tope mantiene los ÚLTIMOS registros (más viejo primero)"
     )
-    assert not os.path.exists(history_store.icon_path("n0_avatar.png")), (
+    assert not os.path.exists(history_store.icon_path(nombres[0])), (
         "el icono del registro descartado queda huérfano en disco"
     )
-    assert os.path.exists(history_store.icon_path("n3_avatar.png"))
+    assert os.path.exists(history_store.icon_path(nombres[3]))
 
 
 # --- Store: iconos ---
@@ -94,7 +96,7 @@ def test_copy_icon_copia_bytes(datos):
     src = datos / "tab.png"
     src.write_bytes(b"contenido")
     fname = history_store.copy_icon(5, str(src), "avatar")
-    assert fname == "n5_avatar.png"
+    assert fname.startswith("n5_avatar_")
     with open(history_store.icon_path(fname), "rb") as f:
         assert f.read() == b"contenido"
 
@@ -172,7 +174,7 @@ def test_record_a_kwargs_usa_el_icono_archivado(datos):
     assert (kw["titulo"], kw["cuerpo"]) == ("hola", "cuerpo")
     assert kw["icon_path"] == history_store.icon_path(fname)
     assert kw["urgency"] == 2
-    assert kw["duration"] == 6000
+    assert kw["duration"] == 0   # critical nunca expira, también en el replay
     assert kw["actions"] == ["default", "Activar"]
     assert kw["app_icon"] == "dialog-warning"
     assert kw["on_close"] is None and kw["on_click"] is None, (

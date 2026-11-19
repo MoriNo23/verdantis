@@ -739,7 +739,8 @@ class ToastCard(Gtk.Widget):
         ih, iw = 140, min(260, fr.W - fr.pad * 2)
         s.save()
         s.push_rounded_clip(_rounded(fr.pad, iy, iw, ih, 8))
-        s.append_texture(_texture(self._image_pb), _rect(fr.pad, iy, iw, ih))
+        s.append_texture(_texture(_cover_pixbuf(self._image_pb, iw, ih)),
+                         _rect(fr.pad, iy, iw, ih))
         s.append_linear_gradient(
             _rect(fr.pad, iy + ih - 30, iw, 30),
             Graphene.Point().init(0, iy + ih - 30),
