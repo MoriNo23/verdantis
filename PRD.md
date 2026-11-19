@@ -173,6 +173,13 @@ aportar su percepción pero no es la fuente exclusiva.
 - Hecho (0.16.1): el centro NO reproduce toasts al click. Reproducir queda solo
   en el CLI (`verdantis replay`), que es quien elige duración y filtros; el
   centro muestra y limpia.
+- Hecho (chore, sin bump): verificación visual determinista. `scripts/gsk_shot.py` dibuja
+  el toast offscreen (mismo `do_snapshot` GSK) a PNG y `visual_check.sh` compara
+  contra `tests/golden/toast-offscreen.png`: no depende de KWin, del wallpaper,
+  del panel ni de que la sesión esté destrabada (con la pantalla bloqueada KWin
+  responde `ScreenShot2.Error.NoAuthorized`). La captura del desktop queda como
+  smoke opcional (`--live`) y ya no se compara píxel a píxel: el panel mueve la
+  card y la golden vieja (`toast-vibrancia.png`) era no determinista.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.

@@ -23,9 +23,12 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
 - Tests de render GSK (`tests/test_render_gsk.py`): serializan el `Gsk.RenderNode`
   de `do_snapshot` sin ventana. Si falta un nodo (gradiente, sombra, texto,
   clip), la suite falla — es la red de seguridad que faltaba antes de v0.15.2.
-- Verificación en vivo: `scripts/visual_check.sh` (reftest de la card contra
-  `tests/golden/toast-vibrancia.png`; `--update` regenera la golden) y
-  `scripts/dbus_check.py` (contrato D-Bus end-to-end: `Notify` →
+- Verificación visual: `scripts/visual_check.sh` dibuja el toast offscreen con
+  `scripts/gsk_shot.py` (mismo `do_snapshot` GSK, sin KWin ni wallpaper) y lo
+  compara contra `tests/golden/toast-offscreen.png`; `--update` regenera la
+  golden. Con `--live` además verifica que el toast aparezca en pantalla
+  (captura KWin + sanity de colores, SIN comparar píxeles: el panel mueve la
+  card). `scripts/dbus_check.py` cubre el contrato D-Bus end-to-end (`Notify` →
   `NotificationClosed` razón 3, incluida una notificación todavía en cola).
   OJO al parsear ids: `grep -o '[0-9]*'` sobre `(uint32 1,)` devuelve `32`.
 - CI en `.github/workflows/ci.yml`: corre los 113 tests + `pip-audit` + `pip check`
