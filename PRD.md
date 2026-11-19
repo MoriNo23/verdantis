@@ -195,6 +195,22 @@ aportar su percepción pero no es la fuente exclusiva.
   invisible, sin tocar el FIFO ni la capacidad de 2. El click del body quedó como
   estaba (freedesktop 1.2: `default` si el sender lo proveyó, si no `xdg-open`):
   no se cae a la primera acción para no disparar una acción destructiva invisible.
+- Hecho (chore, sin bump): cierre de los dos frentes opcionales.
+  (a) **Dependencias de `mockups/`**: `pnpm audit` pasó de 35 advisories
+  (2 critical, 8 high, 17 moderate, 3 low) a **0**. `next`/`eslint-config-next`
+  16.3.8 → 16.4.6 (RCE/DoS y todas sus transitives: undici, zod, body-parser,
+  hono, qs, systeminformation, ip-address, fast-uri); el `minimatch` 10.2.6 que
+  quedaba vía `shadcn > ts-morph > @ts-morph/common` se forzó a `^11.0.1` con
+  `overrides` en `pnpm-workspace.yaml` (pnpm 11 ya no lee `pnpm.overrides` de
+  `package.json`). `pnpm build` genera las 6 rutas estáticas OK. `pnpm lint`
+  sigue con 14 errores de estilo preexistentes en los mockups: no son del cambio
+  y AGENTS los declara sin validador.
+  (b) **Verificación visual real**: con la sesión desbloqueada (`loginctl
+  unlock-session`, captura con `spectacle`, re-bloqueo inmediato) se confirmó en
+  pantalla el rail rojo del critical, la escala 13/12/11 y el badge "+N
+  notificaciones en espera" **debajo** de los dos toasts. La sesión quedó
+  bloqueada como estaba. CI real de GitHub también verde: `144 passed, 2
+  skipped`, `pip-audit` y `pip check` limpios.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.
