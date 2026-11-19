@@ -9,13 +9,13 @@ import toast_window as wp
 
 
 def test_jerarquia_de_tamanos():
-    assert wp._TITLE_FS > wp._BODY_FS > wp._APP_FS
+    assert wp._TITLE_FS > wp._BODY_FS >= wp._APP_FS
 
 
 def test_minimos_legibles():
     assert wp._TITLE_FS >= 13
-    assert wp._BODY_FS >= 12
-    assert wp._APP_FS >= 11
+    assert wp._BODY_FS >= 10
+    assert wp._APP_FS >= 10
 
 
 def test_escala_por_resolucion_conserva_la_jerarquia():

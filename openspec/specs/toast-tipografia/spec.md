@@ -10,7 +10,7 @@ la superficie de 360 px.
 
 ### Requirement: Jerarquía title > body > app
 
-El toast SHALL usar una escala con título 13 px, body 12 px y label de app 11 px
+El toast SHALL usar una escala con título 13 px, body 10 px y label de app 10 px
 en resolución de referencia (`font_scale=1.0`). Los tres tamaños SHALL bajar
 solo por `font_scale` y SHALL conservar el orden `title >= body >= app` en toda
 escala soportada (0.85 a 1.15), sin aplanarse a un mismo valor.
@@ -18,7 +18,7 @@ escala soportada (0.85 a 1.15), sin aplanarse a un mismo valor.
 #### Scenario: Escala de referencia
 
 - **WHEN** se dibuja un toast con `font_scale=1.0`
-- **THEN** `_TITLE_FS` es 13, `_BODY_FS` es 12 y `_APP_FS` es 11
+- **THEN** `_TITLE_FS` es 13, `_BODY_FS` es 10 y `_APP_FS` es 11
 
 #### Scenario: Monitor chico
 

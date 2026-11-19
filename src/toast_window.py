@@ -668,7 +668,8 @@ class ToastCard(Gtk.Widget):
             s.push_clip(_rect(0 if not is_dark else fr.wx - (tx0 + ink.width + gap),
                               0, clip_x, fr.H))
             s.append_stroke(path, Gsk.Stroke.new(1.5),
-                            _rgba(_TXT_BANDA_R if is_dark else acc))
+                            _rgba(_TXT_BANDA_R if is_dark
+                                  else self._accent_rgb))
             s.pop()
             s.restore()
         s.restore()

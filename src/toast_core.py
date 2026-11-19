@@ -35,8 +35,8 @@ _ACTIONS_ROW_H = 28
 _ACTIONS_GAP = 8
 _CARD_RADIUS = 14          # 12 → 14: radio "card física" (estilo Mac)
 _TITLE_FS = 13
-_BODY_FS = 12
-_APP_FS = 11
+_BODY_FS = 10
+_APP_FS = 10
 
 _PLACEHOLDER_BG = "#313244"
 _PLACEHOLDER_FG = "#a6adc8"
@@ -449,7 +449,7 @@ def _body_layout(cuerpo, fs, width, max_lines=0):
     return _layout_for(
         cuerpo, Pango.FontDescription("Manrope " + str(fs)),
         width=width, wrap=True, justify=False, markup=True,
-        max_lines=max_lines)
+        ellipsize=bool(max_lines), max_lines=max_lines)
 
 
 def _texture(pixbuf):
