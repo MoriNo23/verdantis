@@ -31,9 +31,9 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
   card). `scripts/dbus_check.py` cubre el contrato D-Bus end-to-end (`Notify` →
   `NotificationClosed` razón 3, incluida una notificación todavía en cola).
   OJO al parsear ids: `grep -o '[0-9]*'` sobre `(uint32 1,)` devuelve `32`.
-- CI en `.github/workflows/ci.yml`: corre los 154 tests + `pip-audit` + `pip check`
+- CI en `.github/workflows/ci.yml`: corre los 158 tests + `pip-audit` + `pip check`
   (los self-checks `test_gsk_shot.py` y `test_el_badge_real_se_construye_y_se_actualiza`
-  se saltean sin display, así que en CI pasan 152).
+  se saltean sin display, así que en CI pasan 156).
   El headless usaba `GDK_BACKEND=broadway` SIN servidor:GTK no inicializaba y los
   tests de widget crasheaban. Ahora el workflow levanta `gtk4-broadwayd` (paquete
   `libgtk-4-bin`) en `:5`; para reproducirlo en local, exportar

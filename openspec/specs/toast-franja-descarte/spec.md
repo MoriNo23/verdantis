@@ -2,32 +2,32 @@
 
 ## Purpose
 
-Define el rail de descarte con la X de cierre — en cualquier toast, persistente o con timer —, por qué el rail queda reservado siempre, y cómo el hover pausa el vencimiento para que el descarte manual sea alcanzable. El hover tiñe el rail; nunca reacomoda la card.
+Define el rail de descarte con el botón circular de cierre — en cualquier toast, persistente o con timer —, por qué el rail queda reservado siempre, y cómo el hover pausa el vencimiento para que el descarte manual sea alcanzable. El hover enciende el botón, nunca inunda el rail de rojo ni reacomoda la card.
 
 ## Requirements
 
 ### Requirement: El rail de descarte está reservado siempre
 
-En cualquier toast — persistente o con auto-expiración —, el rail de descarte SHALL medir 28 px de ancho en el borde derecho y SHALL estar reservado también sin puntero encima: la columna de texto SHALL ser 212 px (360 − 14 − 80 − 12 − 28 − 14) en todos los estados. La X SHALL dibujarse siempre, tenue (acento rosa al 30 %) en reposo y al 95 % con el puntero dentro del rail; el tinte rojo de la franja SHALL dibujarse solo con el puntero dentro del rail (32 % en hover, 45 % en pressed). El hit-rect de cierre SHALL ser el rail completo de alto completo (no solo el glyph de la X). El cierre por rail/X es cierre manual del usuario: cierra el toast sin disparar la acción default ni abrir URL alguna.
+En cualquier toast — persistente o con auto-expiración —, el rail de descarte SHALL medir 28 px de ancho en el borde derecho y SHALL estar reservado también sin puntero encima: la columna de texto SHALL ser 212 px (360 − 14 − 80 − 12 − 28 − 14) en todos los estados. El cierre SHALL ser un botón circular de 24 px dentro del rail, con una X neutra de 10 px, usando los MISMOS tokens de superficie que los botones de acción: blanco al 7 % en reposo, 11 % en hover y 4 % al presionar, con brillo interior de 1 px y hundimiento de 2 px en pressed. El glifo SHALL ir del 70 % en reposo al 100 % en hover. La franja SHALL NO inundarse de rojo en ningún estado. El hit-rect de cierre SHALL ser el rail completo de alto completo (no solo el botón). El cierre por rail/botón es cierre manual del usuario: cierra el toast sin disparar la acción default ni abrir URL alguna.
 
 #### Scenario: Reposo
 
 - **WHEN** un toast está en pantalla y el puntero no está encima
-- **THEN** no hay tinte de franja, la X se ve tenue en el rail y la columna de texto mide 212 px
+- **THEN** la placa está al 7 % con la X al 70 %, no hay tinte en el rail y la columna de texto mide 212 px
 
 #### Scenario: El puntero entra al rail
 
 - **WHEN** el puntero entra a los 28 px del borde derecho
-- **THEN** el tinte rojo y la X al 95 % se hacen visibles, sin mover ningún texto
+- **THEN** la placa sube al 11 % y la X al 100 %, sin mover ningún texto
 
 #### Scenario: El puntero sale del rail
 
 - **WHEN** el puntero deja el rail
-- **THEN** el tinte desaparece y la X vuelve al 30 %, en el redibujado inmediato
+- **THEN** la placa vuelve al 7 % y la X al 70 %, en el redibujado inmediato
 
 #### Scenario: El hit-rect es el rail completo
 
-- **WHEN** el usuario hace click en cualquier punto del rail, aunque no caiga sobre el glyph de la X
+- **WHEN** el usuario hace click en cualquier punto del rail, aunque no caiga sobre el botón circular
 - **THEN** el toast se cierra como cierre manual (razón de usuario del spec 1.2)
 
 #### Scenario: El descarte no dispara la acción
@@ -37,7 +37,7 @@ En cualquier toast — persistente o con auto-expiración —, el rail de descar
 
 ### Requirement: El hover no reacomoda la card
 
-Con el puntero encima, el toast SHALL NOT cambiar el ancho de su columna de texto, ni el wrap del cuerpo, del título o de la barra "Ver más", ni el ancho del botón Copiar, ni la altura de la card. El hover SHALL limitarse a teñir el rail, encender los estados hover de los botones y pausar el vencimiento. El ancho de columna SHALL ser el mismo en reposo, hover y pressed, de modo que la pila de toasts nunca se reacomode por el puntero.
+Con el puntero encima, el toast SHALL NOT cambiar el ancho de su columna de texto, ni el wrap del cuerpo, del título o de la barra "Ver más", ni el ancho del botón Copiar, ni la altura de la card. El hover SHALL limitarse a encender el botón circular, encender los estados hover de los botones y pausar el vencimiento. El ancho de columna SHALL ser el mismo en reposo, hover y pressed, de modo que la pila de toasts nunca se reacomode por el puntero.
 
 #### Scenario: Puntero sobre el cuerpo
 

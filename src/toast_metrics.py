@@ -75,6 +75,18 @@ _MIN_ALPHA = 0.90   # spec toast-contraste: AA sobre el fondo real
 _SHADOW_PAD = {"top": 12, "right": 12, "bottom": 28, "left": 12}
 
 
+def close_style(hover=False, pressed=False):
+    """(fill, alpha del glifo, hundido) del botón circular de descarte.
+
+    Reutiliza los tokens de los botones de acción: mismo lenguaje, cero
+    inundaciones rojas en el rail y sin salto de 30 % a 95 % en la X.
+    """
+    fill = (_VIB_BTN_PRESSED if pressed
+            else _VIB_BTN_HOVER if hover else _VIB_BTN_ALPHA)
+    glyph = 0.85 if pressed else 1.0 if hover else 0.70
+    return fill, glyph, bool(pressed)
+
+
 def surface_size(card_w, card_h):
     """Tamaño de la surface layer-shell para que la sombra no se recorte."""
     return (card_w + _SHADOW_PAD["left"] + _SHADOW_PAD["right"],
@@ -411,4 +423,4 @@ def _layout_for(text, font_desc, width=None, ellipsize=False, wrap=False,
     return lay
 
 
-__all__ = ['_SHADOW_PAD', 'layer_margins', 'surface_size', '_ACTIONS_GAP', '_ACTIONS_ROW_H', '_APP_FS', '_APP_ICON_BOX', '_APP_ROW_H', '_BODY_FS', '_BTN_GAP', '_CARD_BG_HEX', '_CARD_RADIUS', '_CARD_WIDTH', '_CLOSE_RAIL_W', '_FONT_OPTIONS', '_Frame', '_IMAGE_LEFT_GAP', '_IMAGE_LEFT_W', '_Layout', '_MIN_ALPHA', '_PAD', '_PANGO_TAGS', '_PLACEHOLDER_BG', '_PLACEHOLDER_FG', '_ROW_MIN_H', '_TEXT_COL_W', '_TITLE_FS', '_TITLE_ROW_H', '_TXT_APP_L', '_TXT_APP_R', '_TXT_BANDA_R', '_TXT_BODY_L', '_TXT_BODY_R', '_TXT_TITLE_L', '_TXT_TITLE_R', '_VIB_BORDER', '_VIB_BOTTOM', '_VIB_BTN_ALPHA', '_VIB_BTN_HOVER', '_VIB_BTN_PRESSED', '_VIB_INSET', '_VIB_SHADOW', '_VIB_SHADOW_BLUR', '_VIB_SHADOW_DY', '_VIB_TOP', '_append_sink', '_append_text', '_body_layout', '_body_metrics', '_count_body_lines', '_create_layout', '_has_pango_markup', '_hex_rgb', '_layout_for', '_layout_metrics', '_make_circular', '_make_placeholder_icon', '_parse_actions', '_rect', '_resample', '_rgba', '_round_fill', '_rounded', '_rows_above_body', '_sanitize_pango_markup', '_stop', '_texture', 'rrect']
+__all__ = ['_SHADOW_PAD', 'close_style', 'layer_margins', 'surface_size', '_ACTIONS_GAP', '_ACTIONS_ROW_H', '_APP_FS', '_APP_ICON_BOX', '_APP_ROW_H', '_BODY_FS', '_BTN_GAP', '_CARD_BG_HEX', '_CARD_RADIUS', '_CARD_WIDTH', '_CLOSE_RAIL_W', '_FONT_OPTIONS', '_Frame', '_IMAGE_LEFT_GAP', '_IMAGE_LEFT_W', '_Layout', '_MIN_ALPHA', '_PAD', '_PANGO_TAGS', '_PLACEHOLDER_BG', '_PLACEHOLDER_FG', '_ROW_MIN_H', '_TEXT_COL_W', '_TITLE_FS', '_TITLE_ROW_H', '_TXT_APP_L', '_TXT_APP_R', '_TXT_BANDA_R', '_TXT_BODY_L', '_TXT_BODY_R', '_TXT_TITLE_L', '_TXT_TITLE_R', '_VIB_BORDER', '_VIB_BOTTOM', '_VIB_BTN_ALPHA', '_VIB_BTN_HOVER', '_VIB_BTN_PRESSED', '_VIB_INSET', '_VIB_SHADOW', '_VIB_SHADOW_BLUR', '_VIB_SHADOW_DY', '_VIB_TOP', '_append_sink', '_append_text', '_body_layout', '_body_metrics', '_count_body_lines', '_create_layout', '_has_pango_markup', '_hex_rgb', '_layout_for', '_layout_metrics', '_make_circular', '_make_placeholder_icon', '_parse_actions', '_rect', '_resample', '_rgba', '_round_fill', '_rounded', '_rows_above_body', '_sanitize_pango_markup', '_stop', '_texture', 'rrect']

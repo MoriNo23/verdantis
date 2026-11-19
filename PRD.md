@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (154 tests, ~9 s; 152 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
+| Regresión global | suite completa verde (158 tests, ~9 s; 156 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
 
 ## 8. Dependencias y plataforma
 
@@ -225,6 +225,12 @@ aportar su percepción pero no es la fuente exclusiva.
   tapando la sombra. `_add_window_css()` registra `background: transparent`
   para la ventana del toast y del badge. Verificado en vivo: se lee el
   contenido detrás del card y no hay bloque; la sombra queda sobre el fondo real.
+- Hecho (0.18.4): el X rosa flotante se reemplaza por un botón circular
+  neutro de 24 px con los tokens de los botones de acción (7 % / 11 % / 4 %),
+  X gris de 10 px, brillo interior y hundimiento al presionar. Se eliminó el
+  flood rojo del rail (32/45 %) y el salto 30 %→95 % de la X. Hit-rect sigue
+  siendo el rail completo de 28 px, cero reflow. Spec `toast-franja-descarte`
+  reescrita + 4 tests TDD; golden offscreen regenerada.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Hecho (0.18.2): `image-data` sin path de archivo ya se archiva como PNG en el
   directorio de iconos (`history_store.write_icon`), con el mismo `avatar_file`

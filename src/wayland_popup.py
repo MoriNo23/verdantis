@@ -747,24 +747,27 @@ class NotificationWidget(Gtk.Widget):
         sw = self._CLOSE_RAIL_W
         sx0 = fr.W - sw
         self._close_rect = (sx0, 0, fr.W, fr.H)
-        if self._hover_close or self._pressed_close:
-            tint = ((0.86, 0.15, 0.15, 0.45) if self._pressed_close
-                    else (0.86, 0.15, 0.15, 0.32))
-            s.save()
-            s.push_rounded_clip(_rounded(0, 0, fr.W, fr.H, fr.r))
-            s.append_color(_rgba(tint), _rect(sx0, 0, sw, fr.H))
-            s.pop()
-            s.restore()
+        fill, glyph_alpha, sink = close_style(
+            hover=self._hover_close, pressed=self._pressed_close)
         mx, my = sx0 + sw / 2, fr.H / 2
-        inset = 9   # 18 px: con 12 la X rozaba la esquina redondeada
+        r = 12          # placa circular de 24 px dentro del rail de 28
+        s.save()
+        s.push_rounded_clip(_rounded(mx - r, my - r, 2 * r, 2 * r, r))
+        s.append_color(_rgba((1.0, 1.0, 1.0, fill)),
+                       _rect(mx - r, my - r, 2 * r, 2 * r))
+        s.append_color(_rgba(_VIB_INSET), _rect(mx - r, my - r, 2 * r, 1))
+        if sink:
+            _append_sink(s, mx - r, my - r, 2 * r)
+        s.pop()
+        s.restore()
+        # X neutra de 10 px: misma familia cromática que el texto del card.
+        inset = 5
         path = Gsk.Path.parse(
             "M %d %d L %d %d M %d %d L %d %d" % (
                 mx - inset, my - inset, mx + inset, my + inset,
                 mx + inset, my - inset, mx - inset, my + inset))
-        alpha = (0.45 if self._pressed_close
-                 else 0.95 if self._hover_close else 0.30)
-        s.append_stroke(path, Gsk.Stroke.new(2.5),
-                        _rgba(_hex_rgb("#f38ba8") + (alpha,)))
+        s.append_stroke(path, Gsk.Stroke.new(2),
+                        _rgba(_hex_rgb(_TXT_BODY_L) + (glyph_alpha,)))
 
 
 # La surface crece 12/28 px para darle sitio a la sombra. El fondo de la
