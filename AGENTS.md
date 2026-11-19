@@ -31,30 +31,32 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
   card). `scripts/dbus_check.py` cubre el contrato D-Bus end-to-end (`Notify` →
   `NotificationClosed` razón 3, incluida una notificación todavía en cola).
   OJO al parsear ids: `grep -o '[0-9]*'` sobre `(uint32 1,)` devuelve `32`.
-- CI en `.github/workflows/ci.yml`: corre los 146 tests + `pip-audit` + `pip check`
+- CI en `.github/workflows/ci.yml`: corre los 151 tests + `pip-audit` + `pip check`
   (los self-checks `test_gsk_shot.py` y `test_el_badge_real_se_construye_y_se_actualiza`
-  se saltean sin display, así que en CI pasan 144).
+  se saltean sin display, así que en CI pasan 149).
   El headless usaba `GDK_BACKEND=broadway` SIN servidor:GTK no inicializaba y los
   tests de widget crasheaban. Ahora el workflow levanta `gtk4-broadwayd` (paquete
   `libgtk-4-bin`) en `:5`; para reproducirlo en local, exportar
   `BROADWAY_DISPLAY=:9 GDK_BACKEND=broadway` y correr `gtk4-broadwayd :9` aparte
   (`broadwayd` suelto es el de GTK3 y no sirve).
-  en Ubuntu con GTK4/gtk4-layer-shell. Sin `WAYLAND_DISPLAY`, conftest usa
-  `GDK_BACKEND=broadway` (GTK4 no tiene `offscreen`).
 - GTK4: cargar `libgtk4-layer-shell` con `ctypes.CDLL(..., RTLD_GLOBAL)` ANTES
   de `import gi` (en `wayland_popup.py` y `verdantis_daemon.py`): si libwayland
   se carga primero, `is_supported()` da False. No hace falta `LD_PRELOAD`.
-- 7 módulos en `src/`:
+- 9 módulos en `src/`:
   - `verdantis.py` — entry point; `--daemon` delega al daemon; subcomandos
     `list`/`replay`/`clear` (historial) delegan a `replay`; el one-shot delega la rama
     de backend a `replay.mostrar_toast`. Import perezoso en todos los branches.
   - `verdantis_daemon.py` — dueño del bus DBus (`Notify`, `CloseNotification`,
     `GetCapabilities`, `GetServerInformation`, signals), cola de toasts, click→action,
     archivo al historial (`_persist_to_disk`, salvo hints `transient`).
-  - `wayland_popup.py` — render del toast: `NotificationWidget` (Gtk.Widget con
-    `do_snapshot` GSK puro: gradiente/sombra/hairline/botones físicos), layout
-    (imagen izquierda de 80px siempre / columna de texto única), wrap Pango,
-    franja vertical de descarte + barra expandir full-width, wipe de tiempo.
+  - `toast_icons.py` — iconos (.desktop exacto → tema), URLs, detección de
+    código de verificación, portapapeles (`wl-copy`, sin robar foco).
+  - `toast_metrics.py` — métricas de layout (fuente única) y primitivas GSK:
+    gradientes, sombra, hairline, pixbufs. Incluye `surface_size`/`layer_margins`:
+    la surface layer-shell es mayor que la card para que la sombra no se recorte.
+  - `wayland_popup.py` — `NotificationWidget` (interacción + `do_snapshot`) y
+    `WaylandPopup` (layer-shell, timers, pila). Re-exporta los dos módulos de
+    arriba para no romper imports históricos (`from wayland_popup import ...`).
   - `app_info.py` — fuente única de `APP_NAME`/`APP_ID`/`VENDOR` (nada de literales
     "Verdantis" inline; el vendor de GetServerInformation es MoriNo23, no el nombre).
   - `x11_popup.py` — fallback X11 (Gtk.Window posicionable, sin layer-shell) que

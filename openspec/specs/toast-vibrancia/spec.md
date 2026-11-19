@@ -56,6 +56,30 @@ modificar el gap ni el orden (`toast-stack`).
 - **WHEN** un toast se expande, se contrae o entra uno nuevo
 - **THEN** la sombra se reposiciona con su card y el gap de 12 px permanece intacto
 
+#### Scenario: La sombra no se recorta en el borde de la surface
+
+- **WHEN** el toast se dibuja en una surface layer-shell
+- **THEN** la surface es mayor que la card (12 px arriba y a los lados, 28 px abajo) y la card conserva su posición original gracias a márgenes compensatorios
+
+### Requirement: La surface layer-shell deja sitio a la sombra
+
+La surface SHALL ser mayor que la card: 12 px de pad arriba, izquierda y
+derecha, y 28 px abajo (el desplazamiento de 8 px más el blur de 18). La card
+SHALL colocarse dentro con márgenes iguales al pad, y los márgenes del
+layer-shell SHALL restar ese pad para que la card siga a la misma distancia del
+borde de la pantalla, incluso al apilar (`offset` de pila). El tamaño de la
+surface SHALL recalcularse al expandir o contraer el body.
+
+#### Scenario: Card a 16 px del borde
+
+- **WHEN** el toast se ancla `top-right` con `margin=16`
+- **THEN** los márgenes efectivos son 4 px arriba y 4 px a la derecha (16 menos el pad), y la card se ve a 16 px del borde
+
+#### Scenario: Expandir el body agranda la surface
+
+- **WHEN** el toast se expande y su card crece
+- **THEN** la surface crece el mismo delta y el offset de pila sigue sumándose sin mover la card respecto del borde
+
 ### Requirement: Los botones se hunden al presionarse
 
 El fill de los botones de acción SHALL ser una superficie blanca translúcida

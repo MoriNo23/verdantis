@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (146 tests, ~9 s; 144 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
+| Regresión global | suite completa verde (151 tests, ~9 s; 149 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
 
 ## 8. Dependencias y plataforma
 
@@ -213,6 +213,13 @@ aportar su percepción pero no es la fuente exclusiva.
   notificaciones en espera" **debajo** de los dos toasts. La sesión quedó
   bloqueada como estaba. CI real de GitHub también verde: `144 passed, 2
   skipped`, `pip-audit` y `pip check` limpios.
+- Hecho (0.18.1): sombra real y desmonte del monopólito. La surface layer-shell
+  ahora mide la card + 12 px (arriba/lados) y +28 px (abajo: dy 8 + blur 18), con
+  márgenes compensatorios para que la card siga a 16 px del borde y el offset de
+  pila siga sumando. Verificado en vivo: la sombra se ve sobre el contenido debajo
+  de la card (píxeles ~20 vs ~31 de fondo), sin moverla. `wayland_popup.py` pasó
+  de 1598 a 990 líneas: salieron `toast_icons.py` y `toast_metrics.py`, con
+  re-exports para no romper ningún import existente. Suite 150 tests.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.
