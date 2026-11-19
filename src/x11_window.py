@@ -2,7 +2,7 @@
 
 Se carga SOLO en el branch X11 (import perezoso desde `verdantis.main`): el
 daemon y el path Wayland no pagan este import. Un solo toolkit en el
-proyecto — GTK4, reutilizando el render GSK de `NotificationWidget`; Qt quedó
+proyecto — GTK4, reutilizando el render GSK de `ToastCard`; Qt quedó
 fuera por completo.
 
 GTK4 no expone mover la ventana ni hints de "keep above": sin layer-shell el
@@ -13,7 +13,7 @@ compositing manager el fondo puede salir negro; los X11 modernos lo traen.
 import os
 import ctypes
 # GDK_BACKEND=x11 ANTES de que cualquiera toque Gdk — convención de
-# `wayland_popup` (que hace setdefault a 'wayland' y por eso no lo pisa):
+# `toast_window` (que hace setdefault a 'wayland' y por eso no lo pisa):
 # sin esto, `--force-fallback` dentro de una sesión Wayland elegiría backend
 # wayland y la ventana no se comportaría como fallback X11.
 os.environ.setdefault('GDK_BACKEND', 'x11')
@@ -37,9 +37,9 @@ _X.XFlush.argtypes = [ctypes.c_void_p]
 _XA_ATOM = 4          # Xatom.h
 _PROP_REPLACE = 0     # X.h
 
-# `wayland_popup` PRIMERO: carga libgtk4-layer-shell y fija Gtk/Gdk 4.0 y aporta
+# `toast_window` PRIMERO: carga libgtk4-layer-shell y fija Gtk/Gdk 4.0 y aporta
 # el render — la ventana de acá es solo el contenedor.
-from wayland_popup import NotificationWidget, _CARD_WIDTH
+from toast_window import ToastCard, _CARD_WIDTH
 from app_info import APP_ID, DEFAULT_ACCENT
 import gi
 gi.require_version('Gtk', '4.0')
@@ -48,7 +48,7 @@ gi.require_version('GdkX11', '4.0')
 from gi.repository import Gtk, GLib, Gdk, GdkX11
 
 
-class NotificacionX11:
+class X11Toast:
     """Toast one-shot en `Gtk.Window` común (fallback X11, sin layer-shell).
 
     Misma superficie de parámetros que el viejo fallback Qt: la rejija del
@@ -85,7 +85,7 @@ class NotificacionX11:
         self.window.connect("close-request", lambda *a: self._close())
         self.window.connect("destroy", lambda *a: self._loop.quit())
 
-        self._card = NotificationWidget(
+        self._card = ToastCard(
             self.app_name, self.app_icon, self.titulo, self.cuerpo,
             self.icon_path, self.image_path, self.accent,
             on_click=self._on_click,

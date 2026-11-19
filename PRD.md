@@ -86,7 +86,7 @@ aportar su percepción pero no es la fuente exclusiva.
   `verdantis replay` vuelva a mostrar "cómo se veía X app tal cual" **en producción**.
   Tope de 1000 registros (rotación, borrando también sus iconos) y 256 KB por icono.
 - El replay **no pasa por el bus**: reconstruye el toast con el render real
-  (`WaylandPopup` o el fallback X11, misma elección de rama que el one-shot). Por eso
+  (`ToastWindow` o el fallback X11, misma elección de rama que el one-shot). Por eso
   no re-archiva, no lo filtra la dedup y funciona aunque el daemon no sea el dueño de
   `org.freedesktop.Notifications`. A cambio no hay sender: click = `xdg-open` de la
   URL archivada, sin `ActionInvoked`.
@@ -111,7 +111,7 @@ aportar su percepción pero no es la fuente exclusiva.
 - `_bg_alpha` por urgency: código muerto (se asigna, `_draw` no lo lee) — deuda
   documentada, fuera de este ciclo.
 - PyGObject 3.58 (solo sdist; el venv vive de la .so de girepository del sistema).
-- X11 como target primario: el fallback es GTK4 (`x11_popup`, sin layer-shell,
+- X11 como target primario: el fallback es GTK4 (`x11_window`, sin layer-shell,
   anclaje reposicionado con Xlib/EWMH); no hay Qt en el proyecto.
 - Replay por bus (re-emitir `Notify`): se vería el stack real pero re-archivaría el
   historial y la dedup se tragaría los repetidos.
@@ -217,7 +217,7 @@ aportar su percepción pero no es la fuente exclusiva.
   ahora mide la card + 12 px (arriba/lados) y +28 px (abajo: dy 8 + blur 18), con
   márgenes compensatorios para que la card siga a 16 px del borde y el offset de
   pila siga sumando. Verificado en vivo: la sombra se ve sobre el contenido debajo
-  de la card (píxeles ~20 vs ~31 de fondo), sin moverla. `wayland_popup.py` pasó
+  de la card (píxeles ~20 vs ~31 de fondo), sin moverla. `toast_window.py` pasó
   de 1598 a 990 líneas: salieron `toast_helpers.py` y `toast_core.py`, con
   re-exports para no romper ningún import existente. Suite 151 tests.
 - Hecho (0.18.3): el fondo de la surface agrandada era el background opaco

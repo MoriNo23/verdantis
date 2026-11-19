@@ -5,8 +5,8 @@ no alcanzaba a leer una alerta crítica. Acá la regla es que NO expire y que
 lleve un rail de acento propio para reconocerla en la pila.
 """
 import app_info as ai
-import verdantis_daemon as vd
-import wayland_popup as wp
+import daemon as vd
+import toast_window as wp
 
 from test_render_gsk import _nodos
 

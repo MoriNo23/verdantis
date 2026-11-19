@@ -4,8 +4,8 @@
 `list` / `replay` / `clear` operan sobre el historial archivado
 (`history_store` + `replay`). El one-shot elige backend por sesión:
 
-- `WAYLAND_DISPLAY` → WaylandPopup (GTK4/GSK + layer-shell).
-- solo X11 (o `--force-fallback`) → `x11_popup` (Gtk.Window común, mismo
+- `WAYLAND_DISPLAY` → ToastWindow (GTK4/GSK + layer-shell).
+- solo X11 (o `--force-fallback`) → `x11_window` (Gtk.Window común, mismo
   render GSK, sin layer-shell).
 - Wayland SIN layer-shell → error por stderr y exit ≠ 0: no hay fallback
   mal posicionado (spec `entrada-fallback`).
@@ -72,7 +72,7 @@ def main():
         return
 
     if args.daemon:
-        from verdantis_daemon import NotificationDaemon
+        from daemon import NotificationDaemon
         NotificationDaemon(corner=args.corner).run()
         return
 

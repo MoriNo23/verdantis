@@ -7,7 +7,7 @@ la última card. Spec `toast-badge-pendientes`.
 from unittest.mock import Mock
 
 from test_contrato_dbus import _manager_headless
-from wayland_popup import WaylandPopup
+from toast_window import ToastWindow
 
 
 def test_reflow_reposiciona_el_badge_con_el_alto_nuevo():

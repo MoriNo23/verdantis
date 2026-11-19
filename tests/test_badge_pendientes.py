@@ -10,7 +10,7 @@ from unittest.mock import Mock
 
 import pytest
 
-import verdantis_daemon as vd
+import daemon as vd
 from test_contrato_dbus import _manager_headless
 
 

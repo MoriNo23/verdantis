@@ -1,6 +1,6 @@
 """Iconos, URLs, códigos de verificación y portapapeles (sin GSK).
 
-Extraído de `wayland_popup.py`: helpers de proceso, no del render.
+Extraído de `toast_window.py`: helpers de proceso, no del render.
 """
 import os
 import re

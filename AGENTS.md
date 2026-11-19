@@ -40,13 +40,13 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
   `BROADWAY_DISPLAY=:9 GDK_BACKEND=broadway` y correr `gtk4-broadwayd :9` aparte
   (`broadwayd` suelto es el de GTK3 y no sirve).
 - GTK4: cargar `libgtk4-layer-shell` con `ctypes.CDLL(..., RTLD_GLOBAL)` ANTES
-  de `import gi` (en `wayland_popup.py` y `verdantis_daemon.py`): si libwayland
+  de `import gi` (en `toast_window.py` y `daemon.py`): si libwayland
   se carga primero, `is_supported()` da False. No hace falta `LD_PRELOAD`.
 - 9 módulos en `src/`:
   - `verdantis.py` — entry point; `--daemon` delega al daemon; subcomandos
     `list`/`replay`/`clear` (historial) delegan a `replay`; el one-shot delega la rama
     de backend a `replay.mostrar_toast`. Import perezoso en todos los branches.
-  - `verdantis_daemon.py` — dueño del bus DBus (`Notify`, `CloseNotification`,
+  - `daemon.py` — dueño del bus DBus (`Notify`, `CloseNotification`,
     `GetCapabilities`, `GetServerInformation`, signals), cola de toasts, click→action,
     archivo al historial (`_persist_to_disk`, salvo hints `transient`).
   - `toast_helpers.py` — iconos (.desktop exacto → tema), URLs, detección de
@@ -54,13 +54,13 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
   - `toast_core.py` — métricas de layout (fuente única) y primitivas GSK:
     gradientes, sombra, hairline, pixbufs. Incluye `surface_size`/`layer_margins`:
     la surface layer-shell es mayor que la card para que la sombra no se recorte.
-  - `wayland_popup.py` — `NotificationWidget` (interacción + `do_snapshot`) y
-    `WaylandPopup` (layer-shell, timers, pila). Re-exporta los dos módulos de
-    arriba para no romper imports históricos (`from wayland_popup import ...`).
+  - `toast_window.py` — `ToastCard` (interacción + `do_snapshot`) y
+    `ToastWindow` (layer-shell, timers, pila). Re-exporta los dos módulos de
+    arriba para no romper imports históricos (`from toast_window import ...`).
   - `app_info.py` — fuente única de `APP_NAME`/`APP_ID`/`VENDOR` (nada de literales
     "Verdantis" inline; el vendor de GetServerInformation es MoriNo23, no el nombre).
-  - `x11_popup.py` — fallback X11 (Gtk.Window posicionable, sin layer-shell) que
-    reutiliza `NotificationWidget`; solo se importa en ese branch. Qt no existe.
+  - `x11_window.py` — fallback X11 (Gtk.Window posicionable, sin layer-shell) que
+    reutiliza `ToastCard`; solo se importa en ese branch. Qt no existe.
   - `history_store.py` — historial en `$XDG_DATA_HOME/verdantis/history.jsonl` +
     `icons/`: `append`/`read`/`copy_icon`/`icon_path`/`clear`, tope 1000 registros y
     rotación con borrado de iconos. Best-effort: NUNCA tumba un `Notify`.
@@ -68,7 +68,7 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
     backend, única copia para one-shot y replay). Sin gi al importar: `list` y `clear`
     no tocan display. `history_store` reapareció con este ciclo (v0.12.0 lo había
     eliminado junto al dashboard, que sigue muerto y recuperable por git).
-- Métricas de layout: fuente única en `wayland_popup` (`_PAD`/`_rows_above_body`/...),
+- Métricas de layout: fuente única en `toast_window` (`_PAD`/`_rows_above_body`/...),
   consumidas por `_draw`, `calc_card_height` y `_eff_text_width`. No recomputar el
   stack a mano o divergen. Escala tipográfica: `_TITLE_FS`/`_BODY_FS`/`_APP_FS`
   = 13/12/11; `calc_card_height` deriva el alto del body de `_BODY_FS`, no de una
@@ -76,7 +76,7 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
   `notification_center._css()` (foco con `DEFAULT_ACCENT`, no azul Adwaita).
   Urgencia: `critical` (`urgency=2`) no expira — `_duration_for` en el daemon —
   y su acento propio (`app_info.accent_for`, `#ef9a9a`) dibuja un rail GSK en
-  `NotificationWidget`. La cola pendiente se muestra en `_PendingBadge`
+  `ToastCard`. La cola pendiente se muestra en `_PendingBadge`
   (layer-shell, sin foco), sincronizada por `_sync_badge` en el daemon.
 
 ## Build & test
@@ -89,15 +89,15 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
 - Mockups del toast: viven en `mockups/` (app Next.js + wireframe-ui, parte
   de main). Correr con `pnpm dev` dentro de la carpeta y editar el JSX
   directamente — tokens en `mockups/src/lib/toast-tokens.ts` con la constante
-  original de `wayland_popup.py` comentada en cada valor. Sin validador: los
+  original de `toast_window.py` comentada en cada valor. Sin validador: los
   mockups son documentación visual y PUEDEN divergir; la verdad del
   comportamiento son los specs de `openspec/specs/` y el código. (El tablero
   anterior se retiró con este cambio; recuperable por `ba091a4` en git.)
 - Los tests son headless: `tests/conftest.py` es el dueño del `GDK_BACKEND` (wayland
   si hay `WAYLAND_DISPLAY`, offscreen si no) y del path hacia `src/` — corre antes que
   cualquier módulo de test, así que los archivos no repiten ese preámbulo.
-  `wayland_popup` forza `GDK_BACKEND=wayland` al importarse, por eso el env debe
-  fijarse antes de importarlo. `wayland_popup` carga libgtk4-layer-shell con
+  `toast_window` forza `GDK_BACKEND=wayland` al importarse, por eso el env debe
+  fijarse antes de importarlo. `toast_window` carga libgtk4-layer-shell con
   RTLD_GLOBAL antes de gi: importarlo primero es obligatorio en cada módulo.
 - Convención de tests: unit + metatests de sensibilidad (test_tests_*.py que inyectan
   la versión bugueada y verifican que la suite la detecta).
@@ -107,7 +107,7 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
 
 - Código y commits en español. Commits conventional: `feat:`, `fix:`, `test:`, `chore:`.
 - Versionado: semver (`MAJOR.MINOR.PATCH`) con fuente única en la constante `VERSION`
-  de `src/verdantis_daemon.py` (la usa `GetServerInformation`). Bump MINOR en el primer
+  de `src/daemon.py` (la usa `GetServerInformation`). Bump MINOR en el primer
   commit `feat:` de cada ciclo; PATCH en `fix:`; MAJOR solo en breaking. `test:`/`chore:`
   NO bumpan. Un commit que bumea actualiza `VERSION` en el mismo commit y lo reporta al
   usuario; verificar el bump con `busctl --user call ... GetServerInformation` tras
@@ -166,7 +166,7 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
   de Plasma. Si plasmashell lo reclama, verdantis pierde el nombre y queda idle
   (NameLost). Verificar owner con `busctl --user list | grep Notifications`.
 - Reinicio: `systemctl --user restart verdantis.service` (Type=dbus, BusName=...).
-- Import de gi: `import wayland_popup` PRIMERO carga libgtk4-layer-shell con
+- Import de gi: `import toast_window` PRIMERO carga libgtk4-layer-shell con
   RTLD_GLOBAL antes que libwayland. Si otro módulo importa Gtk/Gdk antes,
   `Gtk4LayerShell.is_supported()` da False y el toast no se mapea (falla limpio).
   `Gtk.Window.set_size_request` NO funciona en GTK4: usar `set_default_size`.

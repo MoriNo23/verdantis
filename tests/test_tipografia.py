@@ -5,7 +5,7 @@ jerarquía dependía solo del peso. Ahora la escala es title > body > app y esto
 tests la fijan, además de acotar el alto del card para que un body largo no
 empuje el contenido fuera de la superficie.
 """
-import wayland_popup as wp
+import toast_window as wp
 
 
 def test_jerarquia_de_tamanos():
@@ -30,6 +30,6 @@ def test_escala_por_resolucion_conserva_la_jerarquia():
 def test_body_largo_no_explota_el_card():
     """3 líneas visibles: el alto queda acotado (la card mide 360 de ancho)."""
     largo = "palabra " * 120
-    alto = wp.WaylandPopup.calc_card_height(
+    alto = wp.ToastWindow.calc_card_height(
         "Brave", largo, "", text_width=212, actions_count=0, has_copy=True)
     assert alto <= 220, "card de %s px: ¿se perdió el cap de 3 líneas?" % alto

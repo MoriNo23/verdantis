@@ -14,11 +14,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-import wayland_popup as wp
-from wayland_popup import WaylandPopup, NotificationWidget, _layout_metrics
+import toast_window as wp
+from toast_window import ToastWindow, ToastCard, _layout_metrics
 from test_contrato_dbus import FakeBus
 
-from verdantis_daemon import NotificationManager
+from daemon import NotificationManager
 
 
 def _manager_stub_show():
@@ -28,7 +28,7 @@ def _manager_stub_show():
     m.set_dbus(FakeBus())
 
     def stub_show(nid, kwargs):
-        popup = WaylandPopup(**kwargs)
+        popup = ToastWindow(**kwargs)
         m._active.append((nid, popup))
 
     m._show_popup = stub_show
@@ -39,7 +39,7 @@ def _manager_stub_show():
 
 def test_prepare_sin_wayland_display_levanta(monkeypatch):
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
-    popup = WaylandPopup(titulo="t", cuerpo="b")
+    popup = ToastWindow(titulo="t", cuerpo="b")
     try:
         popup.prepare()
     except RuntimeError as e:
@@ -51,7 +51,7 @@ def test_prepare_sin_wayland_display_levanta(monkeypatch):
 
 
 def test_show_popup_con_prepare_roto_libera_hueco(monkeypatch):
-    from verdantis_daemon import WaylandPopup as _WP
+    from daemon import ToastWindow as _WP
     monkeypatch.setattr(_WP, "prepare", lambda self: (_ for _ in ()).throw(
         RuntimeError("simulado")))
     m = NotificationManager(corner="top-right")
@@ -104,13 +104,13 @@ def test_cierre_por_timer_limpia_dedup():
 def _calc_viejo_y_metrics(app, cuerpo, expanded, actions_count):
     """calc_card_height ACTUAL vs _layout_metrics con los mismos args."""
     body_fs = max(9, round(wp._BODY_FS * 1.0))
-    h_calc = WaylandPopup.calc_card_height(
+    h_calc = ToastWindow.calc_card_height(
         app, cuerpo, "", text_width=wp._TEXT_COL_W, expanded=expanded,
         hide_title=False, font_scale=1.0, actions_count=actions_count)
     lay = _layout_metrics(
         cuerpo, wp._TEXT_COL_W, body_fs, app, False, expanded,
-        actions_count > 0, wp._IMAGE_LEFT_W, NotificationWidget._MAX_VISIBLE_LINES,
-        NotificationWidget._BTN_H)
+        actions_count > 0, wp._IMAGE_LEFT_W, ToastCard._MAX_VISIBLE_LINES,
+        ToastCard._BTN_H)
     return h_calc, wp._PAD + lay.row_h + wp._PAD
 
 
@@ -132,8 +132,8 @@ def test_altura_calc_igual_a_layout_metrics():
 # --- 1.5 Margins por instancia ---
 
 def test_margins_por_instancia_desde_self_margin():
-    p = WaylandPopup(titulo="t", cuerpo="b", margin=42)
+    p = ToastWindow(titulo="t", cuerpo="b", margin=42)
     assert p._margins["top-right"] == (42, 42, 0, 0), (
         "--margin debe honrarse en Wayland (spec entrada-fallback)")
-    d = WaylandPopup(titulo="t", cuerpo="b")
+    d = ToastWindow(titulo="t", cuerpo="b")
     assert d._margins["top-right"] == (16, 16, 0, 0), "default intacto"

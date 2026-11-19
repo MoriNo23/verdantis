@@ -18,11 +18,11 @@ y registrarse en `org.kde.StatusNotifierWatcher`. Las propiedades SHALL incluir
 Sin watcher (o sin systray) el daemon SHALL seguir sirviendo notificaciones: la
 bandeja es aditiva, nunca un requisito de arranque.
 
-#### Scenario: Systray presente
+#### Scenario: Syssystray presente
 - **WHEN** el daemon arranca en una sesión Plasma
 - **THEN** el watcher lista el ítem y el ícono aparece junto al resto
 
-#### Scenario: Systray ausente
+#### Scenario: Syssystray ausente
 - **WHEN** `StatusNotifierWatcher` no existe (sesión sin bandeja)
 - **THEN** el ítem queda exportado, el daemon no falla y los toasts siguen
 

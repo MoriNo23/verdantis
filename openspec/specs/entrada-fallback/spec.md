@@ -12,7 +12,7 @@ El one-shot SHALL renderizar con layer-shell Wayland cuando exista `WAYLAND_DISP
 
 #### Scenario: Sesión Wayland
 - **WHEN** se invoca el one-shot con `WAYLAND_DISPLAY` definido y el render layer-shell funciona
-- **THEN** se renderiza con WaylandPopup y no se crea ninguna ventana de fallback
+- **THEN** se renderiza con ToastWindow y no se crea ninguna ventana de fallback
 
 #### Scenario: Sesión X11
 - **WHEN** se invoca el one-shot sin `WAYLAND_DISPLAY`

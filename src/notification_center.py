@@ -47,7 +47,7 @@ def card_fields(record, now=None):
     record = record or {}
     body = record.get("body") or ""
     try:
-        from wayland_popup import _strip_urls
+        from toast_window import _strip_urls
         body = _strip_urls(body)
     except Exception:
         pass
@@ -83,7 +83,7 @@ def _records_recientes(limit):
 def _css():
     """CSS del centro: mismo lenguaje de card que el toast, foco con acento."""
     from app_info import DEFAULT_ACCENT
-    from wayland_popup import _CARD_BG_HEX, _CARD_RADIUS
+    from toast_window import _CARD_BG_HEX, _CARD_RADIUS
     return (
         ".center-list row { background: %s; border-radius: %dpx;"
         " margin: 6px 10px; }"

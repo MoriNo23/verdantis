@@ -20,7 +20,7 @@ no para un daemon layer-shell, y su look choca con "carácter propio" de PRODUCT
   API idiomática: `init_for_window`, `set_layer`, `set_namespace`, `set_anchor`,
   `set_margin`, `set_exclusive_zone`, `is_layer_window`, `is_supported`.
   No existe `try_force_commit` (se elimina).
-- **Widget**: `NotificationWidget` pasa de `Gtk.DrawingArea` a `Gtk.Widget` con
+- **Widget**: `ToastCard` pasa de `Gtk.DrawingArea` a `Gtk.Widget` con
   `do_snapshot(self, snapshot)` + `do_measure(...)`. GTK4 no tiene señales
   `draw`/`button-press-event`: se usan `Gtk.EventControllerMotion` y
   `Gtk.GestureClick` vía `add_controller`.
@@ -31,7 +31,7 @@ no para un daemon layer-shell, y su look choca con "carácter propio" de PRODUCT
   dibujados con `Gtk.Snapshot.append_layout(layout, Gdk.RGBA)`. GSK resuelve el AA;
   se retira `_FONT_OPTIONS`/`_create_layout(cr)` de la ruta de dibujo.
 - **Medición**: `calc_card_height` y `_body_metrics` ya son headless con Pango; se
-  reutilizan. La única fuente de métricas sigue siendo `wayland_popup`.
+  reutilizan. La única fuente de métricas sigue siendo `toast_window`.
 
 ## Mapa de nodos GSK
 

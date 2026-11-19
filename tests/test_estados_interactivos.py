@@ -6,12 +6,12 @@ presionar marca el estado pressed (tinte más intenso) y consume; soltar
 fuera cancela y restaura. La barra "Ver más" queda press-based (PRODUCT.md
 no la nombra).
 
-Headless: `NotificationWidget.__new__` + attrs inyectados — el routing es
+Headless: `ToastCard.__new__` + attrs inyectados — el routing es
 lógica propia, el render lo verifica el agente (spec `verificacion-visual`).
 """
 from unittest.mock import Mock
 
-from wayland_popup import NotificationWidget
+from toast_window import ToastCard
 
 
 class _Evt:
@@ -23,7 +23,7 @@ class _Evt:
 
 def _widget():
     """Widget sin display: justo los attrs que toca press/release."""
-    w = NotificationWidget.__new__(NotificationWidget)
+    w = ToastCard.__new__(ToastCard)
     w._close_rect = (280, 0, 360, 120)          # franja de 80px
     w._expand_rect = None
     w._action_rects = [(10, 60, 100, 88, "settings")]

@@ -14,14 +14,14 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gsk", "4.0")
 from gi.repository import Gtk
 
-import wayland_popup as wp
+import toast_window as wp
 
 
 def _widget(cuerpo="Tu código de verificación es 482193",
             acciones=None, ancho=360, alto=200, urgencia=1,
             acento="#80cbc4"):
     """Widget mínimo con los atributos que do_snapshot consulta."""
-    w = wp.NotificationWidget.__new__(wp.NotificationWidget)
+    w = wp.ToastCard.__new__(wp.ToastCard)
     w.__dict__.update(
         _cuerpo=cuerpo, _app_name="Brave", _hide_title=False, _expanded=False,
         _actions=acciones or [], _fraction=0.6, _hover=False,

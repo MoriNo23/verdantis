@@ -1,6 +1,6 @@
 """Métricas de layout y primitivas GSK del toast (fuente única).
 
-Extraído de `wayland_popup.py`: nada acá toca ventanas ni el layer-shell.
+Extraído de `toast_window.py`: nada acá toca ventanas ni el layer-shell.
 """
 import math
 import re

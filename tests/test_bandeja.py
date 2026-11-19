@@ -13,7 +13,7 @@ from gi.repository import Gio, GLib
 
 import pytest
 
-import tray
+import systray
 
 
 @pytest.fixture
@@ -100,8 +100,8 @@ def _call(conn, path, iface, method, args, rtype="()", destino=None):
                    method, args, rtype)
 
 
-def _tray(conn, abierto=None, limpiado=None):
-    t = tray.TrayIcon(
+def _systray(conn, abierto=None, limpiado=None):
+    t = systray.TrayIcon(
         conn=conn,
         on_open=lambda: abierto.append(1),
         on_clear=lambda: limpiado.append(1),
@@ -114,7 +114,7 @@ def _tray(conn, abierto=None, limpiado=None):
 
 def test_sni_expone_propiedades(par):
     servicio, cliente = par
-    _tray(servicio)
+    _systray(servicio)
     dest = servicio.get_unique_name()
     assert _get(cliente, "org.kde.StatusNotifierItem", "Category", dest)[0] == "ApplicationStatus"
     assert _get(cliente, "org.kde.StatusNotifierItem", "Id", dest)[0] == "verdantis"
@@ -125,7 +125,7 @@ def test_sni_expone_propiedades(par):
 def test_sni_publica_pixmap(par):
     """Sin pixmap el systray puede caer al tema y mostrar el icono genérico."""
     servicio, cliente = par
-    _tray(servicio)
+    _systray(servicio)
     v = _get(cliente, "org.kde.StatusNotifierItem", "IconPixmap",
              servicio.get_unique_name())[0]
     [(ancho, alto, datos)] = v
@@ -136,7 +136,7 @@ def test_sni_publica_pixmap(par):
 def test_sni_activar_abre_el_centro(par):
     servicio, cliente = par
     abierto = []
-    _tray(servicio, abierto=abierto)
+    _systray(servicio, abierto=abierto)
     _call(cliente, "/StatusNotifierItem", "org.kde.StatusNotifierItem",
           "Activate", GLib.Variant("(ii)", (0, 0)),
           destino=servicio.get_unique_name())
@@ -147,7 +147,7 @@ def test_sni_activar_abre_el_centro(par):
 
 def test_menu_layout_tiene_los_items(par):
     servicio, cliente = par
-    _tray(servicio)
+    _systray(servicio)
     rev, layout = _call(cliente, "/MenuBar", "com.canonical.dbusmenu",
                         "GetLayout", GLib.Variant("(ii)", (0, -1)),
                         "(u(ia{sv}av))",
@@ -162,7 +162,7 @@ def test_menu_layout_tiene_los_items(par):
 def test_menu_click_en_limpiar_llama_al_callback(par):
     servicio, cliente = par
     limpiado = []
-    _tray(servicio, limpiado=limpiado)
+    _systray(servicio, limpiado=limpiado)
     dest = servicio.get_unique_name()
     _, layout = _call(cliente, "/MenuBar", "com.canonical.dbusmenu",
                       "GetLayout", GLib.Variant("(ii)", (0, -1)),
@@ -179,7 +179,7 @@ def test_menu_click_en_limpiar_llama_al_callback(par):
 def test_menu_click_en_abrir_llama_al_callback(par):
     servicio, cliente = par
     abierto = []
-    _tray(servicio, abierto=abierto)
+    _systray(servicio, abierto=abierto)
     dest = servicio.get_unique_name()
     _, layout = _call(cliente, "/MenuBar", "com.canonical.dbusmenu",
                       "GetLayout", GLib.Variant("(ii)", (0, -1)),

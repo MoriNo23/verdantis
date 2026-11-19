@@ -150,7 +150,7 @@ clear it.
 
 No Qt and no Plasma applet reuse: the Plasma notification applet only reads the
 model of *its* daemon — invalid while Verdantis owns
-`org.freedesktop.Notifications` — and is GPL, while this repo is MIT. The tray
+`org.freedesktop.Notifications` — and is GPL, while this repo is MIT. The systray
 item is plain D-Bus on the same `Gio` connection, and the center is a GTK4
 window built from `history_store`. Without a StatusNotifierWatcher the item is
 still exported and the daemon works as before.
@@ -188,17 +188,17 @@ still exported and the daemon works as before.
 
 ```text
 src/
-  verdantis.py         entry point: --daemon, CLI (list/replay/clear), one-shot
-  verdantis_daemon.py  DBus name owner: Notify/CloseNotification/signals, queue
-  toast_helpers.py       app icons, URLs, verification codes, clipboard
-  toast_core.py     layout metrics + GSK primitives (surface > card for shadow)
-  wayland_popup.py     toast widget + layer-shell surface (re-exports the above)
-  x11_popup.py         X11 fallback (positionable window), reuses the widget
-  replay.py            history CLI + the shared render branch
-  tray.py              StatusNotifierItem + DBusMenu (KDE systray)
+  verdantis.py            entry point: --daemon, CLI (list/replay/clear), one-shot
+  daemon.py               DBus name owner: Notify/CloseNotification/signals, queue
+  toast_helpers.py        app icons, URLs, verification codes, clipboard
+  toast_core.py           layout metrics + GSK primitives (surface > card for shadow)
+  toast_window.py         toast card + layer-shell surface (re-exports the above)
+  x11_window.py           X11 fallback (positionable window), reuses the card
+  replay.py               history CLI + the shared render branch
+  systray.py              StatusNotifierItem + DBusMenu (KDE systray)
   notification_center.py  notification center (read-only cards, clear)
-  history_store.py     JSONL store + icon byte copies (best-effort)
-  app_info.py          single source of identity (name, id, vendor, accent)
+  history_store.py        JSONL store + image byte copies (best-effort)
+  app_info.py             single source of identity (name, id, vendor, accent)
 tests/                 D-Bus contract, audit, history/replay + sensitivity metatests
 mockups/               Next.js visual docs of the toast (may diverge)
 ```

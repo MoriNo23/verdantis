@@ -3,7 +3,7 @@ del layer-shell y el compositor la recorta. El fix agranda la surface y corre
 los márgenes para que la CARD siga en el mismo sitio.
 """
 import toast_core as tm
-import wayland_popup as wp
+import toast_window as wp
 
 
 def test_surface_mayor_que_la_card():
@@ -39,7 +39,7 @@ def test_apply_margins_con_pila_no_lanza(monkeypatch):
     puestos = {}
     monkeypatch.setattr(wp.Gtk4LayerShell, "set_margin",
                         lambda w, edge, val: puestos.__setitem__(str(edge), val))
-    p = wp.WaylandPopup(corner="top-right", margin=16)
+    p = wp.ToastWindow(corner="top-right", margin=16)
     p.window = object()
     p._card = None
     p._stack_margin = 40

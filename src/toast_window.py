@@ -1,3 +1,8 @@
+"""Fachada del toast: `ToastCard` (GSK) + `ToastWindow` (layer-shell).
+
+Re-exporta `toast_helpers` y `toast_core` para conservar la API histórica.
+"""
+
 import math
 import os
 import re
@@ -36,7 +41,7 @@ from app_info import APP_ID, APP_NAME, DEFAULT_ACCENT
 from toast_helpers import *       # noqa: F401,F403 (API histórica)
 from toast_core import *     # noqa: F401,F403 (API histórica)
 
-class NotificationWidget(Gtk.Widget):
+class ToastCard(Gtk.Widget):
     """Toast: widget GSK puro. Dibuja en do_snapshot, interactúa con controllers."""
 
     _MAX_VISIBLE_LINES = 3
@@ -412,7 +417,7 @@ class NotificationWidget(Gtk.Widget):
         return _TEXT_COL_W - self._strip_w()
 
     def desired_height(self):
-        h = WaylandPopup.calc_card_height(
+        h = ToastWindow.calc_card_height(
             self._app_name, self._cuerpo, "",
             text_width=self._eff_text_width(), expanded=self._expanded,
             hide_title=self._hide_title, font_scale=self._font_scale,
@@ -794,7 +799,7 @@ def _add_window_css():
     _CSS_YA_PUESTO = True
 
 
-class WaylandPopup:
+class ToastWindow:
     """Popup layer-shell GTK4. La cola/FIFO la maneja el daemon."""
 
     def __init__(self, titulo="", cuerpo="", icon_path=None, image_path=None,
@@ -881,7 +886,7 @@ class WaylandPopup:
         # superficie mapeada pero INVISIBLE. El default 0 es lo correcto para
         # un toast que no debe reservar espacio de panel.
 
-        self._card = NotificationWidget(
+        self._card = ToastCard(
             self.app_name, self.app_icon,
             self.titulo, self.cuerpo,
             self.icon_path, self.image_path,
@@ -913,7 +918,7 @@ class WaylandPopup:
     def stack_height(self):
         if self._card:
             return self._card.desired_height()
-        return WaylandPopup.calc_card_height(
+        return ToastWindow.calc_card_height(
             self.app_name, self.cuerpo, self.image_path,
             text_width=_CARD_WIDTH - _PAD * 2,
             has_copy=bool(getattr(self._card, "_copy_text", None)))
@@ -956,7 +961,7 @@ class WaylandPopup:
         lay = _layout_metrics(
             cuerpo, text_width, _body_fs, app_name, hide_title, expanded,
             actions_count > 0 or has_copy, _IMAGE_LEFT_W,
-            NotificationWidget._MAX_VISIBLE_LINES, NotificationWidget._BTN_H,
+            ToastCard._MAX_VISIBLE_LINES, ToastCard._BTN_H,
         )
         h = _PAD + lay.row_h + _PAD
         if image_path and os.path.exists(image_path):

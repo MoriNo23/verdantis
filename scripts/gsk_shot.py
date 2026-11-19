@@ -27,7 +27,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, GLib
 
-import wayland_popup as wp
+import toast_window as wp
 
 
 def _pump(n=30):
@@ -53,7 +53,7 @@ def _fondo(hex_color):
 
 def shot_toast(salida, fondo):
     """Misma data que la notificación de `visual_check.sh`."""
-    w = wp.NotificationWidget(
+    w = wp.ToastCard(
         app_name="verdantis-visual", app_icon="mail",
         titulo="Código de verificación",
         cuerpo="Tu código de verificación es 482193. No lo compartas.",

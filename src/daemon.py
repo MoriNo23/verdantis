@@ -1,3 +1,5 @@
+"""Dueño de `org.freedesktop.Notifications`: cola FIFO, señales, bandeja y centro."""
+
 import ctypes
 import json
 import os
@@ -17,8 +19,8 @@ gi.require_version('Gtk4LayerShell', '1.0')
 from gi.repository import Gtk, Gdk, GdkPixbuf, Gtk4LayerShell, GLib, Gio
 
 from app_info import APP_ID, APP_NAME, DEFAULT_ACCENT, VENDOR, accent_for
-from wayland_popup import (
-    WaylandPopup,
+from toast_window import (
+    ToastWindow,
     _extract_markup_url,
 )
 import history_store
@@ -154,7 +156,7 @@ class _PendingBadge:
         self.window.set_focusable(False)
         self.window.add_css_class("verdantis-badge-window")
         try:
-            from wayland_popup import _add_window_css
+            from toast_window import _add_window_css
             _add_window_css()
         except Exception:
             pass
@@ -305,7 +307,7 @@ class NotificationManager:
     # Gap entre cards de la pila, en px. Autoridad única: lo suman `_stack_offsets`
     # al calcular el offset de cada card (spec `toast-stack`, "El reflow es
     # estable": el de abajo arranca a `alto_de_arriba + 12`). Antes este valor
-    # estaba hardcodeado en `WaylandPopup._apply_margins` (12) y la constante de
+    # estaba hardcodeado en `ToastWindow._apply_margins` (12) y la constante de
     # acá (8) no la usaba nadie: dos fuentes de verdad, la equivocada muerta.
     STACK_GAP = 12
     # Delay entre notificaciones de un mismo burst: evita que lleguen todas a la
@@ -549,7 +551,7 @@ class NotificationManager:
         # `urgency`, y la pila terminaba apilándose por tipo — un critical
         # tardío adelantaba a los que ya esperaban y un low se iba al fondo.
         # La `urgency` sigue viva donde sirve: duración y opacidad del card
-        # (WaylandPopup.__init__), nunca la posición.
+        # (ToastWindow.__init__), nunca la posición.
         self._pending.append((nid, kwargs, urgency))
         # Tope de la cola: si ya está llena, la MÁS VIEJA sale (con su estado
         # limpio) para que la recién llamada entre siempre.
@@ -663,7 +665,7 @@ class NotificationManager:
         self._sync_badge()
 
     def _show_popup(self, nid, kwargs):
-        popup = WaylandPopup(**kwargs)
+        popup = ToastWindow(**kwargs)
         idx = len(self._active)
         # Stagger del auto-close: la posición 0 mantiene su duration base; las
         # siguientes suman un holdback creciente (idx * CLOSE_STAGGER_MS) para no
@@ -827,7 +829,7 @@ class NotificationDaemon:
         self._bus = None
         self._loop = None
         self._owned = False
-        self._tray = None
+        self._systray = None
         self._center = None
 
     def _on_bus_acquired(self, conn, name):
@@ -919,12 +921,12 @@ class NotificationDaemon:
             self._on_name_lost,
         )
         self._loop = GLib.MainLoop()
-        from tray import TrayIcon
-        self._tray = TrayIcon(
+        from systray import TrayIcon
+        self._systray = TrayIcon(
             on_open=self._open_center,
             on_clear=self._clear_history,
         )
-        self._tray.start()       # best-effort: sin systray sigue sin bandeja
+        self._systray.start()       # best-effort: sin systray sigue sin bandeja
         self._loop.run()
 
     def stop(self):

@@ -2,7 +2,7 @@
 # Verificación visual + de funcionamiento de Verdantis.
 #
 # El render se compara SIEMPRE contra una golden offscreen: el mismo
-# `NotificationWidget` se dibuja con `do_snapshot` y se rasteriza a PNG
+# `ToastCard` se dibuja con `do_snapshot` y se rasteriza a PNG
 # (`scripts/gsk_shot.py`), sin KWin, sin wallpaper, sin panel y sin depender de
 # que la sesión esté destrabada. La card translúcida se compone sobre un fondo
 # fijo, así que esa golden es la única comparable: la captura del desktop cambia

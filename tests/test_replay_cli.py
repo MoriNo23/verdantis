@@ -248,21 +248,21 @@ def test_record_a_kwargs_solo_parametros_que_el_popup_acepta(datos):
     """Guardarraíl contra divergencia: el shape del daemon y el del popup son
     el mismo contrato; una clave de más revienta en el render."""
     import inspect
-    from wayland_popup import WaylandPopup
+    from toast_window import ToastWindow
     kw = replay.record_a_kwargs(_rec(
         hints={"urgency": 2, "desktop-entry": "brave-browser"},
         actions=["default", "Activar"]))
-    assert set(kw) <= set(inspect.signature(WaylandPopup.__init__).parameters)
+    assert set(kw) <= set(inspect.signature(ToastWindow.__init__).parameters)
 
 
 def test_para_x11_solo_pasa_parametros_del_fallback(datos):
     """El __init__ del fallback X11 es un subconjunto: urgency, actions y
     callbacks no existen ahí (TypeError si el filtro no corre)."""
     import inspect
-    from x11_popup import NotificacionX11
+    from x11_window import X11Toast
     kw = replay._para_x11(replay.record_a_kwargs(_rec(
         hints={"urgency": 2}, actions=["default", "Activar"])))
-    assert set(kw) <= set(inspect.signature(NotificacionX11.__init__).parameters)
+    assert set(kw) <= set(inspect.signature(X11Toast.__init__).parameters)
     assert "actions" not in kw and "urgency" not in kw
 def test_record_a_kwargs_registro_viejo_minimo(datos):
     """Los 1000 registros en disco traen el esquema completo, pero el replay no

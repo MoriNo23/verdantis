@@ -2,7 +2,7 @@
 
 WCAG 2.x: luminancia relativa + ratio, medidos contra el FONDO EFECTIVO de
 cada zona — los hex REALES que dibuja el render (constantes de módulo de
-`wayland_popup`, no copias):
+`toast_window`, no copias):
 
 - Zona clara (sin wipe): el card se pinta con #1e1e2e a alpha 0.85 (reposo)
   o 0.92 (hover) compositado sobre el fondo de referencia #1e1e2e — con ese
@@ -18,7 +18,7 @@ pueden pisarlo, la promesa AA es con el acento del producto. No hay texto
 grande en el card (todas las fuentes son 10-11px): todo exige 4.5:1.
 """
 import app_info
-import wayland_popup as wp
+import toast_window as wp
 
 AA = 4.5
 

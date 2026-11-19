@@ -9,17 +9,17 @@ NotificationClosed(id, reason) por path de cierre:
   - replaces_id / dedup / replay → sin emisión alguna
 GetServerInformation reporta spec_version "1.2" (posición 4).
 
-Manager headless: scheduler no-op + `_pump()` manual + WaylandPopup real sin
+Manager headless: scheduler no-op + `_pump()` manual + ToastWindow real sin
 window (prepare() nunca se llama). FakeBus registra las señales emitidas.
 """
 from unittest.mock import Mock
 
 import subprocess
 
-import verdantis_daemon
-from verdantis_daemon import NotificationManager, NotificationDaemon, VERSION
+import daemon
+from daemon import NotificationManager, NotificationDaemon, VERSION
 from app_info import APP_NAME, VENDOR
-from wayland_popup import WaylandPopup
+from toast_window import ToastWindow
 
 
 class FakeBus:
@@ -38,7 +38,7 @@ def _manager_headless():
     m.set_dbus(FakeBus())
 
     def headless_show(nid, kwargs):
-        popup = WaylandPopup(**kwargs)
+        popup = ToastWindow(**kwargs)
         m._active.append((nid, popup))
 
     m._show_popup = headless_show
@@ -69,7 +69,7 @@ def _invokes(bus):
 
 def test_timer_expiry_emite_razon_1():
     m, nid = _manager_con_toast()
-    # Lo que hace WaylandPopup._update_progress al llegar a 0: _close() sin fuente.
+    # Lo que hace ToastWindow._update_progress al llegar a 0: _close() sin fuente.
     m._active[0][1]._close()
     assert _closes(m._dbus_bus) == [(nid, 1)]
 
@@ -77,7 +77,7 @@ def test_timer_expiry_emite_razon_1():
 # --- Razón 2: cierre por usuario ---
 
 def test_cierre_usuario_franja_emite_razon_2():
-    # Franja/X de descarte (cualquier toast) → WaylandPopup._close("user")
+    # Franja/X de descarte (cualquier toast) → ToastWindow._close("user")
     m, nid = _manager_con_toast()
     m._active[0][1]._close("user")
     assert _closes(m._dbus_bus) == [(nid, 2)]
@@ -97,7 +97,7 @@ def test_click_cuerpo_con_default_action_invoked_antes_de_closed():
 def test_click_cuerpo_url_sin_default_razon_2(monkeypatch):
     # Sin actions pero con URL: no hay ActionInvoked, solo cierre razón 2.
     monkeypatch.setattr(
-        "verdantis_daemon.subprocess.Popen", lambda cmd, **k: None)
+        "daemon.subprocess.Popen", lambda cmd, **k: None)
     m, nid = _manager_con_toast(hints={"url": "https://ejemplo.com/x"})
     m._on_action_invoked(nid)
     assert _invokes(m._dbus_bus) == []
@@ -118,7 +118,7 @@ def test_click_cuerpo_actions_sin_default_con_url_abre_url(monkeypatch):
     # actions (la regla dunst "con actions nunca xdg-open" solo aplica a la
     # action default real).
     popen = Mock()
-    monkeypatch.setattr("verdantis_daemon.subprocess.Popen", popen)
+    monkeypatch.setattr("daemon.subprocess.Popen", popen)
     m, nid = _manager_con_toast(
         actions=["settings", "Ajustes"],
         hints={"url": "https://ejemplo.com/x"},
@@ -175,7 +175,7 @@ def test_close_notification_handler_emite_razon_3():
     m.set_dbus(FakeBus())
 
     def headless_show(nid, kwargs):
-        popup = WaylandPopup(**kwargs)
+        popup = ToastWindow(**kwargs)
         m._active.append((nid, popup))
 
     m._show_popup = headless_show
@@ -190,7 +190,7 @@ def test_close_notification_handler_emite_razon_3():
     d._handle_method_call(None, ":1.99", "/org/freedesktop/Notifications",
                           "org.freedesktop.Notifications",
                           "CloseNotification",
-                          verdantis_daemon.GLib.Variant("(u)", (nid,)),
+                          daemon.GLib.Variant("(u)", (nid,)),
                           invocation)
     assert _closes(m._dbus_bus) == [(nid, 3)], (
         "CloseNotification por D-Bus no emitió razón 3"

@@ -10,7 +10,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-import wayland_popup as wp
+import toast_window as wp
 
 from test_contraste import _ratio, _BG, AA
 

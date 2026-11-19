@@ -12,12 +12,12 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gsk", "4.0")
 from gi.repository import Gtk, Pango
 
-import wayland_popup as wp
+import toast_window as wp
 
 
 def _widget(cuerpo="Tu código de verificación es 482193",
             acciones=None, hover=False):
-    w = wp.NotificationWidget.__new__(wp.NotificationWidget)
+    w = wp.ToastCard.__new__(wp.ToastCard)
     w.__dict__.update(
         _cuerpo=cuerpo, _app_name="Brave", _hide_title=False,
         _expanded=False, _actions=acciones or [], _fraction=0.6,
@@ -74,7 +74,7 @@ def test_el_rail_de_cierre_existe_tambien_en_reposo():
     assert w._close_rect is not None, (
         "sin hover no había rect de cierre: el rail debe estar reservado")
     ancho = w._close_rect[2] - w._close_rect[0]
-    assert ancho == wp.NotificationWidget._CLOSE_RAIL_W
+    assert ancho == wp.ToastCard._CLOSE_RAIL_W
     assert ancho >= 24, "WCAG 2.5.8: target mínimo 24x24"
 
 

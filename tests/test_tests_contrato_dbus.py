@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-import verdantis_daemon
+import daemon
 
 from test_contrato_dbus import _manager_con_toast, _closes, _invokes
 
@@ -31,7 +31,7 @@ def test_metatest_mapeo_fijo_2_detectado_en_timer(monkeypatch):
     """Inyección: TODAS las fuentes → razón 2 (el mapeo fijo de antes).
     El test de timer (espera razón 1) debe quedar en rojo."""
     monkeypatch.setattr(
-        verdantis_daemon, "_RAZONES",
+        daemon, "_RAZONES",
         {"timeout": 2, "user": 2, "action": 2, "dbus-close": 2},
     )
     m, nid = _manager_con_toast()
@@ -46,7 +46,7 @@ def test_metatest_dbus_close_razon_2_detectado(monkeypatch):
     """Inyección: dbus-close pierde su razón 3 (cae en la genérica 2).
     El test de CloseNotification (espera razón 3) debe quedar en rojo."""
     monkeypatch.setattr(
-        verdantis_daemon, "_RAZONES",
+        daemon, "_RAZONES",
         {"timeout": 1, "user": 2, "action": 2, "dbus-close": 2},
     )
     m, nid = _manager_con_toast()
@@ -62,7 +62,7 @@ def test_metatest_fallback_actions0_detectado(monkeypatch):
     'default' (el fallback pre-fix). El test de click sin default (espera
     cero ActionInvoked) debe quedar en rojo."""
     monkeypatch.setattr(
-        verdantis_daemon, "_pick_action_key", _pick_action_key_bugeada)
+        daemon, "_pick_action_key", _pick_action_key_bugeada)
     m, nid = _manager_con_toast(actions=["settings", "Ajustes"])
     m._on_action_invoked(nid)
     assert _invokes(m._dbus_bus) != [], (

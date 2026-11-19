@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import history_store
 import replay
-import verdantis_daemon
+import daemon
 
 from test_replay_cli import _manager, _rec, _recs, datos  # noqa: F401
 
@@ -43,7 +43,7 @@ def test_metatest_icono_archivado_ignorado_detectado(datos, monkeypatch):
 def test_metatest_transient_archivado_detectado(datos, monkeypatch):
     """Inyección: el daemon archiva TODO, incluidas las transient (bug del
     guard ausente). El test de transient debe quedar en rojo."""
-    monkeypatch.setattr(verdantis_daemon, "_debe_archivar", lambda hints: True)
+    monkeypatch.setattr(daemon, "_debe_archivar", lambda hints: True)
     m = _manager()
     m.notify(app_name="sim", summary="efímera", body="",
              hints={"transient": True}, expire_timeout=6000)

@@ -5,7 +5,7 @@ congela (crédito que compensa tick a tick) y al salir reanuda con el tiempo
 restante — sin esto, la X de un toast de 6s es una carrera perdida contra
 el timer que el usuario siempre pierde.
 
-Headless: WaylandPopup sin window ni card real (prepare()/_build_ui nunca se
+Headless: ToastWindow sin window ni card real (prepare()/_build_ui nunca se
 llaman, igual que en test_contrato_dbus). El card es un stub con la interfaz
 que _update_progress toca (_hover + set_fraction) y el reloj un stub inyectado
 SOLO en el `time` del módulo — el render lo verifica el agente (spec
@@ -13,8 +13,8 @@ SOLO en el `time` del módulo — el render lo verifica el agente (spec
 """
 import types
 
-import wayland_popup
-from wayland_popup import WaylandPopup
+import toast_window
+from toast_window import ToastWindow
 
 
 class _CardStub:
@@ -29,7 +29,7 @@ class _CardStub:
 
 
 def _popup_con_card(duration=5000):
-    p = WaylandPopup(duration=duration)
+    p = ToastWindow(duration=duration)
     p._card = _CardStub()
     return p
 
@@ -37,7 +37,7 @@ def _popup_con_card(duration=5000):
 def _con_reloj(monkeypatch, popup):
     reloj = {"t": 0.0}
     monkeypatch.setattr(
-        wayland_popup, "time",
+        toast_window, "time",
         types.SimpleNamespace(monotonic=lambda: reloj["t"]))
     popup._start = reloj["t"]
     return reloj

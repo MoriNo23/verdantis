@@ -3,7 +3,7 @@ import sys
 
 # conftest corre ANTES que cualquier módulo de test: es el dueño único del
 # path hacia src/ y del GDK_BACKEND. Los archivos de test no repiten este
-# preámbulo. wayland_popup carga libgtk4-layer-shell con RTLD_GLOBAL antes de
+# preámbulo. toast_window carga libgtk4-layer-shell con RTLD_GLOBAL antes de
 # gi (pitfall del orden de linking con libwayland en GTK4).
 # Excepción deliberada: test_version_constant.py conserva su propio sys.path
 # porque declara que debe poder correr aislado (fuera de pytest).

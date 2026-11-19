@@ -1,7 +1,7 @@
 """Replay del historial por CLI: `list`, `replay` y `clear`.
 
 El replay NO pasa por el bus: reconstruye el toast con el render real
-(`WaylandPopup` o el fallback X11, la misma elección de rama que el one-shot)
+(`ToastWindow` o el fallback X11, la misma elección de rama que el one-shot)
 directo desde `history.jsonl`. Consecuencias deliberadas: no re-archiva (el
 historial no se infla), no lo filtra el dedup del daemon y funciona aunque
 verdantis no sea el dueño de `org.freedesktop.Notifications`. A cambio, click
@@ -50,7 +50,7 @@ def seleccionar(records, last=5, app=None, id=None):
 def _click_abre_url(url):
     """Callback de click del replay: abre la URL archivada con `xdg-open` y
     pide el cierre retornando True — no hay daemon que cierre por él
-    (el callback del daemon retorna None; ver `WaylandPopup._on_button_press`)."""
+    (el callback del daemon retorna None; ver `ToastWindow._on_button_press`)."""
     def cb(key=None):
         try:
             subprocess.Popen(
@@ -103,7 +103,7 @@ def record_a_kwargs(record, duration=None):
     # Import perezoso: la detección de navegador y la defensa de URLs locales
     # viven en el daemon (que sí importa gi) y el replay ya paga gi al dibujar,
     # pero `list`/`clear` no tocan display.
-    from verdantis_daemon import _is_browser, _is_local_url
+    from daemon import _is_browser, _is_local_url
     if url and _is_local_url(url):
         url = ""
 
@@ -136,8 +136,8 @@ def mostrar_toast(kwargs, force_wayland=False, force_fallback=False):
     """Muestra UN toast con el backend de la sesión.
 
     Rama única para el one-shot y el replay (antes duplicada en
-    `verdantis.main`): Wayland con layer-shell → `WaylandPopup`; X11 o
-    `--force-fallback` → `NotificacionX11`; Wayland SIN layer-shell → error por
+    `verdantis.main`): Wayland con layer-shell → `ToastWindow`; X11 o
+    `--force-fallback` → `X11Toast`; Wayland SIN layer-shell → error por
     stderr y exit ≠ 0, sin fallback mal posicionado (spec `entrada-fallback`)."""
     is_wayland = (
         force_wayland
@@ -145,8 +145,8 @@ def mostrar_toast(kwargs, force_wayland=False, force_fallback=False):
     )
     if is_wayland:
         try:
-            from wayland_popup import WaylandPopup
-            WaylandPopup(**kwargs).show()
+            from toast_window import ToastWindow
+            ToastWindow(**kwargs).show()
             return
         except Exception as e:
             # En Wayland SIN layer-shell NO hay fallback: una ventana toplevel
@@ -157,8 +157,8 @@ def mostrar_toast(kwargs, force_wayland=False, force_fallback=False):
             sys.exit(1)
 
     # Import perezoso del fallback X11: el path Wayland no lo carga.
-    from x11_popup import NotificacionX11
-    NotificacionX11(**_para_x11(kwargs)).show()
+    from x11_window import X11Toast
+    X11Toast(**_para_x11(kwargs)).show()
 
 
 def _para_x11(kwargs):

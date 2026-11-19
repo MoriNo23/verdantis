@@ -15,7 +15,7 @@ Páginas: `/` (variantes) · `/anatomia` (cotas px) · `/tokens` (paleta y medid
 ## ⚠️ Advertencia: sin validador
 
 Estos mockups son **documentación** — no hay validación automática contra
-`src/wayland_popup.py` (la maquinaria de manifiestos del tablero Lunacy se
+`src/toast_window.py` (la maquinaria de manifiestos del tablero Lunacy se
 retiró con este change). La verdad del comportamiento son los specs de main:
 
 - `toast-acciones` — botones de acción y action-icons
@@ -32,6 +32,6 @@ trade-off a cambio de editarlo con el editor y verlo en el navegador.
 ## Editar
 
 Todo el layout vive en `src/lib/toast-tokens.ts` (colores/medidas/tipografía,
-con comentarios que nombran la constante original de `wayland_popup.py`) y
+con comentarios que nombran la constante original de `toast_window.py`) y
 `src/components/toast-mock.tsx` (el componente del toast). Las páginas solo
 componen variantes.

@@ -3,7 +3,7 @@
 Si la ventana layer-shell conserva el fondo opaco del tema, se ve un bloque
 negro rectangular detrás del toast (el "fondo negro" que tapaba la sombra).
 """
-import wayland_popup as wp
+import toast_window as wp
 
 
 def test_css_de_ventana_hace_transparente_fuera_de_la_card(monkeypatch):
