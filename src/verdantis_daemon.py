@@ -630,6 +630,9 @@ class NotificationManager:
         """
         for offset, (_, p) in zip(self._stack_offsets(), self._active):
             p.set_stack_margin(offset)
+        # El badge cuelga del final de la pila: si una card cambió de alto,
+        # reposicionarlo también (spec `toast-badge-pendientes`).
+        self._sync_badge()
 
     def _show_popup(self, nid, kwargs):
         popup = WaylandPopup(**kwargs)

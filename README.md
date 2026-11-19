@@ -80,7 +80,7 @@ Apps send notifications over DBus and Verdantis draws them:
 systemctl --user status verdantis.service
 busctl --user call org.freedesktop.Notifications \
   /org/freedesktop/Notifications org.freedesktop.Notifications GetServerInformation
-# => ssss "Verdantis" "MoriNo23" "0.15.10" "1.2"
+# => ssss "Verdantis" "MoriNo23" "0.18.0" "1.2"
 ```
 
 ### Stack rules
@@ -88,6 +88,9 @@ busctl --user call org.freedesktop.Notifications \
 - Max **2 toasts on screen**; the rest wait in line.
 - The line is **FIFO by arrival**: no type (low/normal/critical) wins a slot
   or skips ahead — `urgency` only changes duration and style, never position.
+- A **critical** notification (`urgency=2`) never expires on its own and is
+  marked with a red left rail. A small badge below the stack shows how many
+  notifications are still waiting.
 - The line is **capped at 20**: in a flood the oldest entries are dropped,
   the newest always get in.
 - **A toast is not created until there is a visual slot**: waiting entries
