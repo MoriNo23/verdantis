@@ -7,7 +7,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk
 
-import toast_metrics as tm
+import toast_core as tm
 from test_render_gsk import _widget
 
 

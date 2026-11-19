@@ -190,8 +190,8 @@ still exported and the daemon works as before.
 src/
   verdantis.py         entry point: --daemon, CLI (list/replay/clear), one-shot
   verdantis_daemon.py  DBus name owner: Notify/CloseNotification/signals, queue
-  toast_icons.py       app icons, URLs, verification codes, clipboard
-  toast_metrics.py     layout metrics + GSK primitives (surface > card for shadow)
+  toast_helpers.py       app icons, URLs, verification codes, clipboard
+  toast_core.py     layout metrics + GSK primitives (surface > card for shadow)
   wayland_popup.py     toast widget + layer-shell surface (re-exports the above)
   x11_popup.py         X11 fallback (positionable window), reuses the widget
   replay.py            history CLI + the shared render branch

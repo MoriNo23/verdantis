@@ -218,7 +218,7 @@ aportar su percepción pero no es la fuente exclusiva.
   márgenes compensatorios para que la card siga a 16 px del borde y el offset de
   pila siga sumando. Verificado en vivo: la sombra se ve sobre el contenido debajo
   de la card (píxeles ~20 vs ~31 de fondo), sin moverla. `wayland_popup.py` pasó
-  de 1598 a 990 líneas: salieron `toast_icons.py` y `toast_metrics.py`, con
+  de 1598 a 990 líneas: salieron `toast_helpers.py` y `toast_core.py`, con
   re-exports para no romper ningún import existente. Suite 151 tests.
 - Hecho (0.18.3): el fondo de la surface agrandada era el background opaco
   del tema GTK y se veía como un bloque negro rectangular detrás del toast,

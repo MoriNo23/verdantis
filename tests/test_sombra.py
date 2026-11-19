@@ -2,7 +2,7 @@
 del layer-shell y el compositor la recorta. El fix agranda la surface y corre
 los márgenes para que la CARD siga en el mismo sitio.
 """
-import toast_metrics as tm
+import toast_core as tm
 import wayland_popup as wp
 
 

@@ -33,8 +33,8 @@ from gi.repository import (Gtk, Gdk, Gsk, GLib, GdkPixbuf, Pango,
 from app_info import APP_ID, APP_NAME, DEFAULT_ACCENT
 
 
-from toast_icons import *       # noqa: F401,F403 (API histórica)
-from toast_metrics import *     # noqa: F401,F403 (API histórica)
+from toast_helpers import *       # noqa: F401,F403 (API histórica)
+from toast_core import *     # noqa: F401,F403 (API histórica)
 
 class NotificationWidget(Gtk.Widget):
     """Toast: widget GSK puro. Dibuja en do_snapshot, interactúa con controllers."""

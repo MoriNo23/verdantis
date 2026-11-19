@@ -49,9 +49,9 @@ GSK + gtk4-layer-shell, sin depender de Plasma. Reemplaza a mako/deadd.
   - `verdantis_daemon.py` — dueño del bus DBus (`Notify`, `CloseNotification`,
     `GetCapabilities`, `GetServerInformation`, signals), cola de toasts, click→action,
     archivo al historial (`_persist_to_disk`, salvo hints `transient`).
-  - `toast_icons.py` — iconos (.desktop exacto → tema), URLs, detección de
+  - `toast_helpers.py` — iconos (.desktop exacto → tema), URLs, detección de
     código de verificación, portapapeles (`wl-copy`, sin robar foco).
-  - `toast_metrics.py` — métricas de layout (fuente única) y primitivas GSK:
+  - `toast_core.py` — métricas de layout (fuente única) y primitivas GSK:
     gradientes, sombra, hairline, pixbufs. Incluye `surface_size`/`layer_margins`:
     la surface layer-shell es mayor que la card para que la sombra no se recorte.
   - `wayland_popup.py` — `NotificationWidget` (interacción + `do_snapshot`) y
