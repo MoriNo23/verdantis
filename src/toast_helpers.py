@@ -83,9 +83,10 @@ def _rebuild_desktop_cache():
             pass
 
 
-def _get_app_icon_from_desktop(app_name, size=80, mode="cover"):
-    """Icono de la app desde .desktop, SOLO con match EXACTO."""
-    path = _exact_desktop_file(app_name)
+def _get_app_icon_from_desktop(app_name, size=80, mode="cover",
+                               desktop_entry=None):
+    """Icono de la app desde .desktop: primero `desktop-entry`, luego app_name."""
+    path = _exact_desktop_file(app_name, desktop_entry)
     if not path:
         return None
     try:
@@ -102,19 +103,33 @@ def _get_app_icon_from_desktop(app_name, size=80, mode="cover"):
     return None
 
 
-def _exact_desktop_file(app_name):
-    """Resuelve el .desktop con match EXACTO (stem/WMClass/Name), sin substring."""
-    if not app_name:
+def _exact_desktop_file(app_name, desktop_entry=None):
+    """Resuelve el .desktop con match EXACTO (stem/WMClass/Name), sin substring.
+
+    `desktop-entry` es la fuente canónica del spec freedesktop y lo que Plasma
+    usa (`KService::serviceByDesktopName`); `app_name` es sólo fallback.
+    """
+    candidatos = []
+    for valor in (desktop_entry, app_name):
+        if valor:
+            valor = str(valor).strip().lower()
+            if valor.endswith(".desktop"):
+                valor = valor[:-8]
+            if valor and valor not in candidatos:
+                candidatos.append(valor)
+    if not candidatos:
         return None
     if _desktop_cache is None:
         _rebuild_desktop_cache()
-    entries = _desktop_cache.get(app_name.lower().strip())
-    if entries:
-        return entries[0]["path"]
+    for clave in candidatos:
+        entries = _desktop_cache.get(clave)
+        if entries:
+            return entries[0]["path"]
     _rebuild_desktop_cache()
-    entries = _desktop_cache.get(app_name.lower().strip())
-    if entries:
-        return entries[0]["path"]
+    for clave in candidatos:
+        entries = _desktop_cache.get(clave)
+        if entries:
+            return entries[0]["path"]
     return None
 
 
@@ -168,9 +183,18 @@ def _icon_from_theme(icon_name, size=16):
             display = Gdk.Display.get_default()
             theme = (Gtk.IconTheme.get_for_display(display) if display
                      else Gtk.IconTheme.new())
-            info = theme.lookup_icon(attempt, size, 0)
-            if info:
-                return info.load_icon()
+            # GTK4: lookup_icon(nombre, fallbacks, size, scale, direction, flags)
+            # GTK3 usaba lookup_icon(nombre, size, flags): llamarla así lanza
+            # TypeError y el except de abajo escondía que NINGÚN icono resolvía.
+            paintable = theme.lookup_icon(
+                attempt, None, size, 1, Gtk.TextDirection.LTR,
+                Gtk.IconLookupFlags.FORCE_REGULAR)
+            if paintable:
+                archivo = paintable.get_file()
+                ruta = archivo.get_path() if archivo else None
+                if ruta:
+                    return GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                        ruta, size, size, True)
         except Exception:
             pass
     return None

@@ -8,7 +8,7 @@ Define cómo el toast obtiene, escala y garantiza el logo de 16 px de la fila de
 
 ### Requirement: El logo se resuelve desde cualquier fuente del sender
 
-El toast SHALL mostrar el logo de 16 px de la fila de app cuando la notificación provee cualquiera de estas fuentes: (a) un archivo de icono existente — path plano o URI `file://` — en `app_icon`; (b) un nombre de icono "pelado" resoluble en el tema de iconos (hicolor/Breeze) en `app_icon`; (c) un `.desktop` que matchee EXACTO por `app_name` con campo `Icon=`. La normalización que hace el daemon del `app_icon` (path-o-vacío) no SHALL descartar los nombres de tema: si el `app_icon` del sender es un nombre de icono, el toast SHALL resolverlo por tema.
+El toast SHALL mostrar el logo de 16 px de la fila de app cuando la notificación provee cualquiera de estas fuentes, en este orden: (a) `hints["desktop-entry"]` resuelto a un `.desktop` con `Icon=` (fuente canónica del spec y la que usa Plasma vía `KService::serviceByDesktopName`); (b) un archivo de icono existente — path plano o URI `file://` — en `app_icon`; (c) un nombre de icono "pelado" resoluble en el tema de iconos (hicolor/Breeze) en `app_icon`; (d) un `.desktop` que matchee EXACTO por `app_name`. La normalización que hace el daemon del `app_icon` (path-o-vacío) no SHALL descartar los nombres de tema. La resolución de tema SHALL usar la firma de GTK4 (`lookup_icon(nombre, fallbacks, size, scale, direction, flags)`), nunca la de GTK3.
 
 #### Scenario: app_icon con nombre de tema pelado
 - **WHEN** un sender manda `app_icon="firefox"` (nombre de icono del tema, sin archivo asociado)
@@ -22,9 +22,37 @@ El toast SHALL mostrar el logo de 16 px de la fila de app cuando la notificació
 - **WHEN** la resolución por `app_icon` falla pero `app_name` resuelve en el tema de iconos
 - **THEN** la fila de app muestra el icono del tema por `app_name`
 
+#### Scenario: desktop-entry con app_name localizado
+
+- **WHEN** un sender manda `app_name="Correo"` y `hints["desktop-entry"]="thunderbird"`
+- **THEN** el logo es el del `.desktop` thunderbird, aunque "Correo" no matchee ningún archivo
+
+#### Scenario: lookup de tema en GTK4
+
+- **WHEN** el `.desktop` dice `Icon=thunderbird` y el icono está en hicolor
+- **THEN** se resuelve con la firma GTK4 de `lookup_icon` y se muestra escalado a 16/80 px
+
 #### Scenario: Match exacto de .desktop
 - **WHEN** `app_name` matchea exactamente un `.desktop` con campo `Icon=`
 - **THEN** la fila de app muestra ese icono
+
+### Requirement: El nombre de app toma el tono del icono
+
+La fila de app SHALL colorearse con el promedio de los píxeles opacos del icono
+resuelto (`_icon_tint`), con un piso de luminancia WCAG de 0,25 para mantener
+contraste AA sobre la card. Si el icono no resuelve o es transparente, SHALL
+usarse el color base `_TXT_APP_L`. El tono SHALL aplicarse tanto en la zona clara
+como en la del wipe.
+
+#### Scenario: Icono azul oscuro
+
+- **WHEN** el icono resuelto es mayormente azul y poco luminoso
+- **THEN** el nombre de app se ve azul claro, legible y del mismo color que el icono
+
+#### Scenario: Sin icono
+
+- **WHEN** no hay ni `app_icon` ni `desktop-entry` resoluble
+- **THEN** el nombre de app conserva el color de texto base
 
 ### Requirement: Los iconos no cuadrados no se cortan
 

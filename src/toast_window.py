@@ -55,8 +55,9 @@ class ToastCard(Gtk.Widget):
                  accent, image_data_raw=None, on_click=None, on_resize=None,
                  on_close=None, app_label=None, hide_title=False,
                  persistent=False, actions=None, action_icons=False,
-                 buttons_actionable=True, urgency=1):
+                 buttons_actionable=True, urgency=1, desktop_entry=None):
         super().__init__()
+        self._desktop_entry = desktop_entry
         self.set_name("verdantis-toast")
 
         self._actions = _parse_actions(actions)
@@ -141,7 +142,8 @@ class ToastCard(Gtk.Widget):
             except Exception:
                 pass
         if not self._app_icon_pb:
-            icon_from_desktop = _get_app_icon_from_desktop(app_name, 16, mode="contain")
+            icon_from_desktop = _get_app_icon_from_desktop(app_name, 16, mode="contain",
+                                                  desktop_entry=self._desktop_entry)
             if icon_from_desktop:
                 self._app_icon_pb = _resample(icon_from_desktop, 16, mode="contain")
             else:
@@ -168,7 +170,8 @@ class ToastCard(Gtk.Widget):
             except Exception:
                 pass
         if not self._image_left_pb:
-            icon_from_desktop = _get_app_icon_from_desktop(app_name, _IMAGE_LEFT_W)
+            icon_from_desktop = _get_app_icon_from_desktop(app_name, _IMAGE_LEFT_W,
+                                                  desktop_entry=self._desktop_entry)
             if icon_from_desktop:
                 self._image_left_pb = _make_circular(icon_from_desktop, _IMAGE_LEFT_W)
             if not self._image_left_pb:
@@ -179,6 +182,9 @@ class ToastCard(Gtk.Widget):
         if not self._image_left_pb:
             self._image_left_pb = _make_circular(
                 _make_placeholder_icon(self._app_name, _IMAGE_LEFT_W), _IMAGE_LEFT_W)
+        # El nombre de app toma su tono del icono para combinar en todos los
+        # casos; _icon_tint garantiza contraste AA sobre la card.
+        self._app_tint = _icon_tint(self._app_icon_pb or self._image_left_pb)
 
         if image_path and os.path.exists(image_path):
             try:
@@ -692,7 +698,8 @@ class ToastCard(Gtk.Widget):
         def draw_pass(s, is_dark):
             tcol = self._right_title if is_dark else self._left_title
             bcol = self._right_body if is_dark else self._left_body
-            acol = self._right_app if is_dark else self._left_app
+            acol = getattr(self, "_app_tint", None) or (
+                self._right_app if is_dark else self._left_app)
             yy = ty
             if self._app_name:
                 if self._app_icon_pb:
@@ -812,7 +819,8 @@ class ToastWindow:
                  accent=DEFAULT_ACCENT, app_name="", app_icon="",
                  on_close=None, image_data_raw=None, on_click=None, urgency=1,
                  app_label=None, hide_title=False, actions=None,
-                 action_icons=False, buttons_actionable=True):
+                 action_icons=False, buttons_actionable=True,
+                 desktop_entry=None):
         self.app_name = app_name
         self.app_icon = app_icon
         self.titulo = titulo
@@ -846,6 +854,7 @@ class ToastWindow:
         self.urgency = urgency if urgency in (0, 1, 2) else 1
         self.app_label = app_label
         self.hide_title = hide_title
+        self.desktop_entry = desktop_entry
         if self.urgency == 0 and duration > 0:
             self.duration = int(duration * 0.7)
         elif self.urgency == 2 and duration > 0:
@@ -901,6 +910,7 @@ class ToastWindow:
             on_resize=self._resize_card,
             on_close=self._close,
             app_label=self.app_label, hide_title=self.hide_title,
+            desktop_entry=self.desktop_entry,
             persistent=(self.duration == 0),
             actions=self.actions, action_icons=self.action_icons,
             buttons_actionable=self._buttons_actionable,

@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (180 tests, ~9 s; 178 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
+| Regresión global | suite completa verde (190 tests, ~9 s; 188 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
 
 ## 8. Dependencias y plataforma
 
@@ -261,6 +261,17 @@ aportar su percepción pero no es la fuente exclusiva.
   ellipsize: medíamos 3 líneas pero pintábamos 6 y el texto se metía detrás
   de los botones. Ahora dibuja con ellipsize y el body baja a 11 px para que
   la jerarquía contra el título de 13 px sea clara. Golden regenerada.
+- Hecho (0.18.10): iconos de app alineados con Plasma. La causa de que
+  Thunderbird no mostrara logo era doble: `_icon_from_theme` llamaba
+  `lookup_icon` con la firma de GTK3 (TypeError escondido por un `except`) y
+  el daemon ignoraba `hints["desktop-entry"]`, que es la fuente canónica que
+  KDE resuelve con `KService::serviceByDesktopName`. Ahora `desktop-entry`
+  manda sobre `app_name` (localizado) en daemon y replay, y el lookup usa la
+  firma GTK4 con `get_file()` + `new_from_file_at_scale`. Spec + 7 tests TDD.
+- Hecho (0.18.11): el nombre de app toma el color promedio del icono
+  (`_icon_tint`), con piso de luminancia 0,25 para no romper AA. Sin icono
+  cae al color base. Golden regenerada (el reftest ahora incluye el icono que
+  antes no resolvía). Spec `toast-iconos-app` + 3 tests TDD.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Hecho (0.18.2): `image-data` sin path de archivo ya se archiva como PNG en el
   directorio de iconos (`history_store.write_icon`), con el mismo `avatar_file`

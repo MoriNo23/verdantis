@@ -118,6 +118,7 @@ def record_a_kwargs(record, duration=None):
         "urgency": urgency,
         "app_name": app_name,
         "app_icon": record.get("app_icon") or "",
+        "desktop_entry": hints.get("desktop-entry", ""),
         "actions": record.get("actions") or [],
         "accent": hints.get("accent", app_info.DEFAULT_ACCENT),
         # Sin sender no hay señales. Con URL archivada el click abre y pide
