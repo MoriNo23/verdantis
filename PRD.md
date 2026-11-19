@@ -156,7 +156,10 @@ aportar su percepción pero no es la fuente exclusiva.
 - Hecho (0.15.8): la banda "Copiar código" existe solo cuando hay código
   (26 de 1000 notificaciones del historial lo traen). Antes se reservaba siempre
   y, al hacerse visible, metía una banda de 36 px en casi todos los toasts.
-- Pendiente: push a `origin/main`.
+- Hecho (0.15.9): `_parse_actions` partía la lista PLANA de D-Bus (`[key,label,...]`)
+  en los dos primeros caracteres de cada string: los botones del desktop mostraban
+  "a" y "e" en vez de "Marcar como leída"/"Responder". Acepta lista plana y pares.
+- Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Límite conocido del replay: lo archivado por `image-data` **sin** path de archivo no
   guarda bytes (los 28 registros viejos sí tienen PNG); esos caen al icono de app.
 - Riesgo abierto: el usuario vio una vez un "toast de más" en la transición de

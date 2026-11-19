@@ -9,8 +9,9 @@ cada zona — los hex REALES que dibuja el render (constantes de módulo de
   reference el compositado da EXACTO #1e1e2e en ambos estados, así que la
   medición no depende del wallpaper (PRODUCT.md: "no contra negro puro").
 - Zona del wipe: blend opaco bg→acento al 15% (lo que pinta _draw_background).
-- Bandas ("Ver más" + labels de acciones): fill acento 22% sobre el fondo de
-  la zona; label _TXT_TITLE_L en la clara, _TXT_BANDA_R en la oscura.
+- Bandas ("Ver más", acciones y "Copiar código"): fill BLANCO translúcido
+  (_VIB_BTN_ALPHA) sobre el fondo de la zona; label _TXT_TITLE_L en la clara,
+  _TXT_BANDA_R en la oscura. Antes era acento 22%, que salía gris verdoso.
 
 El acento es el de identidad (app_info.DEFAULT_ACCENT): los hints del sender
 pueden pisarlo, la promesa AA es con el acento del producto. No hay texto
@@ -42,8 +43,8 @@ def _mezcla(bg, fg, a):
 _BG = wp._hex_rgb(wp._CARD_BG_HEX)
 _ACC = wp._hex_rgb(app_info.DEFAULT_ACCENT)
 _BG_WIPE = _mezcla(_BG, _ACC, 0.15)          # tinte del wipe (opaco)
-_BG_BANDA_L = _mezcla(_BG, _ACC, 0.22)      # fill de banda, zona clara
-_BG_BANDA_R = _mezcla(_BG_WIPE, _ACC, 0.22)  # fill de banda, zona wipe
+_BG_BANDA_L = _mezcla(_BG, (1.0, 1.0, 1.0), wp._VIB_BTN_ALPHA)      # zona clara
+_BG_BANDA_R = _mezcla(_BG_WIPE, (1.0, 1.0, 1.0), wp._VIB_BTN_ALPHA)  # zona wipe
 
 
 def _assert_aa(nombre, fg, bg):
@@ -82,9 +83,18 @@ def test_zona_wipe_contraste_aa():
 
 
 def test_bandas_contraste_aa():
-    """Labels de 'Ver más' y de los botones sobre el fill 22% del acento."""
+    """Labels de 'Ver más' y de los botones sobre el fill blanco del botón."""
     _assert_aa("banda (claro)", wp._hex_rgb(wp._TXT_TITLE_L), _BG_BANDA_L)
     _assert_aa("banda (wipe)", wp._TXT_BANDA_R, _BG_BANDA_R)
+
+
+def test_boton_contraste_aa_peor_caso_wallpaper_claro():
+    """Peor caso del label de un botón: gradiente abajo sobre wallpaper claro
+    (#d0d0d0) + el fill de HOVER (11%, el más claro). El label debe seguir AA."""
+    wallpaper_claro = (0.816, 0.816, 0.816)   # #d0d0d0
+    fondo = _mezcla(wallpaper_claro, wp._VIB_BOTTOM[:3], wp._VIB_BOTTOM[3])
+    fill = _mezcla(fondo, (1.0, 1.0, 1.0), wp._VIB_BTN_HOVER)
+    _assert_aa("label de botón (peor caso)", wp._hex_rgb(wp._TXT_TITLE_L), fill)
 
 
 def test_la_medicion_no_usa_negro_puro():

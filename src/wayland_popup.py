@@ -354,7 +354,13 @@ def _create_layout(cr=None):
 
 
 def _parse_actions(raw):
-    """Lista plana D-Bus (pares key/label) → pares, cap 3, sin default."""
+    """Lista plana D-Bus (pares key/label) → pares, cap 3, sin default.
+
+    El spec manda `actions` como lista PLANA [key, label, key, label]; también
+    se aceptan pares ya armados (tests y llamadas internas). Sin esta
+    normalización cada string se partía en sus dos primeros caracteres y los
+    botones del desktop mostraban "a"/"e" en vez del label real.
+    """
     if not raw:
         return []
     out = []
@@ -363,6 +369,8 @@ def _parse_actions(raw):
         items = list(raw)
     except Exception:
         return []
+    if items and isinstance(items[0], str):
+        items = list(zip(items[0::2], items[1::2]))
     for item in items:
         try:
             key, label = item[0], item[1]

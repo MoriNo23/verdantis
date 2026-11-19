@@ -115,3 +115,18 @@ def test_constructor_solo_arma_el_boton_con_codigo():
                                 "Tu código de verificación es 482193",
                                 None, None, "#80cbc4", None)
     assert con._copy_text == "482193"
+
+
+def test_parse_actions_acepta_lista_plana_dbus():
+    """REGRESIÓN (v0.15.8): el spec D-Bus manda `actions` como lista PLANA
+    [key,label,key,label]. _parse_actions esperaba pares y tomaba item[0] e
+    item[1] de cada string: los botones del desktop mostraban "a" y "e"
+    (primer y segundo carácter del label) en vez de "Marcar como leída"."""
+    plana = ["a", "Marcar como leída", "b", "Responder"]
+    assert wp._parse_actions(plana) == [
+        ("a", "Marcar como leída"), ("b", "Responder")]
+
+
+def test_parse_actions_sigue_aceptando_pares():
+    pares = [("go", "Abrir"), ("late", "Recordar")]
+    assert wp._parse_actions(pares) == pares
