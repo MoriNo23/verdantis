@@ -42,8 +42,10 @@ notifications show in arrival order and nothing covers anything.
 
 Time wipe: a full-height tint whose front sweeps right to left — the part
 already swept (the right side) stays tinted. While the pointer is over the
-toast, expiry pauses (on leave it resumes with the remaining time). Dismiss
-strip + X on hover for ANY toast (persistent or timed).
+toast, expiry pauses (on leave it resumes with the remaining time). Any toast,
+persistent or timed, has a 28 px dismiss rail with a circular button that
+brightens on hover; its hit area is the whole rail, even if the pointer is not
+over the button.
 ```
 
 ## Requirements
@@ -51,8 +53,9 @@ strip + X on hover for ANY toast (persistent or timed).
 - **KDE Plasma 6 on Wayland** — the tested daily driver. Other compositors
   with wlr-layer-shell support (Sway, Hyprland) should work; GNOME/Mutter is
   not supported (no layer-shell protocol).
-- GTK 4.18.6, `gtk4-layer-shell` 1.0.4 (dev package) and `python3-gi` from your
-  distro — the venv uses the system GObject-introspection libraries.
+- GTK 4.18+ (tested on 4.18.6), `gtk4-layer-shell` 1.0.4+ (runtime and dev
+  packages) and `python3-gi` from your distro — the venv uses the system
+  GObject-introspection libraries.
 - Python 3.13 with `venv` + pip, and a systemd user session.
 - Debian/Ubuntu are the tested target (`install.sh` runs `apt`); on other
   distros, install the system packages above by hand.
@@ -88,9 +91,9 @@ busctl --user call org.freedesktop.Notifications \
 - Max **2 toasts on screen**; the rest wait in line.
 - The line is **FIFO by arrival**: no type (low/normal/critical) wins a slot
   or skips ahead — `urgency` only changes duration and style, never position.
-- A **critical** notification (`urgency=2`) never expires on its own and is
-  marked with a red left rail. A small badge below the stack shows how many
-  notifications are still waiting.
+- A **critical** notification (`urgency=2`) never expires on its own: only the
+  user closes it. It carries a soft red (`#ef9a9a`) left rail. A compact badge
+  below the stack reports how many notifications are still waiting.
 - The line is **capped at 20**: in a flood the oldest entries are dropped,
   the newest always get in.
 - **A toast is not created until there is a visual slot**: waiting entries
@@ -106,8 +109,9 @@ busctl --user call org.freedesktop.Notifications \
 
 Every notification (except `transient` ones) is archived to
 `$XDG_DATA_HOME/verdantis/history.jsonl` — capped at 1000 records — with a
-copy of the icon bytes (browser favicons live in `/tmp` and die with the
-session). That history is what replay reproduces **in production**:
+copy of the image bytes — including `image-data` with no file path (browser
+favicons live in `/tmp` and die with the session). That history is what replay
+reproduces **in production**:
 
 ```bash
 .venv/bin/python src/verdantis.py list --last 20        # table: id, date, app, summary
@@ -192,7 +196,7 @@ src/
   x11_popup.py         X11 fallback (positionable window), reuses the widget
   replay.py            history CLI + the shared render branch
   tray.py              StatusNotifierItem + DBusMenu (KDE systray)
-  notification_center.py  history center window (cards, replay, clear)
+  notification_center.py  notification center (read-only cards, clear)
   history_store.py     JSONL store + icon byte copies (best-effort)
   app_info.py          single source of identity (name, id, vendor, accent)
 tests/                 D-Bus contract, audit, history/replay + sensitivity metatests
@@ -218,7 +222,14 @@ metrics).
 
 ```bash
 .venv/bin/python -m pytest tests/ -q     # D-Bus contract, audit, replay (+ metatests)
+.venv/bin/python scripts/dbus_check.py   # end-to-end Notify -> CloseNotification
+bash scripts/visual_check.sh             # deterministic offscreen toast reftest
+bash scripts/visual_check.sh --live      # optional on-screen smoke (needs a live session)
 ```
+
+The visual reftest renders the real widget through GSK to PNG, so it does not
+depend on KWin granting screenshots. CI (`.github/workflows/ci.yml`) runs the
+suite plus `pip-audit` and `pip check`.
 
 - Product map: `PRD.md`.
 - Formal behavior truth: `openspec/specs/`.
