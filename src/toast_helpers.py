@@ -256,4 +256,17 @@ def _extract_markup_url(text):
     return ""
 
 
-__all__ = ['_BARE_HOST_RE', '_CODE_CONTEXT_RE', '_CODE_RE', '_CODE_WORDS', '_DESKTOP_DIRS', '_FONT_DIR', '_URL_RE', '_copy_to_clipboard', '_desktop_cache', '_exact_desktop_file', '_extract_markup_url', '_find_code', '_get_app_display_name', '_get_app_icon_from_desktop', '_icon_from_theme', '_rebuild_desktop_cache', '_register_bundled_font', '_strip_urls', '_tiene_comando']
+__all__ = ['browser_labels', '_BARE_HOST_RE', '_CODE_CONTEXT_RE', '_CODE_RE', '_CODE_WORDS', '_DESKTOP_DIRS', '_FONT_DIR', '_URL_RE', '_copy_to_clipboard', '_desktop_cache', '_exact_desktop_file', '_extract_markup_url', '_find_code', '_get_app_display_name', '_get_app_icon_from_desktop', '_icon_from_theme', '_rebuild_desktop_cache', '_register_bundled_font', '_strip_urls', '_tiene_comando']
+
+
+def browser_labels(app_name, summary, body):
+    """(línea de app, hide_title) para navegadores.
+
+    Con body se pliega el título en "App - pestaña" para no duplicarlo. Sin
+    body visible (vacío o solo URL sanitizada) el título vuelve a su fila:
+    si no, la card queda con una sola línea y un hueco grande.
+    """
+    visible = (_strip_urls(body) or "").strip()
+    if visible:
+        return "{} - {}".format(app_name, summary), True
+    return app_name, False

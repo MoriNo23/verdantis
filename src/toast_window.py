@@ -113,6 +113,9 @@ class ToastCard(Gtk.Widget):
         self._app_name = _get_app_display_name(app_name)
         self._titulo = (titulo or "").replace("\n", " ").replace("\t", " ").strip()
         self._cuerpo = _strip_urls(cuerpo)
+        # Nunca una card en blanco: si no hay título ni body, texto neutral.
+        if not self._titulo and not (self._cuerpo or "").strip():
+            self._titulo = "Notificación"
         # Solo con código de verificación: el botón es para pegar el código en
         # la app, no un "copiar todo" que aparecería en casi todos los toasts.
         self._copy_text = _find_code(self._cuerpo)

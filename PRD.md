@@ -124,7 +124,7 @@ aportar su percepción pero no es la fuente exclusiva.
 | R3 | spec `toast-texto-nitido` + verificación visual del agente |
 | R6 | `tests/test_replay_cli.py` (store, selección, mapeo registro→toast, archivo/transient del daemon) + `tests/test_tests_replay_cli.py` (metatests que inyectan el bug y exigen que el test lo detecte) |
 | R7 | verificación visual del agente (spec `verificacion-visual`) |
-| Regresión global | suite completa verde (172 tests, ~9 s; 170 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
+| Regresión global | suite completa verde (177 tests, ~9 s; 175 en CI porque 2 self-checks visuales se saltean sin display), en local y en CI (`.github/workflows/ci.yml`) |
 
 ## 8. Dependencias y plataforma
 
@@ -249,6 +249,12 @@ aportar su percepción pero no es la fuente exclusiva.
   corregido el desajuste de diseño: la ventana X11 medía exactamente la card
   y recortaba la sombra. Ahora usa `surface_size` + márgenes compensatorios
   (`x11_geometry`) y CSS transparente, igual que la surface layer-shell.
+- Hecho (0.18.8): ninguna card queda sin texto. Las notificaciones de
+  navegador sin body visible (vacío, espacios o URL sanitizada) dejaban el
+  título plegado en la línea de app y mostraban un hueco grande. `browser_labels`
+  (compartida por daemon y replay) despliega el título en su fila cuando no hay
+  body; si faltan título y body, la card muestra "Notificación". Spec
+  `toast-body-colapso` + 5 tests TDD.
 - Push a `origin/main`: al día (últimos commits de este ciclo subidos).
 - Hecho (0.18.2): `image-data` sin path de archivo ya se archiva como PNG en el
   directorio de iconos (`history_store.write_icon`), con el mismo `avatar_file`

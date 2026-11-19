@@ -128,9 +128,10 @@ def record_a_kwargs(record, duration=None):
         "buttons_actionable": False,
     }
     if _is_browser(app_name, hints.get("desktop-entry", "")):
-        # Misma regla que el daemon: "Brave - <tab>" y el título se pliega ahí.
-        kwargs["app_label"] = "{} - {}".format(app_name, summary)
-        kwargs["hide_title"] = True
+        # Misma regla que el daemon: se pliega sólo si hay body que mostrar.
+        from toast_helpers import browser_labels
+        kwargs["app_label"], kwargs["hide_title"] = browser_labels(
+            app_name, summary, record.get("body") or "")
     return kwargs
 
 

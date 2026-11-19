@@ -21,13 +21,14 @@ gi.require_version('Gtk4LayerShell', '1.0')
 from gi.repository import Gtk, Gdk, GdkPixbuf, Gtk4LayerShell, GLib, Gio
 
 from app_info import APP_ID, APP_NAME, DEFAULT_ACCENT, VENDOR, accent_for
+from toast_helpers import browser_labels
 from toast_window import (
     ToastWindow,
     _extract_markup_url,
 )
 import history_store
 
-VERSION = "0.18.7"
+VERSION = "0.18.8"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -592,8 +593,8 @@ class NotificationManager:
         # Navegadores: la línea de app = "Brave - <tab>" (el tab = summary, que es
         # el nombre de la notificación/pestaña) y el título se pliega ahí.
         if _is_browser(app_name, desktop_entry):
-            kwargs["app_label"] = "{} - {}".format(app_name, summary)
-            kwargs["hide_title"] = True
+            kwargs["app_label"], kwargs["hide_title"] = browser_labels(
+                app_name, summary, body)
 
         # Batching: toda notificación entra a la cola pendiente y se muestra
         # una por vez cada STAGGER_MS (ver _pump). Así un burst no aparece

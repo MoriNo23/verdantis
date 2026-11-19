@@ -5,6 +5,24 @@ Define el colapso del body del toast: cuántas líneas completas se muestran, d�
 
 ## Requirements
 
+### Requirement: Toda card muestra texto legible
+
+Ninguna card SHALL quedar con sólo la línea de app. Cuando un navegador no
+tiene body visible (vacío, espacios o una URL que se sanitiza), el título SHALL
+volver a su fila y la línea de app SHALL ser sólo el nombre de la app, en el
+daemon y en el replay (`browser_labels`). Si no hay título ni body, la card
+SHALL mostrar el texto neutral "Notificación".
+
+#### Scenario: Navegador sin body
+
+- **WHEN** un `Notify` de Brave trae summary "Mi pestaña" y body vacío
+- **THEN** la card muestra "Brave" en la línea de app y "Mi pestaña" como título
+
+#### Scenario: Navegador con body
+
+- **WHEN** el mismo `Notify` trae body "Mensaje nuevo"
+- **THEN** la línea de app es "Brave - Mi pestaña" y el título se pliega ahí
+
 ### Requirement: El ellipsis cae tras el número exacto de líneas del cap
 
 Cuando el body excede el máximo de líneas visibles (3), el toast SHALL mostrar exactamente las primeras 3 líneas completas y el ellipsis ("...") SHALL caer al final de la tercera línea — nunca antes. El cálculo del límite SHALL usar la altura real de la línea del font renderizado, no una aproximación derivada del tamaño de fuente, para que ninguna fuente, escala de resolución o variante de layout corte de más.
