@@ -137,8 +137,9 @@ no action to run.
 The daemon exports its own `org.kde.StatusNotifierItem`, so it sits in the KDE
 systray next to the others. Left click opens the notification center (the
 archived history as cards, newest first); right click lists "Abrir historial"
-and "Limpiar historial". Clicking a card replays that toast through the CLI
-replay path (buttons are drawn, not fired) and does not re-archive it.
+and "Limpiar historial". The cards are read-only: replay stays in the CLI
+(`verdantis replay`), the center only shows what was archived and lets you
+clear it.
 
 No Qt and no Plasma applet reuse: the Plasma notification applet only reads the
 model of *its* daemon — invalid while Verdantis owns

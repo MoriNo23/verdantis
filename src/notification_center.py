@@ -8,7 +8,8 @@ muestra "no disponible". Acá la data es la nuestra (`history.jsonl`).
 Este módulo expone:
 - `card_fields(record, now)`: el registro crudo → textos de la tarjeta.
 - `menu_items()`: items del menú de la bandeja (ids estables para DBusMenu).
-- `CenterWindow`: la ventana GTK4 con la lista (import perezoso de gi).
+- `CenterWindow`: la ventana GTK4 con la lista, de solo lectura (import
+  perezoso de gi).
 """
 import time
 
@@ -86,13 +87,12 @@ class CenterWindow:
     cerrarla: el daemon vive sin ventanas visibles.
     """
 
-    def __init__(self, on_replay=None, limit=50):
+    def __init__(self, limit=50):
         import gi
         gi.require_version("Gtk", "4.0")
         from gi.repository import Gtk, Gdk
         from wayland_popup import _CARD_BG_HEX, _CARD_RADIUS
         self._Gtk = Gtk
-        self._on_replay = on_replay
         self._limit = limit
         # Mismo lenguaje de card que el toast (radio + fondo), sin heredar el
         # render GSK: acá las filas son widgets GTK con hover propio.
@@ -136,7 +136,6 @@ class CenterWindow:
         self._lista = Gtk.ListBox()
         self._lista.set_selection_mode(Gtk.SelectionMode.NONE)
         self._lista.add_css_class("center-list")
-        self._lista.connect("row-activated", self._on_row)
         scroll = Gtk.ScrolledWindow()
         scroll.set_vexpand(True)
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
@@ -189,11 +188,6 @@ class CenterWindow:
         return fila
 
     # ── eventos ──────────────────────────────────────────────────────────
-
-    def _on_row(self, lista, fila):
-        rec = getattr(fila, "record", None)
-        if rec and self._on_replay:
-            self._on_replay(rec)
 
     def _on_clear(self, _btn):
         try:

@@ -21,7 +21,7 @@ from wayland_popup import (
 )
 import history_store
 
-VERSION = "0.16.0"
+VERSION = "0.16.1"
 # Versión del spec freedesktop que el daemon realmente sirve (posición 4 de
 # GetServerInformation). 1.2 es lo que declaran dunst/mako/Plasma 6.3.6: no
 # hay features de 1.3 implementadas, no se anuncia.
@@ -769,7 +769,7 @@ class NotificationDaemon:
     def _show_center(self):
         if self._center is None:
             from notification_center import CenterWindow
-            self._center = CenterWindow(on_replay=self._replay_record)
+            self._center = CenterWindow()
         self._center.show()
         return False              # GLib.idle_add: correr una sola vez
 
@@ -777,14 +777,6 @@ class NotificationDaemon:
         # El click de la bandeja llega en medio de una llamada D-Bus: crear la
         # ventana ahí adentro deja el mensaje sin responder. Se difiere al loop.
         GLib.idle_add(self._show_center)
-
-    def _replay_record(self, record):
-        # Misma ruta que `verdantis replay`: los botones se dibujan pero no
-        # ejecutan (fidelidad visual, no re-disparo de la app original).
-        # shortcut: es un popup fuera de la pila del daemon, puede taparse con
-        # un toast activo; enhebrarlo en NotificationManager si molesta.
-        from replay import mostrar_toast, record_a_kwargs
-        mostrar_toast(record_a_kwargs(record, duration=6000))
 
     def _clear_history(self):
         try:

@@ -102,12 +102,10 @@ def test_ventana_sin_registros_lo_dice(monkeypatch):
     assert nc2.CenterWindow()._conteo.get_text() == "sin notificaciones"
 
 
-def test_ventana_click_en_fila_reproduce(monkeypatch):
+def test_ventana_no_expone_replay(monkeypatch):
+    """El centro es de solo lectura: no reproduce toasts al click."""
     import notification_center as nc2
-    rec = _rec()
-    monkeypatch.setattr(nc2, "_records_recientes", lambda limit: [rec])
-    vistos = []
-    win = nc2.CenterWindow(on_replay=vistos.append)
-    fila = win._lista.get_row_at_index(0)
-    win._on_row(win._lista, fila)
-    assert vistos == [rec]
+    monkeypatch.setattr(nc2, "_records_recientes", lambda limit: [_rec()])
+    import inspect
+    assert "on_replay" not in inspect.signature(nc2.CenterWindow).parameters
+    assert not hasattr(nc2.CenterWindow(), "_on_replay")

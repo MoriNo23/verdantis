@@ -63,16 +63,15 @@ acotado a 200 caracteres. Sin registros SHALL decir "sin notificaciones".
 - **WHEN** no hay registros
 - **THEN** la lista queda vacía y el encabezado dice "sin notificaciones"
 
-### Requirement: Click en una tarjeta reproduce el toast
+### Requirement: Las tarjetas son de solo lectura
 
-Activar una fila SHALL mostrar el toast archivado por la misma ruta del replay
-del CLI (`replay.record_a_kwargs` + `mostrar_toast`): los botones se dibujan
-por fidelidad pero no re-disparan la app original. La reproducción NO SHALL
-volver a archivar el registro.
+Activar una fila NO SHALL reproducir el toast ni abrir la URL archivada: el
+centro es una vista del historial, no un replay. Reproducir sigue siendo
+exclusivo del CLI (`verdantis replay`), que decide duración y filtros.
 
-#### Scenario: Reproducir una tarjeta
+#### Scenario: Click en una tarjeta
 - **WHEN** el usuario activa una fila del centro
-- **THEN** aparece el toast correspondiente y el historial no suma entradas
+- **THEN** no aparece ningún toast y no se abre ninguna URL
 
 ### Requirement: La ventana no retiene al daemon
 
